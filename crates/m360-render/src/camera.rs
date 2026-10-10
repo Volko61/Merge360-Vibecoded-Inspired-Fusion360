@@ -139,7 +139,7 @@ impl Camera {
 
     /// Frame a bounding box.
     pub fn fit(&mut self, min: Vec3, max: Vec3, aspect: f32) {
-        if !(min.x <= max.x) {
+        if min.x > max.x || min.x.is_nan() {
             self.target = Vec3::ZERO;
             self.distance = 250.0;
             return;

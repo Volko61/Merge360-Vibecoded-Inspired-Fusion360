@@ -151,7 +151,11 @@ impl Merge360App {
         let mx = if marker == 0 { x0 - 3.0 } else { item_x(marker) - ITEM_GAP / 2.0 };
         let handle = egui::Rect::from_center_size(egui::pos2(mx, strip.center().y), egui::vec2(10.0, strip.height()));
         let mresp = ui.interact(handle, ui.id().with("tl_marker"), Sense::drag());
-        let pos_x = if mresp.dragged() { ui.input(|i| i.pointer.hover_pos()).map_or(mx, |p| p.x) } else { mx };
+        let pos_x = if mresp.dragged() || mresp.drag_stopped() {
+            ui.input(|i| i.pointer.interact_pos().or(i.pointer.hover_pos())).map_or(mx, |p| p.x).clamp(x0 - 3.0, strip.right())
+        } else {
+            mx
+        };
         let col = if mresp.hovered() || mresp.dragged() { theme::ACCENT } else { Color32::from_rgb(0x55, 0x57, 0x5c) };
         painter.line_segment([egui::pos2(pos_x, strip.top() + 1.0), egui::pos2(pos_x, strip.bottom() - 1.0)], egui::Stroke::new(3.0, col));
         painter.add(egui::Shape::convex_polygon(

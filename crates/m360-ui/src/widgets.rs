@@ -64,6 +64,7 @@ fn expr_field(
 pub struct DialogResult {
     pub ok: bool,
     pub cancel: bool,
+    pub enabled: bool,
 }
 
 /// A Fusion-style command dialog anchored at the right of the canvas.
@@ -74,7 +75,7 @@ pub fn command_dialog(
     ok_enabled: bool,
     add_contents: impl FnOnce(&mut egui::Ui),
 ) -> DialogResult {
-    let mut res = DialogResult { ok: false, cancel: false };
+    let mut res = DialogResult { ok: false, cancel: false, enabled: ok_enabled };
     egui::Area::new(egui::Id::new("command_dialog"))
         .order(egui::Order::Foreground)
         .fixed_pos(anchor)

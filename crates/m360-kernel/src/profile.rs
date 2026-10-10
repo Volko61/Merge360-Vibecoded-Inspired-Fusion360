@@ -152,7 +152,7 @@ pub fn extent(distance: f64, symmetric: bool) -> (f64, f64) {
 
 /// Extrude a region between two offsets along the frame normal.
 pub fn extrude_range(frame: &Frame, region: &Region, z0: f64, z1: f64) -> Result<Solid> {
-    if !(z1 - z0 > 1e-6) {
+    if z1 - z0 <= 1e-6 || z1.is_nan() || z0.is_nan() {
         return Err(KernelError::InvalidParameter("distance must not be zero".into()));
     }
     let face = region.face_at(z0)?;

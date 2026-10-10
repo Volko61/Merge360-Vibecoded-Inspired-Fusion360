@@ -232,7 +232,7 @@ impl Merge360App {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 1.0;
                             let nav = self.tabs[self.active].nav;
-                            let mut toggle = |ui: &mut egui::Ui, icon: Icon, mode: NavMode, tip: &str, app: &mut Self| {
+                            let toggle = |ui: &mut egui::Ui, icon: Icon, mode: NavMode, tip: &str, app: &mut Self| {
                                 let r = nav_icon(ui, icon, nav == mode, tip);
                                 if r.clicked() {
                                     app.tab().nav = if nav == mode { NavMode::Select } else { mode };

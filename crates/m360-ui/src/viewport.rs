@@ -181,7 +181,7 @@ impl Merge360App {
         let cam = self.tabs[active].camera;
         let ray = self.ray_at(&cam, pos);
         let mut best: Option<(f32, SelItem)> = None;
-        let mut consider = |t: f32, item: SelItem, best: &mut Option<(f32, SelItem)>| {
+        let consider = |t: f32, item: SelItem, best: &mut Option<(f32, SelItem)>| {
             if best.is_none_or(|(bt, _)| t < bt) {
                 *best = Some((t, item));
             }
@@ -821,12 +821,12 @@ impl Merge360App {
             }
             let blue = srgb(0.1, 0.5, 1.0, 1.0);
             if Some(b.id) == combine_target {
-                d.highlight = [blue[0], blue[1], blue[2], 0.45];
+                d.highlight = [blue[0], blue[1], blue[2], 0.32];
             } else if combine_tools.contains(&b.id) {
                 let red = srgb(0.9, 0.25, 0.2, 1.0);
                 d.highlight = [red[0], red[1], red[2], 0.45];
-            } else if sel_bodies.contains(&b.id) && tab.selection.iter().any(|s| *s == SelItem::Body(b.id)) || move_bodies.contains(&b.id) {
-                d.highlight = [blue[0], blue[1], blue[2], 0.38];
+            } else if sel_bodies.contains(&b.id) && tab.selection.contains(&SelItem::Body(b.id)) || move_bodies.contains(&b.id) {
+                d.highlight = [blue[0], blue[1], blue[2], 0.28];
                 d.edge_color = srgb(0.02, 0.35, 0.8, 1.0);
             } else if timeline_bodies.contains(&b.id) {
                 d.highlight = [blue[0], blue[1], blue[2], 0.25];

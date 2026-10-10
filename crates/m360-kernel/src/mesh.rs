@@ -25,7 +25,7 @@ impl BodyMesh {
     /// Signed volume via the divergence theorem (mm³).
     pub fn volume(&self) -> f64 {
         self.indices
-            .chunks_exact(3)
+            .as_chunks::<3>().0.iter()
             .map(|t| {
                 let a = DVec3::from(self.positions[t[0] as usize].map(f64::from));
                 let b = DVec3::from(self.positions[t[1] as usize].map(f64::from));
@@ -37,7 +37,7 @@ impl BodyMesh {
 
     pub fn area(&self) -> f64 {
         self.indices
-            .chunks_exact(3)
+            .as_chunks::<3>().0.iter()
             .map(|t| {
                 let a = DVec3::from(self.positions[t[0] as usize].map(f64::from));
                 let b = DVec3::from(self.positions[t[1] as usize].map(f64::from));
@@ -53,7 +53,7 @@ impl BodyMesh {
 
     /// Iterate triangles as world-space vertex triples together with their face id.
     pub fn triangles(&self) -> impl Iterator<Item = ([Vec3; 3], u32)> + '_ {
-        self.indices.chunks_exact(3).map(|t| {
+        self.indices.as_chunks::<3>().0.iter().map(|t| {
             (
                 [
                     Vec3::from(self.positions[t[0] as usize]),

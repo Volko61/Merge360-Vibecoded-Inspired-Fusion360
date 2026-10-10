@@ -101,6 +101,7 @@ impl Merge360App {
         let title = cmd.title();
         let preview_err = self.tabs[self.active].preview.as_ref().and_then(|p| p.error.clone());
         let mut finish: Option<bool> = None; // Some(true)=ok, Some(false)=cancel
+        let mut enabled = true;
 
         match &mut cmd {
             Command::Primitive { kind, plane_chosen, .. } => {
@@ -169,6 +170,7 @@ impl Merge360App {
                         ui.end_row();
                     }
                 });
+                enabled = r.enabled;
                 finish = resolve(r);
             }
             Command::Extrude { sketch, profiles, distance, symmetric, op, .. } => {
@@ -213,6 +215,7 @@ impl Merge360App {
                         ui.end_row();
                     }
                 });
+                enabled = r.enabled;
                 finish = resolve(r);
             }
             Command::Combine { target, tools, op, keep_tools, field, .. } => {
@@ -242,6 +245,7 @@ impl Merge360App {
                     ui.checkbox(keep_tools, "");
                     ui.end_row();
                 });
+                enabled = r.enabled;
                 finish = resolve(r);
             }
             Command::Move { bodies, translate, axis, angle_deg, copy, .. } => {
@@ -278,6 +282,7 @@ impl Merge360App {
                     ui.checkbox(copy, "");
                     ui.end_row();
                 });
+                enabled = r.enabled;
                 finish = resolve(r);
             }
             Command::SketchPlane => {
@@ -291,6 +296,7 @@ impl Merge360App {
                     }
                     ui.end_row();
                 });
+                enabled = r.enabled;
                 finish = resolve(r);
             }
             Command::Measure { picks } => {
@@ -301,6 +307,7 @@ impl Merge360App {
                     ui.end_row();
                     self.measure_rows(ui, &picks, units);
                 });
+                enabled = r.enabled;
                 finish = resolve(r);
             }
             Command::Appearance => {
@@ -315,11 +322,17 @@ impl Merge360App {
                 });
                 // Swatch grid in its own area under the dialog.
                 self.appearance_swatches(ctx, anchor + vec2(0.0, 150.0), &sel);
+                enabled = r.enabled;
                 finish = resolve(r);
             }
             Command::Parameters => {
                 let mut open = true;
-                egui::Window::new("Parameters").open(&mut open).default_size([520.0, 360.0]).collapsible(false).show(ctx, |ui| self.parameters_ui(ui));
+                egui::Window::new("Parameters")
+                    .open(&mut open)
+                    .default_size([520.0, 360.0])
+                    .default_pos(self.canvas_rect.center() - egui::vec2(260.0, 180.0))
+                    .collapsible(false)
+                    .show(ctx, |ui| self.parameters_ui(ui));
                 if !open {
                     finish = Some(true);
                 }
@@ -334,6 +347,7 @@ impl Merge360App {
                 if u != units {
                     self.tab().edit("Change Units", |d| d.units = u);
                 }
+                enabled = r.enabled;
                 finish = resolve(r);
             }
             Command::CenterOfMass | Command::Properties => {
@@ -389,12 +403,17 @@ impl Merge360App {
                         ui.end_row();
                     }
                 });
+                enabled = r.enabled;
                 finish = resolve(r);
             }
         }
 
         if self.script.as_mut().is_some_and(|s| std::mem::take(&mut s.ok)) {
-            finish = Some(true);
+            if enabled {
+                finish = Some(true);
+            } else {
+                eprintln!("script: OK is disabled for {title}");
+            }
         }
         match finish {
             Some(true) => self.commit_command(cmd),

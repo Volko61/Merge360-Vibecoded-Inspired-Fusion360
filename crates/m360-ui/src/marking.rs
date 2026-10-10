@@ -38,7 +38,6 @@ enum Item {
     Redo,
     ToggleVisibility,
     FinishSketch,
-    Empty,
 }
 
 impl Merge360App {
@@ -56,7 +55,6 @@ impl Merge360App {
             Item::Redo => ("Redo".into(), Icon::Redo, self.tabs[self.active].history.can_redo()),
             Item::ToggleVisibility => ("Show/Hide".into(), Icon::Eye, !self.tabs[self.active].selected_bodies().is_empty()),
             Item::FinishSketch => ("Finish Sketch".into(), Icon::FinishSketch, true),
-            Item::Empty => (String::new(), Icon::Generic, false),
         }
     }
 
@@ -82,7 +80,6 @@ impl Merge360App {
                 self.tab().selection.clear();
             }
             Item::FinishSketch => self.actions.push(Action::FinishSketch),
-            Item::Empty => {}
         }
     }
 

@@ -41,12 +41,13 @@ pub struct FileDialog {
     pub name: String,
     pub selected: Option<PathBuf>,
     pub overwrite: Option<PathBuf>,
+    pub focus_name: u8,
 }
 
 impl FileDialog {
     pub fn new(mode: FileMode, dir: PathBuf, name: &str) -> Self {
         let dir_text = dir.display().to_string();
-        Self { mode, dir, dir_text, name: name.to_string(), selected: None, overwrite: None }
+        Self { mode, dir, dir_text, name: name.to_string(), selected: None, overwrite: None, focus_name: 3 }
     }
 }
 
@@ -166,6 +167,12 @@ impl Merge360App {
                 ui.horizontal(|ui| {
                     ui.label("Name:");
                     let r = ui.add(egui::TextEdit::singleline(&mut dlg.name).desired_width(300.0));
+                    // Focus the name field for the first frames (the window's
+                    // sizing pass swallows a single request).
+                    if dlg.focus_name > 0 {
+                        dlg.focus_name -= 1;
+                        r.request_focus();
+                    }
                     ui.label(RichText::new(format!(".{}", dlg.mode.ext())).color(theme::TEXT_DIM));
                     let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

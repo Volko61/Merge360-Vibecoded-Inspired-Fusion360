@@ -16,7 +16,6 @@ pub const TEXT_DIM: Color32 = Color32::from_rgb(0x6b, 0x6e, 0x73);
 pub const HOVER_BG: Color32 = Color32::from_rgb(0xdd, 0xee, 0xf8);
 pub const SELECT_BG: Color32 = Color32::from_rgb(0xc4, 0xe2, 0xf5);
 pub const DIALOG_HEADER: Color32 = Color32::from_rgb(0x3a, 0x3c, 0x40);
-pub const SKETCH: Color32 = Color32::from_rgb(0xe8, 0x89, 0x2f);
 pub const SKETCH_GREEN: Color32 = Color32::from_rgb(0x2f, 0xa8, 0x4f);
 pub const ERROR: Color32 = Color32::from_rgb(0xd6, 0x3b, 0x30);
 pub const WARNING: Color32 = Color32::from_rgb(0xf2, 0xb1, 0x27);

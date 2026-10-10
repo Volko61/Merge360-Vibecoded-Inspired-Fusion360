@@ -82,7 +82,6 @@ pub enum Icon {
     Help,
     User,
     Plus,
-    Close,
     PlayStart,
     PlayBack,
     Play,
@@ -105,6 +104,7 @@ struct Pen<'a> {
     tint: Option<Color32>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl Pen<'_> {
     fn p(&self, x: f32, y: f32) -> Pos2 {
         pos2(self.rect.min.x + x * self.rect.width(), self.rect.min.y + y * self.rect.height())
@@ -296,8 +296,8 @@ pub fn paint(painter: &egui::Painter, rect: Rect, icon: Icon, tint: Option<Color
             q.arrow((0.5, 0.5), (0.5, 0.05), GREEN);
             q.arrow((0.5, 0.5), (0.15, 0.85), Color32::from_rgb(0x2f, 0x6f, 0xd6));
         }
-        Delete | Close => {
-            let c = if icon == Delete { RED } else { GREY };
+        Delete => {
+            let c = RED;
             q.line(&[(0.25, 0.25), (0.75, 0.75)], 2.4, c);
             q.line(&[(0.75, 0.25), (0.25, 0.75)], 2.4, c);
         }

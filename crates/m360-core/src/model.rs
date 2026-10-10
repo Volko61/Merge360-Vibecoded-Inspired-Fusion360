@@ -285,7 +285,7 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                     let t = model.body(target).unwrap();
                     // truck cannot fuse bodies that only touch along coplanar
                     // faces; keep both shells in one body in that case.
-                    let joined = ops::boolean(&t.solid, &[tool.clone()], BooleanOp::Join)
+                    let joined = ops::boolean(&t.solid, std::slice::from_ref(&tool), BooleanOp::Join)
                         .unwrap_or_else(|_| {
                             let mut shells = t.solid.boundaries().clone();
                             shells.extend(tool.into_boundaries());

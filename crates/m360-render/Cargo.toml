@@ -1,0 +1,10 @@
+[package]
+name = "m360-render"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+eframe.workspace = true
+glam.workspace = true
+bytemuck.workspace = true
+m360-kernel.workspace = true

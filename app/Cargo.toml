@@ -1,0 +1,8 @@
+[package]
+name = "merge360"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+m360-ui.workspace = true
+env_logger.workspace = true

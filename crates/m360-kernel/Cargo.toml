@@ -1,0 +1,11 @@
+[package]
+name = "m360-kernel"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+glam.workspace = true
+truck-modeling.workspace = true
+truck-meshalgo.workspace = true
+truck-shapeops.workspace = true
+truck-stepio.workspace = true

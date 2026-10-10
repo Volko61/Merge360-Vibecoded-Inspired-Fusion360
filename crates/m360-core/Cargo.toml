@@ -1,0 +1,10 @@
+[package]
+name = "m360-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+m360-kernel.workspace = true
+glam.workspace = true
+serde.workspace = true
+ron.workspace = true

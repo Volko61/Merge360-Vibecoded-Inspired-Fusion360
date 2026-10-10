@@ -1,0 +1,287 @@
+//! The persistent document (what gets saved to `.m360`).
+
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+
+use crate::feature::{Feature, FeatureKind};
+use crate::model::BodyId;
+use crate::units::Units;
+
+/// Per-body user attributes that are not part of the geometry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BodyMeta {
+    pub name: String,
+    pub visible: bool,
+    /// Appearance color (linear-ish sRGB, 0..1).
+    pub color: [f32; 3],
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NamedView {
+    pub name: String,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub distance: f32,
+    pub target: [f32; 3],
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Document {
+    pub name: String,
+    pub units: Units,
+    pub features: Vec<Feature>,
+    /// Timeline marker: features at index >= marker are rolled back.
+    pub marker: usize,
+    pub next_uid: u64,
+    pub bodies: BTreeMap<BodyId, BodyMeta>,
+    pub sketch_visible: BTreeMap<u64, bool>,
+    pub origin_visible: bool,
+    pub bodies_folder_visible: bool,
+    pub sketches_folder_visible: bool,
+    pub named_views: Vec<NamedView>,
+}
+
+impl Default for Document {
+    fn default() -> Self {
+        Self {
+            name: "Untitled".into(),
+            units: Units::Millimeter,
+            features: Vec::new(),
+            marker: 0,
+            next_uid: 1,
+            bodies: BTreeMap::new(),
+            sketch_visible: BTreeMap::new(),
+            origin_visible: false,
+            bodies_folder_visible: true,
+            sketches_folder_visible: true,
+            named_views: Vec::new(),
+        }
+    }
+}
+
+/// Default palette Fusion-like "Steel - Satin" grey plus a few accents for
+/// copied bodies, so they can be told apart.
+const BODY_COLOR: [f32; 3] = [0.72, 0.74, 0.77];
+
+impl Document {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into(), ..Default::default() }
+    }
+
+    fn next_index(&self, base: &str) -> usize {
+        self.features
+            .iter()
+            .filter_map(|f| f.name.strip_prefix(base)?.parse::<usize>().ok())
+            .max()
+            .unwrap_or(0)
+            + 1
+    }
+
+    /// Insert a feature at the marker (like Fusion, features are added where
+    /// the marker is) and advance the marker. Returns the new uid.
+    pub fn add_feature(&mut self, kind: FeatureKind) -> u64 {
+        let uid = self.next_uid;
+        self.next_uid += 1;
+        let base = kind.base_name();
+        let name = format!("{base}{}", self.next_index(base));
+        if kind.creates_body() {
+            let n = self.bodies.len() + 1;
+            self.bodies.insert(
+                uid,
+                BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR },
+            );
+        }
+        if let FeatureKind::Move { copy: true, bodies, .. } = &kind {
+            for i in 0..bodies.len() {
+                let n = self.bodies.len() + 1;
+                self.bodies.insert(
+                    (uid << 16) | i as u64,
+                    BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR },
+                );
+            }
+        }
+        if matches!(kind, FeatureKind::Sketch { .. }) {
+            self.sketch_visible.insert(uid, true);
+        }
+        let at = self.marker.min(self.features.len());
+        self.features.insert(at, crate::Feature { uid, name, suppressed: false, kind });
+        self.marker = at + 1;
+        uid
+    }
+
+    pub fn feature_index(&self, uid: u64) -> Option<usize> {
+        self.features.iter().position(|f| f.uid == uid)
+    }
+
+    pub fn feature(&self, uid: u64) -> Option<&Feature> {
+        self.features.iter().find(|f| f.uid == uid)
+    }
+
+    pub fn feature_mut(&mut self, uid: u64) -> Option<&mut Feature> {
+        self.features.iter_mut().find(|f| f.uid == uid)
+    }
+
+    pub fn delete_feature(&mut self, uid: u64) {
+        if let Some(i) = self.feature_index(uid) {
+            self.features.remove(i);
+            if self.marker > i {
+                self.marker -= 1;
+            }
+        }
+    }
+
+    pub fn body_meta(&self, id: BodyId) -> BodyMeta {
+        self.bodies.get(&id).cloned().unwrap_or(BodyMeta {
+            name: format!("Body#{id}"),
+            visible: true,
+            color: BODY_COLOR,
+        })
+    }
+
+    pub fn set_marker(&mut self, marker: usize) {
+        self.marker = marker.min(self.features.len());
+    }
+
+    pub fn to_ron(&self) -> Result<String, String> {
+        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default()).map_err(|e| e.to_string())
+    }
+
+    pub fn from_ron(s: &str) -> Result<Self, String> {
+        ron::from_str(s).map_err(|e| e.to_string())
+    }
+
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        std::fs::write(path, self.to_ron()?).map_err(|e| e.to_string())
+    }
+
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let s = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let mut doc = Self::from_ron(&s)?;
+        if let Some(stem) = path.file_stem() {
+            doc.name = stem.to_string_lossy().into_owned();
+        }
+        Ok(doc)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{BooleanOp, PlaneRef, Regenerator};
+
+    fn boxf(x: f64) -> FeatureKind {
+        FeatureKind::Box { plane: PlaneRef::XY, center: [x, 0.0], length: 10.0, width: 10.0, height: 10.0 }
+    }
+
+    #[test]
+    fn names_and_marker() {
+        let mut d = Document::default();
+        let a = d.add_feature(boxf(0.0));
+        let b = d.add_feature(boxf(20.0));
+        assert_eq!(d.feature(a).unwrap().name, "Box1");
+        assert_eq!(d.feature(b).unwrap().name, "Box2");
+        assert_eq!(d.marker, 2);
+        d.set_marker(1);
+        let c = d.add_feature(boxf(40.0));
+        assert_eq!(d.feature_index(c), Some(1));
+        assert_eq!(d.marker, 2);
+    }
+
+    #[test]
+    fn regenerate_and_rollback() {
+        let mut d = Document::default();
+        d.add_feature(boxf(0.0));
+        d.add_feature(boxf(20.0));
+        let mut r = Regenerator::default();
+        assert_eq!(r.regenerate(&d).bodies.len(), 2);
+        d.set_marker(1);
+        assert_eq!(r.regenerate(&d).bodies.len(), 1);
+    }
+
+    #[test]
+    fn combine_cut_and_missing_reference() {
+        let mut d = Document::default();
+        let a = d.add_feature(boxf(0.0));
+        let b = d.add_feature(FeatureKind::Box {
+            plane: PlaneRef::XY,
+            center: [5.0, 0.0],
+            length: 10.0,
+            width: 20.0,
+            height: 20.0,
+        });
+        // Offset the tool so faces are not coplanar.
+        if let FeatureKind::Box { plane, .. } = &mut d.feature_mut(b).unwrap().kind {
+            plane.offset = -5.0;
+        }
+        let c = d.add_feature(FeatureKind::Combine {
+            target: a,
+            tools: vec![b],
+            op: BooleanOp::Cut,
+            keep_tools: false,
+        });
+        let mut r = Regenerator::default();
+        let m = r.regenerate(&d);
+        assert!(m.errors.is_empty(), "{:?}", m.errors);
+        assert_eq!(m.bodies.len(), 1);
+        assert!((m.bodies[0].mesh.volume() - 500.0).abs() < 5.0);
+
+        d.feature_mut(b).unwrap().suppressed = true;
+        let m = r.regenerate(&d);
+        assert!(m.errors.contains_key(&c));
+    }
+
+    #[test]
+    fn sketch_extrude_then_cut() {
+        use crate::{ExtrudeOp, SketchEntity};
+        let mut d = Document::default();
+        let sk = d.add_feature(FeatureKind::Sketch {
+            plane: PlaneRef::XY,
+            entities: {
+                let mut e = crate::sketch::rectangle([-10.0, -10.0], [10.0, 10.0]);
+                e.push(SketchEntity::Circle { c: [0.0, 0.0], r: 4.0 });
+                e
+            },
+        });
+        // Profile 0 is the circle, profile 1 the rectangle with a hole.
+        let base = d.add_feature(FeatureKind::Extrude {
+            sketch: sk,
+            profiles: vec![0, 1],
+            distance: 5.0,
+            symmetric: false,
+            op: ExtrudeOp::NewBody,
+            participants: vec![],
+        });
+        d.add_feature(FeatureKind::Extrude {
+            sketch: sk,
+            profiles: vec![0],
+            distance: 5.0,
+            symmetric: false,
+            op: ExtrudeOp::Cut,
+            participants: vec![base],
+        });
+        let mut r = Regenerator::default();
+        let m = r.regenerate(&d);
+        assert!(m.errors.is_empty(), "{:?}", m.errors);
+        assert_eq!(m.bodies.len(), 1);
+        let expect = (400.0 - std::f64::consts::PI * 16.0) * 5.0;
+        let v = m.bodies[0].mesh.volume();
+        assert!((v - expect).abs() / expect < 0.02, "{v} vs {expect}");
+    }
+
+    #[test]
+    fn ron_roundtrip() {
+        let mut d = Document::new("Part");
+        d.add_feature(boxf(0.0));
+        d.add_feature(FeatureKind::Move {
+            bodies: vec![1],
+            translate: [1.0, 2.0, 3.0],
+            axis: crate::Axis::Z,
+            angle_deg: 45.0,
+            copy: true,
+        });
+        let s = d.to_ron().unwrap();
+        assert_eq!(Document::from_ron(&s).unwrap(), d);
+    }
+}

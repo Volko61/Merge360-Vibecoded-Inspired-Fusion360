@@ -1,0 +1,15 @@
+[package]
+name = "m360-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+m360-core.workspace = true
+m360-kernel.workspace = true
+m360-render.workspace = true
+eframe.workspace = true
+glam.workspace = true
+serde.workspace = true
+ron.workspace = true
+rfd.workspace = true
+log.workspace = true

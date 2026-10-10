@@ -3,6 +3,8 @@
 A parametric 3D CAD application written in Rust, modeled on the **Autodesk Fusion 360**
 user interface and workflow (offline only, no cloud features).
 
+![Merge360](docs/screenshot.png)
+
 ![layout](docs/layout.txt)
 
 ## Running

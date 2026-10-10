@@ -11,5 +11,5 @@ eframe.workspace = true
 glam.workspace = true
 serde.workspace = true
 ron.workspace = true
-rfd.workspace = true
 log.workspace = true
+image.workspace = true

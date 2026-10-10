@@ -1,6 +1,8 @@
 //! Tessellation of B-rep solids into render/pick friendly meshes.
 
-use glam::{Vec3, DVec3};
+use std::collections::HashMap;
+
+use glam::{DVec3, Vec3};
 use truck_meshalgo::prelude::*;
 
 use crate::Solid;
@@ -136,15 +138,57 @@ pub fn tessellate_with(solid: &Solid, tol: f64) -> BodyMesh {
         out.face_count = face_id as u32 + 1;
     }
 
+    // Hide seam edges (same face on both sides) and smooth edges between
+    // tangent-continuous faces, like Fusion does.
+    let scale = 1.0e3 / (out.bbox_max - out.bbox_min).max_element().max(1e-3);
+    let q = |p: [f32; 3]| [(p[0] * scale).round() as i64, (p[1] * scale).round() as i64, (p[2] * scale).round() as i64];
+    let mut normals_at: HashMap<[i64; 3], Vec<(u32, Vec3)>> = HashMap::new();
+    for (i, p) in out.positions.iter().enumerate() {
+        normals_at.entry(q(*p)).or_default().push((out.face_ids[i], Vec3::from(out.normals[i])));
+    }
+    let mut edge_faces: HashMap<_, Vec<u32>> = HashMap::new();
+    for (fi, face) in meshed.face_iter().enumerate() {
+        for wire in face.boundaries() {
+            for e in wire.edge_iter() {
+                edge_faces.entry(e.id()).or_default().push(fi as u32);
+            }
+        }
+    }
+    let normal_of = |p: [f32; 3], f: u32| -> Option<Vec3> {
+        let ns = normals_at.get(&q(p))?;
+        let v: Vec3 = ns.iter().filter(|(id, _)| *id == f).map(|(_, n)| *n).sum();
+        (v.length_squared() > 1e-12).then(|| v.normalize())
+    };
+
+    let mut seen = std::collections::HashSet::new();
     for edge in meshed.edge_iter() {
+        if !seen.insert(edge.id()) {
+            continue;
+        }
         let curve = edge.curve();
         let pts: Vec<[f32; 3]> = curve
             .iter()
             .map(|p| [p.x as f32, p.y as f32, p.z as f32])
             .collect();
-        if pts.len() >= 2 {
-            out.edges.push(pts);
+        if pts.len() < 2 {
+            continue;
         }
+        if let Some(faces) = edge_faces.get(&edge.id()) {
+            if faces.len() == 2 {
+                if faces[0] == faces[1] {
+                    continue; // seam
+                }
+                let samples = [pts[0], pts[pts.len() / 2], pts[pts.len() - 1]];
+                let smooth = samples.iter().all(|p| match (normal_of(*p, faces[0]), normal_of(*p, faces[1])) {
+                    (Some(a), Some(b)) => a.dot(b) > 0.999,
+                    _ => false,
+                });
+                if smooth {
+                    continue;
+                }
+            }
+        }
+        out.edges.push(pts);
     }
 
     if out.positions.is_empty() {

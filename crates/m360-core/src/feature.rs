@@ -11,6 +11,9 @@ use crate::model::BodyId;
 pub struct PlaneRef {
     pub base: BasePlane,
     pub offset: f64,
+    /// Sketch on the back side of the plane (normal reversed).
+    #[serde(default)]
+    pub flip: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,9 +24,29 @@ pub enum BasePlane {
 }
 
 impl PlaneRef {
-    pub const XY: PlaneRef = PlaneRef { base: BasePlane::XY, offset: 0.0 };
-    pub const XZ: PlaneRef = PlaneRef { base: BasePlane::XZ, offset: 0.0 };
-    pub const YZ: PlaneRef = PlaneRef { base: BasePlane::YZ, offset: 0.0 };
+    pub fn normal(&self) -> DVec3 {
+        self.frame([0.0, 0.0]).n
+    }
+
+    /// Plane through `point` with world-axis-aligned `normal`, if any.
+    pub fn from_point_normal(point: DVec3, normal: DVec3) -> Option<PlaneRef> {
+        let n = normal.normalize_or_zero();
+        let (base, axis) = if n.z.abs() > 0.999 {
+            (BasePlane::XY, DVec3::Z)
+        } else if n.y.abs() > 0.999 {
+            (BasePlane::XZ, DVec3::Y)
+        } else if n.x.abs() > 0.999 {
+            (BasePlane::YZ, DVec3::X)
+        } else {
+            return None;
+        };
+        let flip = n.dot(axis) < 0.0;
+        Some(PlaneRef { base, offset: point.dot(axis), flip })
+    }
+
+    pub const XY: PlaneRef = PlaneRef { base: BasePlane::XY, offset: 0.0, flip: false };
+    pub const XZ: PlaneRef = PlaneRef { base: BasePlane::XZ, offset: 0.0, flip: false };
+    pub const YZ: PlaneRef = PlaneRef { base: BasePlane::YZ, offset: 0.0, flip: false };
 
     /// Placement frame with the given in-plane center.
     pub fn frame(&self, center: [f64; 2]) -> Frame {
@@ -33,8 +56,9 @@ impl PlaneRef {
             BasePlane::XZ => (DVec3::X, DVec3::NEG_Z),
             BasePlane::YZ => (DVec3::Y, DVec3::Z),
         };
-        let f = Frame::new(DVec3::ZERO, u, v);
-        Frame::new(f.n * self.offset + u * center[0] + v * center[1], u, v)
+        let n = u.cross(v);
+        let v = if self.flip { -v } else { v };
+        Frame::new(n * self.offset + u * center[0] + v * center[1], u, v)
     }
 
     pub fn label(&self) -> String {
@@ -43,10 +67,10 @@ impl PlaneRef {
             BasePlane::XZ => "XZ Plane",
             BasePlane::YZ => "YZ Plane",
         };
-        if self.offset == 0.0 {
+        if self.offset == 0.0 && !self.flip {
             name.to_string()
         } else {
-            format!("{name} (+{:.2})", self.offset)
+            format!("{name} ({:+.2})", self.offset)
         }
     }
 }

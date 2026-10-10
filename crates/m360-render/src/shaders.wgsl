@@ -97,19 +97,19 @@ fn fs_mesh(i: MeshOut) -> @location(0) vec4<f32> {
     if (is_selected(face)) {
         hl = vec4(0.03, 0.35, 0.85, 0.55);
     } else if (face == d.hover_face) {
-        hl = vec4(0.10, 0.55, 1.0, 0.40);
+        hl = vec4(0.25, 0.62, 1.0, 0.28);
     }
     base = mix(base, hl.rgb, hl.a);
 
-    let sky = 0.42;
-    let ground = 0.22;
+    let sky = 0.62;
+    let ground = 0.38;
     let amb = mix(ground, sky, n.y * 0.5 + 0.5);
     let l0 = normalize(g.light0.xyz);
     let l1 = normalize(g.light1.xyz);
-    let diff = max(dot(n, l0), 0.0) * 0.62 + max(dot(n, l1), 0.0) * 0.22;
+    let diff = max(dot(n, l0), 0.0) * 0.55 + max(dot(n, l1), 0.0) * 0.2 + max(dot(n, v), 0.0) * 0.15;
     let h = normalize(l0 + v);
-    let spec = pow(max(dot(n, h), 0.0), 60.0) * 0.28;
-    let rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.08;
+    let spec = pow(max(dot(n, h), 0.0), 60.0) * 0.22;
+    let rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.06;
     let c = base * (amb + diff) + vec3(spec + rim);
     return vec4(c, d.color.a);
 }
@@ -141,8 +141,16 @@ fn clip_near(p: vec4<f32>, q: vec4<f32>) -> vec4<f32> {
 @vertex
 fn vs_line(@builtin(vertex_index) vi: u32, l: LineIn) -> LineOut {
     var o: LineOut;
-    var ca = g.view_proj * vec4(l.a, 1.0);
-    var cb = g.view_proj * vec4(l.b, 1.0);
+    // Pull lines slightly towards the viewer (scale-independent) so edges win
+    // over the faces they bound. Overlay draws (flag 1) skip this.
+    var pa = l.a;
+    var pb = l.b;
+    if ((d.flags & 1u) == 0u) {
+        pa = pa + (g.eye.xyz - pa) * 0.001;
+        pb = pb + (g.eye.xyz - pb) * 0.001;
+    }
+    var ca = g.view_proj * vec4(pa, 1.0);
+    var cb = g.view_proj * vec4(pb, 1.0);
     if (ca.z < 0.0 && cb.z < 0.0) {
         o.clip = vec4(2.0, 2.0, 2.0, 1.0);
         o.color = vec4(0.0);
@@ -176,9 +184,6 @@ fn vs_line(@builtin(vertex_index) vi: u32, l: LineIn) -> LineOut {
     let off = nrm * s * w + dir * (t * 2.0 - 1.0) * w * 0.5;
     var clip = base;
     clip = vec4(clip.xy + off / half_vp * clip.w, clip.z, clip.w);
-    // Pull lines slightly towards the viewer so edges win over coplanar faces.
-    let bias = select(0.0004, 0.00002, g.eye.w > 0.5);
-    clip.z = clip.z - bias * clip.w * select(1.0, 0.0, (d.flags & 1u) != 0u);
     clip.z = max(clip.z, 0.0);
     o.clip = clip;
     o.color = l.color * d.edge_color;

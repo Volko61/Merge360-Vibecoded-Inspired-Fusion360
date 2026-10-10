@@ -495,6 +495,13 @@ pub fn all_tools(sketch: bool) -> Vec<Tool> {
     for tab in tabs {
         for panel in tab.panels {
             for tool in panel.tools {
+                // Unique by id, and by label (keep the implemented variant).
+                if let Some(i) = out.iter().position(|t| t.label == tool.label) {
+                    if !is_implemented(out[i].id) && is_implemented(tool.id) {
+                        out[i] = *tool;
+                    }
+                    continue;
+                }
                 if !out.iter().any(|t| t.id == tool.id) {
                     out.push(*tool);
                 }
@@ -505,5 +512,10 @@ pub fn all_tools(sketch: bool) -> Vec<Tool> {
 }
 
 pub fn find(id: &str) -> Option<Tool> {
-    all_tools(true).into_iter().find(|t| t.id == id)
+    std::iter::once(&SKETCH_TAB)
+        .chain(DESIGN_TABS.iter())
+        .flat_map(|t| t.panels.iter())
+        .flat_map(|p| p.tools.iter())
+        .find(|t| t.id == id)
+        .copied()
 }

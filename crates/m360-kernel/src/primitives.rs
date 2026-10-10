@@ -178,6 +178,21 @@ mod tests {
     }
 
     #[test]
+    fn visible_edges() {
+        let b = tessellate(&make_box(&xy(), 10.0, 10.0, 10.0).unwrap());
+        assert_eq!(b.edges.len(), 12);
+        let s = tessellate(&make_sphere(&xy(), 10.0).unwrap());
+        assert_eq!(s.edges.len(), 0, "sphere seams should be hidden");
+        let c = tessellate(&make_cylinder(&xy(), 10.0, 5.0).unwrap());
+        assert!(!c.edges.is_empty(), "cylinder rims must be visible");
+        // Only the two rims (possibly split into arcs) remain: no side seam.
+        for e in &c.edges {
+            let z0 = e[0][2];
+            assert!(e.iter().all(|p| (p[2] - z0).abs() < 1e-4), "unexpected side edge");
+        }
+    }
+
+    #[test]
     fn rejects_bad_params() {
         assert!(make_box(&xy(), 0.0, 1.0, 1.0).is_err());
         assert!(make_torus(&xy(), 10.0, 20.0).is_err());

@@ -189,7 +189,8 @@ impl Viewport3D {
                     buffers: &[Option<wgpu::VertexBufferLayout>],
                     depth_write: bool,
                     compare: wgpu::CompareFunction,
-                    blend: Option<wgpu::BlendState>| {
+                    blend: Option<wgpu::BlendState>,
+                    offset: bool| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&layout),
@@ -209,7 +210,13 @@ impl Viewport3D {
                     depth_write_enabled: Some(depth_write),
                     depth_compare: Some(compare),
                     stencil: Default::default(),
-                    bias: Default::default(),
+                    // Push faces back by their depth slope so that edges drawn
+                    // in creases (concave corners) are not hidden.
+                    bias: if offset {
+                        wgpu::DepthBiasState { constant: 300, slope_scale: 3.0, clamp: 0.0 }
+                    } else {
+                        Default::default()
+                    },
                 }),
                 multisample: wgpu::MultisampleState { count: samples, ..Default::default() },
                 fragment: Some(wgpu::FragmentState {
@@ -228,13 +235,13 @@ impl Viewport3D {
         };
         use wgpu::CompareFunction::*;
         let pipelines = Pipelines {
-            bg: make("bg", "vs_bg", "fs_bg", &[], false, Always, None),
-            mesh: make("mesh", "vs_mesh", "fs_mesh", &[Some(mesh_layout.clone())], true, Less, None),
-            mesh_blend: make("mesh_blend", "vs_mesh", "fs_mesh", &[Some(mesh_layout)], false, Less, blend_state()),
-            line: make("line", "vs_line", "fs_line", &[Some(line_layout.clone())], false, LessEqual, blend_state()),
-            line_overlay: make("line_ov", "vs_line", "fs_line", &[Some(line_layout)], false, Always, blend_state()),
-            flat: make("flat", "vs_flat", "fs_flat", &[Some(flat_layout.clone())], false, LessEqual, blend_state()),
-            flat_overlay: make("flat_ov", "vs_flat", "fs_flat", &[Some(flat_layout)], false, Always, blend_state()),
+            bg: make("bg", "vs_bg", "fs_bg", &[], false, Always, None, false),
+            mesh: make("mesh", "vs_mesh", "fs_mesh", &[Some(mesh_layout.clone())], true, Less, None, true),
+            mesh_blend: make("mesh_blend", "vs_mesh", "fs_mesh", &[Some(mesh_layout)], false, Less, blend_state(), true),
+            line: make("line", "vs_line", "fs_line", &[Some(line_layout.clone())], false, LessEqual, blend_state(), false),
+            line_overlay: make("line_ov", "vs_line", "fs_line", &[Some(line_layout)], false, Always, blend_state(), false),
+            flat: make("flat", "vs_flat", "fs_flat", &[Some(flat_layout.clone())], false, LessEqual, blend_state(), false),
+            flat_overlay: make("flat_ov", "vs_flat", "fs_flat", &[Some(flat_layout)], false, Always, blend_state(), false),
         };
 
         let draw_capacity = 64;

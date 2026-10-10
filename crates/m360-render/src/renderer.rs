@@ -102,6 +102,41 @@ pub struct Viewport3D {
     bodies: HashMap<usize, GpuBody>,
     targets: Option<Targets>,
     texture_id: Option<egui::TextureId>,
+    /// True on CPU rasterizers (llvmpipe, WARP…): no MSAA, capped resolution.
+    software: bool,
+    /// Hash of the last rendered scene; unchanged scenes are not re-rendered.
+    last_hash: Option<u64>,
+}
+
+/// Max pixels rendered per frame on software rasterizers.
+const SOFTWARE_MAX_PIXELS: f32 = 900_000.0;
+
+fn hash_scene(scene: &Scene, size: [u32; 2]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    size.hash(&mut h);
+    let c = &scene.camera;
+    for f in [c.target.x, c.target.y, c.target.z, c.yaw, c.pitch, c.distance, c.fov_y, scene.pixels_per_point] {
+        f.to_bits().hash(&mut h);
+    }
+    c.ortho.hash(&mut h);
+    bytemuck::cast_slice::<_, u8>(&[scene.bg_top, scene.bg_bottom]).hash(&mut h);
+    for b in &scene.bodies {
+        (Arc::as_ptr(&b.mesh) as usize).hash(&mut h);
+        bytemuck::cast_slice::<_, u8>(&[b.color, b.edge_color, b.highlight]).hash(&mut h);
+        b.hover_face.hash(&mut h);
+        b.selected_faces.hash(&mut h);
+        (b.show_faces, b.show_edges).hash(&mut h);
+    }
+    for v in [&scene.lines, &scene.overlay_lines] {
+        v.len().hash(&mut h);
+        bytemuck::cast_slice::<_, u8>(v).hash(&mut h);
+    }
+    for v in [&scene.tris, &scene.overlay_tris] {
+        v.len().hash(&mut h);
+        bytemuck::cast_slice::<_, u8>(v).hash(&mut h);
+    }
+    h.finish()
 }
 
 fn blend_state() -> Option<wgpu::BlendState> {
@@ -112,7 +147,8 @@ impl Viewport3D {
     pub fn new(rs: &egui_wgpu::RenderState) -> Self {
         let device = &rs.device;
         let flags = rs.adapter.get_texture_format_features(COLOR_FORMAT).flags;
-        let samples = if flags.sample_count_supported(4) { 4 } else { 1 };
+        let software = rs.adapter.get_info().device_type == wgpu::DeviceType::Cpu;
+        let samples = if !software && flags.sample_count_supported(4) { 4 } else { 1 };
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("m360 shaders"),
@@ -259,6 +295,8 @@ impl Viewport3D {
             bodies: HashMap::new(),
             targets: None,
             texture_id: None,
+            software,
+            last_hash: None,
         }
     }
 
@@ -393,7 +431,22 @@ impl Viewport3D {
         size: [u32; 2],
         scene: &Scene,
     ) -> egui::TextureId {
-        let size = [size[0].clamp(1, 8192), size[1].clamp(1, 8192)];
+        let mut size = [size[0].clamp(1, 8192), size[1].clamp(1, 8192)];
+        let mut scene_scale = 1.0;
+        if self.software {
+            let px = size[0] as f32 * size[1] as f32;
+            if px > SOFTWARE_MAX_PIXELS {
+                scene_scale = (SOFTWARE_MAX_PIXELS / px).sqrt();
+                size = [(size[0] as f32 * scene_scale) as u32, (size[1] as f32 * scene_scale) as u32];
+            }
+        }
+        let hash = hash_scene(scene, size);
+        if self.last_hash == Some(hash) {
+            if let Some(id) = self.texture_id {
+                return id;
+            }
+        }
+        self.last_hash = Some(hash);
         self.ensure_targets(rs, size);
         let device = &rs.device;
         let queue = &rs.queue;
@@ -408,7 +461,7 @@ impl Viewport3D {
             view_proj: cam.view_proj(aspect).to_cols_array_2d(),
             eye: cam.eye().extend(if cam.ortho { 1.0 } else { 0.0 }).to_array(),
             view_dir: fwd.extend(0.0).to_array(),
-            viewport: [size[0] as f32, size[1] as f32, scene.pixels_per_point, 0.0],
+            viewport: [size[0] as f32, size[1] as f32, scene.pixels_per_point * scene_scale, 0.0],
             bg_top: scene.bg_top,
             bg_bottom: scene.bg_bottom,
             light0: key.extend(0.0).to_array(),

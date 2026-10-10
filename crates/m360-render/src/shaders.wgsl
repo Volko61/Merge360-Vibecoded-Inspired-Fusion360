@@ -180,7 +180,7 @@ fn vs_line(@builtin(vertex_index) vi: u32, l: LineIn) -> LineOut {
     if (t > 0.5) {
         base = cb;
     }
-    let w = l.width * g.viewport.z * 0.5;
+    let w = max(l.width * g.viewport.z, 1.5) * 0.5;
     let off = nrm * s * w + dir * (t * 2.0 - 1.0) * w * 0.5;
     var clip = base;
     clip = vec4(clip.xy + off / half_vp * clip.w, clip.z, clip.w);

@@ -16,7 +16,9 @@ cargo run --release -p merge360 -- part.m360   # open a design
 
 `Help ▸ Open Sample Design` loads a demo part.
 
-Linux needs a Vulkan or GL driver (works under WSLg with Mesa).
+Linux needs a Vulkan (or OpenGL) driver. Under WSL without GPU drivers Merge360 runs on
+Mesa's CPU rasterizer (llvmpipe): it then disables MSAA and caps the 3D render resolution
+so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force a backend.
 
 ## The interface
 
@@ -85,5 +87,6 @@ Dev hooks (environment variables) used for automated visual checks:
 
 * `M360_SAMPLE=1` — open the sample design
 * `M360_SCREENSHOT=out.png` — save a screenshot after 40 frames and exit
+* `M360_FULLSCREEN=1` — start fullscreen; `M360_FPS=1` — print frame rate
 * `M360_CAMERA="yaw,pitch,dist,tx,ty,tz"` — set the initial camera
 * `M360_SCRIPT=file` — replay scripted input (see `crates/m360-ui/src/script.rs`)

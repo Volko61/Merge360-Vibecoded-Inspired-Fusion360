@@ -73,6 +73,7 @@ pub struct Merge360App {
     pub canvas: crate::viewport::CanvasState,
     pub pending_sketch_plane: Option<PlaneRef>,
     pub script: Option<crate::script::Script>,
+    pub fps: Option<(std::time::Instant, u32)>,
     pub untitled_counter: usize,
 }
 
@@ -108,6 +109,7 @@ impl Merge360App {
             canvas_time: 0.0,
             canvas: Default::default(),
             pending_sketch_plane: None,
+            fps: None,
             script: std::env::var("M360_SCRIPT").ok().and_then(|p| crate::script::Script::load(&p)),
             untitled_counter: 1,
         };
@@ -151,6 +153,15 @@ impl Merge360App {
     /// few frames and exits; `M360_SCRIPT=file` replays scripted input.
     fn dev_hooks(&mut self, ctx: &egui::Context) {
         let n = ctx.cumulative_frame_nr();
+        if std::env::var_os("M360_FPS").is_some() {
+            let now = std::time::Instant::now();
+            let (start, frames) = self.fps.get_or_insert((now, 0));
+            *frames += 1;
+            if now.duration_since(*start).as_secs_f32() >= 2.0 {
+                eprintln!("fps: {:.1} ({} frames, {:.0}x{:.0} pts)", *frames as f32 / now.duration_since(*start).as_secs_f32(), frames, ctx.content_rect().width(), ctx.content_rect().height());
+                self.fps = Some((now, 0));
+            }
+        }
         if let Some(path) = std::env::var_os("M360_SCREENSHOT") {
             let frames: u64 = std::env::var("M360_SCREENSHOT_FRAMES").ok().and_then(|s| s.parse().ok()).unwrap_or(40);
             if n == frames {

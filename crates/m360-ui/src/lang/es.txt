@@ -593,3 +593,28 @@ Click a line near the end to extend	Haga clic en una línea cerca del extremo qu
 Click a curve to split at its intersections	Haga clic en una curva para partirla en sus intersecciones
 Nothing to extend to: no curve in that direction.	Nada hasta donde alargar: no hay ninguna curva en esa dirección.
 The curve does not cross any other curve.	La curva no cruza ninguna otra curva.
+PHYSICAL MATERIAL	MATERIAL FÍSICO
+Merge360 Material Library	Biblioteca de materiales de Merge360
+Select bodies	Seleccione cuerpos
+Select bodies first, then click a material.	Seleccione primero los cuerpos y luego haga clic en un material.
+Material	Material
+Mass	Masa
+Steel	Acero
+Stainless Steel	Acero inoxidable
+Aluminum	Aluminio
+Brass	Latón
+Copper	Cobre
+Titanium	Titanio
+Cast Iron	Hierro fundido
+Gold	Oro
+ABS Plastic	Plástico ABS
+PLA	PLA
+PETG	PETG
+Nylon	Nailon
+Polycarbonate	Policarbonato
+Acrylic	Acrílico
+Rubber	Caucho
+Oak	Roble
+Pine	Pino
+Glass	Vidrio
+Concrete	Hormigón

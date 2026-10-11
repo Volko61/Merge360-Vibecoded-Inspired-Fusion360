@@ -56,7 +56,8 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
 * **Modify:** Fillet and Chamfer (straight edges between planar faces, incl. face loops),
   Shell (prismatic bodies, open faces), Thread (cosmetic, ISO metric sizes
   auto-detected from the face), Combine (join / cut / intersect), Split Body, Scale,
-  Move/Copy, Press Pull (edges → fillet, profiles → extrude), Delete, Appearance,
+  Move/Copy, Press Pull (edges → fillet, profiles → extrude), Delete, Appearance, Physical
+  Material (19 materials; mass and center of mass use their densities),
   Change Parameters, Compute All.
 * **Construct:** Offset Plane, Plane at Angle, Midplane, Plane Through Three Points. Sketches,
   holes and planes work on faces of any orientation.

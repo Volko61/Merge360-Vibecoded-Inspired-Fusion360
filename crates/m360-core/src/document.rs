@@ -19,6 +19,9 @@ pub struct BodyMeta {
     /// Owning component (None = root component).
     #[serde(default)]
     pub component: Option<u64>,
+    /// Physical material name (None = Steel).
+    #[serde(default)]
+    pub material: Option<String>,
 }
 
 /// A component (organises bodies; joints move whole components).
@@ -110,7 +113,7 @@ impl Document {
             let n = self.bodies.len() + 1;
             self.bodies.insert(
                 uid,
-                BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR, component: None },
+                BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR, component: None, material: None },
             );
         }
         if let Some((bodies, mats)) = kind.copy_transforms() {
@@ -118,7 +121,7 @@ impl Document {
                 let n = self.bodies.len() + 1;
                 self.bodies.insert(
                     (uid << 16) | i as u64,
-                    BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR, component: None },
+                    BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR, component: None, material: None },
                 );
             }
         }
@@ -180,6 +183,7 @@ impl Document {
             visible: true,
             color: BODY_COLOR,
             component: None,
+            material: None,
         })
     }
 

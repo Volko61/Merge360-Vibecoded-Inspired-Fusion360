@@ -446,6 +446,7 @@ pub enum Command {
         length: f64,
         editing: Option<EditCtx>,
     },
+    PhysicalMaterial,
     Interference {
         bodies: Vec<BodyId>,
         /// Computed overlaps (None until Compute).
@@ -539,6 +540,7 @@ impl Command {
             Command::DocSettings => "DOCUMENT SETTINGS",
             Command::CenterOfMass => "CENTER OF MASS",
             Command::Interference { .. } => "INTERFERENCE",
+            Command::PhysicalMaterial => "PHYSICAL MATERIAL",
             Command::Properties => "PROPERTIES",
         }
     }

@@ -185,6 +185,7 @@ impl Merge360App {
             | Some(Command::Appearance)
             | Some(Command::CenterOfMass)
             | Some(Command::Interference { .. })
+            | Some(Command::PhysicalMaterial)
             | Some(Command::Properties) => PickMode::Bodies,
             Some(Command::Measure { .. }) => PickMode::Measure,
             Some(Command::Fillet { .. }) => PickMode::Edges,
@@ -1200,7 +1201,7 @@ impl Merge360App {
                     picks.clear();
                 }
             }
-            Some(Command::Appearance) | Some(Command::CenterOfMass) | Some(Command::Properties) => match hover {
+            Some(Command::Appearance) | Some(Command::PhysicalMaterial) | Some(Command::CenterOfMass) | Some(Command::Properties) => match hover {
                 Some(h) => self.click_item(h, true),
                 None => self.tab().selection.clear(),
             },

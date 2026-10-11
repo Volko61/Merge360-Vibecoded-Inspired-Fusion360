@@ -1022,6 +1022,56 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::PhysicalMaterial => {
+                let sel = self.tabs[self.active].selected_bodies();
+                let current: Vec<Option<String>> = sel.iter().map(|b| self.tabs[self.active].doc.body_meta(*b).material).collect();
+                let mut apply: Option<&'static m360_core::materials::Material> = None;
+                let r = command_dialog(ctx, title, anchor, true, |ui| {
+                    row_label(ui, "Apply To");
+                    ui.label(if sel.is_empty() { tr("Select bodies").to_string() } else { format!("{} {}", sel.len(), tr("Bodies")) });
+                    ui.end_row();
+                    row_label(ui, "Library");
+                    ui.label(tr("Merge360 Material Library"));
+                    ui.end_row();
+                });
+                egui::Area::new(egui::Id::new("material_list")).fixed_pos(anchor + vec2(0.0, 150.0)).order(egui::Order::Foreground).show(ctx, |ui| {
+                    egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        ui.set_width(286.0);
+                        egui::ScrollArea::vertical().max_height(330.0).show(ui, |ui| {
+                            egui::Grid::new("materials").striped(true).num_columns(3).show(ui, |ui| {
+                                for m in m360_core::materials::MATERIALS {
+                                    let c = m.color;
+                                    let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), egui::Sense::hover());
+                                    ui.painter().circle_filled(r.center(), 7.0, Color32::from_rgb((c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8));
+                                    let used = !current.is_empty() && current.iter().all(|x| m360_core::materials::material(x.as_deref()).name == m.name);
+                                    if ui.selectable_label(used, tr(m.name)).clicked() {
+                                        apply = Some(m);
+                                    }
+                                    ui.label(RichText::new(format!("{:.2} g/cm³", m.density)).color(theme::TEXT_DIM));
+                                    ui.end_row();
+                                }
+                            });
+                        });
+                    });
+                });
+                if let Some(m) = apply {
+                    if sel.is_empty() {
+                        self.toast(crate::app::ToastKind::Info, tr("Select bodies first, then click a material."));
+                    } else {
+                        let ids = sel.clone();
+                        self.tab().edit("Physical Material", |d| {
+                            for id in &ids {
+                                let mut meta = d.body_meta(*id);
+                                meta.material = Some(m.name.to_string());
+                                meta.color = m.color;
+                                d.bodies.insert(*id, meta);
+                            }
+                        });
+                    }
+                }
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Parameters => {
                 let mut open = true;
                 egui::Window::new(tr("Parameters"))
@@ -1055,6 +1105,8 @@ impl Merge360App {
                     ids = tab.model.bodies.iter().filter(|b| tab.body_visible(b.id)).map(|b| b.id).collect();
                 }
                 let mut vol = 0.0;
+                let mut mass = 0.0;
+                let mut mats: Vec<&'static str> = Vec::new();
                 let mut c = DVec3::ZERO;
                 let mut area = 0.0;
                 let mut min = Vec3::splat(f32::MAX);
@@ -1062,15 +1114,22 @@ impl Merge360App {
                 for id in &ids {
                     if let Some(b) = tab.model.body(*id) {
                         let (v, cc) = mass_props(&b.mesh);
+                        let mat = m360_core::materials::material(tab.doc.body_meta(*id).material.as_deref());
+                        if !mats.contains(&mat.name) {
+                            mats.push(mat.name);
+                        }
+                        let g = m360_core::materials::mass_g(v, mat);
                         vol += v;
-                        c += cc * v;
+                        mass += g;
+                        // Center of mass weighted by mass, not volume.
+                        c += cc * g;
                         area += b.mesh.area();
                         min = min.min(b.mesh.bbox_min);
                         max = max.max(b.mesh.bbox_max);
                     }
                 }
-                if vol.abs() > 1e-12 {
-                    c /= vol;
+                if mass.abs() > 1e-12 {
+                    c /= mass;
                 }
                 self.canvas.com = (is_com && !ids.is_empty()).then(|| c.as_vec3());
                 let name = if ids.len() == 1 { tab.doc.body_meta(ids[0]).name } else { format!("{} bodies", ids.len()) };
@@ -1087,8 +1146,11 @@ impl Merge360App {
                             row_label(ui, "Area");
                             ui.label(format!("{:.3} {}²", units.from_mm(units.from_mm(area)), units.suffix()));
                             ui.end_row();
-                            row_label(ui, "Mass (steel)");
-                            ui.label(format!("{:.3} g", vol / 1000.0 * 7.85));
+                            row_label(ui, "Material");
+                            ui.label(mats.iter().map(|m| tr(m)).collect::<Vec<_>>().join(", "));
+                            ui.end_row();
+                            row_label(ui, "Mass");
+                            ui.label(if mass >= 1000.0 { format!("{:.3} kg", mass / 1000.0) } else { format!("{mass:.3} g") });
                             ui.end_row();
                             let d = max - min;
                             row_label(ui, "Bounding Box");

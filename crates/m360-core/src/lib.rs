@@ -4,6 +4,7 @@ pub mod dxf;
 pub mod document;
 pub mod expr;
 pub mod feature;
+pub mod materials;
 pub mod history;
 pub mod model;
 pub mod sketch;

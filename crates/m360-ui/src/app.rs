@@ -255,6 +255,18 @@ impl Merge360App {
                     (Some(Command::Extrude { symmetric, .. }), "symmetric") => *symmetric = v == "true",
                     (Some(Command::Extrude { taper, .. }), "taper") => *taper = num.unwrap_or(*taper),
                     (Some(Command::RefPlane { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
+                    (Some(Command::PhysicalMaterial), "material") => {
+                        let ids = tab.selected_bodies();
+                        let m = m360_core::materials::material(Some(v.as_str()));
+                        tab.edit("Physical Material", |d| {
+                            for id in &ids {
+                                let mut meta = d.body_meta(*id);
+                                meta.material = Some(m.name.to_string());
+                                meta.color = m.color;
+                                d.bodies.insert(*id, meta);
+                            }
+                        });
+                    }
                     (Some(Command::Interference { bodies, results }), "compute") => *results = Some(crate::state::interferences(&tab.model, bodies)),
                     (Some(Command::Thread { pitch, .. }), "pitch") => *pitch = num.unwrap_or(*pitch),
                     (Some(Command::Thread { full_length, length, .. }), "length") => {
@@ -730,6 +742,7 @@ impl Merge360App {
             }
             "delete" => self.delete_selection(),
             "appearance" => tab.command = Some(Command::Appearance),
+            "physical_material" | "manage_materials" => tab.command = Some(Command::PhysicalMaterial),
             "measure" => {
                 let picks = tab.selection.iter().take(2).copied().collect();
                 tab.command = Some(Command::Measure { picks });

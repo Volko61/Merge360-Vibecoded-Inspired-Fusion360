@@ -593,3 +593,28 @@ Click a line near the end to extend	Klicken Sie eine Linie nahe dem zu dehnenden
 Click a curve to split at its intersections	Klicken Sie auf eine Kurve, um sie an ihren Schnittpunkten zu teilen
 Nothing to extend to: no curve in that direction.	Nichts zum Dehnen: keine Kurve in dieser Richtung.
 The curve does not cross any other curve.	Die Kurve schneidet keine andere Kurve.
+PHYSICAL MATERIAL	PHYSISCHES MATERIAL
+Merge360 Material Library	Merge360-Materialbibliothek
+Select bodies	Körper auswählen
+Select bodies first, then click a material.	Wählen Sie zuerst Körper und klicken Sie dann auf ein Material.
+Material	Material
+Mass	Masse
+Steel	Stahl
+Stainless Steel	Edelstahl
+Aluminum	Aluminium
+Brass	Messing
+Copper	Kupfer
+Titanium	Titan
+Cast Iron	Gusseisen
+Gold	Gold
+ABS Plastic	ABS-Kunststoff
+PLA	PLA
+PETG	PETG
+Nylon	Nylon
+Polycarbonate	Polycarbonat
+Acrylic	Acryl
+Rubber	Gummi
+Oak	Eiche
+Pine	Kiefer
+Glass	Glas
+Concrete	Beton

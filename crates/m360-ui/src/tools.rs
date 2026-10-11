@@ -521,6 +521,8 @@ pub const IMPLEMENTED: &[&str] = &[
     "measure",
     "center_of_mass",
     "interference",
+    "physical_material",
+    "manage_materials",
     "change_parameters",
     "compute_all",
     "export_3dprint",

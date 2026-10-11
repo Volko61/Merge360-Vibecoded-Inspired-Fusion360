@@ -1693,7 +1693,7 @@ impl Merge360App {
 
         // Sketch dimension label next to the cursor.
         let tab = &self.tabs[self.active];
-        if let (Some(s), Some(cur)) = (tab.sketch.as_ref().filter(|s| !matches!(s.tool, SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text)), self.canvas.sketch_cursor) {
+        if let (Some(s), Some(cur)) = (tab.sketch.as_ref().filter(|s| !matches!(s.tool, SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_)) && !s.tool.is_edit()), self.canvas.sketch_cursor) {
             if let Some((plane, _)) = tab.sketch_entities(s.uid) {
                 if let Some(text) = crate::sketch::rubber_band_label(s, cur, tab.doc.units) {
                     if let Some(p) = self.to_screen(&tab.camera, to_world(&plane, cur)) {
@@ -1716,7 +1716,7 @@ impl Merge360App {
             Some(Command::Joint { b: None, .. }) => Some("Select a face on the component to move"),
             Some(Command::Joint { a: None, .. }) => Some("Select the face to join it to"),
             Some(Command::Extrude { profiles, .. }) if profiles.is_empty() => Some("Select a sketch profile"),
-            _ => None,
+            _ => tab.sketch.as_ref().and_then(|s| s.tool.prompt(s.pending.len())),
         };
         if let (Some(text), Some(p)) = (prompt, ui.input(|i| i.pointer.hover_pos()).filter(|p| self.canvas_rect.contains(*p))) {
             let pos = p + egui::vec2(16.0, 14.0);

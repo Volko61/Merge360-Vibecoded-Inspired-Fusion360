@@ -41,6 +41,12 @@ pub enum SketchConstraint {
     Distance { a: PointRef, b: PointRef, value: f64 },
     /// Circle/arc diameter.
     Diameter { entity: usize, value: f64 },
+    /// Point at the midpoint of a line.
+    Midpoint(PointRef, usize),
+    /// Second line on the infinite line through the first.
+    Collinear(usize, usize),
+    /// Two points mirrored about a line.
+    Symmetry(PointRef, PointRef, usize),
 }
 
 impl SketchConstraint {
@@ -52,6 +58,9 @@ impl SketchConstraint {
             Horizontal(e) | Vertical(e) | Diameter { entity: e, .. } => vec![*e],
             Parallel(a, b) | Perpendicular(a, b) | Equal(a, b) | Tangent(a, b) | Concentric(a, b) => vec![*a, *b],
             Fix(p) => vec![p.entity],
+            Midpoint(p, l) => vec![p.entity, *l],
+            Collinear(a, b) => vec![*a, *b],
+            Symmetry(a, b, l) => vec![a.entity, b.entity, *l],
         }
     }
 
@@ -68,6 +77,9 @@ impl SketchConstraint {
             Tangent(..) => "T",
             Concentric(..) => "◎",
             Fix(_) => "F",
+            Midpoint(..) => "M",
+            Collinear(..) => "C",
+            Symmetry(..) => "S",
             Distance { .. } | Diameter { .. } => "",
         }
     }
@@ -96,6 +108,9 @@ impl SketchConstraint {
             Fix(p) => Fix(pr(p)?),
             Distance { a, b, value } => Distance { a: pr(a)?, b: pr(b)?, value: *value },
             Diameter { entity, value } => Diameter { entity: map(*entity)?, value: *value },
+            Midpoint(p, l) => Midpoint(pr(p)?, map(*l)?),
+            Collinear(a, b) => Collinear(map(*a)?, map(*b)?),
+            Symmetry(a, b, l) => Symmetry(pr(a)?, pr(b)?, map(*l)?),
         })
     }
 }
@@ -259,6 +274,27 @@ impl Eval<'_> {
                 Diameter { entity, value } => {
                     let (_, r) = self.circle(x, *entity).ok_or_else(bad)?;
                     out.push(2.0 * r - value);
+                }
+                Midpoint(p, l) => {
+                    let q = self.p(x, *p).ok_or_else(bad)?;
+                    let (a, b) = self.line(x, *l).ok_or_else(bad)?;
+                    out.extend([q[0] - (a[0] + b[0]) / 2.0, q[1] - (a[1] + b[1]) / 2.0]);
+                }
+                Collinear(l1, l2) => {
+                    let (a, b) = self.line(x, *l1).ok_or_else(bad)?;
+                    let (c, e) = self.line(x, *l2).ok_or_else(bad)?;
+                    let d = dir((a, b));
+                    let off = |q: [f64; 2]| (q[0] - a[0]) * d[1] - (q[1] - a[1]) * d[0];
+                    out.extend([off(c), off(e)]);
+                }
+                Symmetry(p, q, l) => {
+                    let (pa, pb) = (self.p(x, *p).ok_or_else(bad)?, self.p(x, *q).ok_or_else(bad)?);
+                    let (a, b) = self.line(x, *l).ok_or_else(bad)?;
+                    let d = dir((a, b));
+                    let m = [(pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0];
+                    // Midpoint on the line, and the segment p-q perpendicular to it.
+                    out.push((m[0] - a[0]) * d[1] - (m[1] - a[1]) * d[0]);
+                    out.push((pb[0] - pa[0]) * d[0] + (pb[1] - pa[1]) * d[1]);
                 }
             }
         }
@@ -441,6 +477,37 @@ fn solve_dense(a: &mut [f64], mut b: Vec<f64>, n: usize) -> Option<Vec<f64>> {
 mod tests {
     use super::*;
     use crate::sketch::rectangle;
+
+    #[test]
+    fn midpoint_collinear_symmetry() {
+        let mut e = vec![
+            SketchEntity::Line { a: [0.0, 0.0], b: [10.0, 0.0] },
+            SketchEntity::Point { p: [3.0, 2.0] },
+            SketchEntity::Line { a: [12.0, 1.0], b: [20.0, 3.0] },
+            SketchEntity::Line { a: [0.0, -5.0], b: [0.0, 5.0] },
+            SketchEntity::Point { p: [-4.0, 1.0] },
+            SketchEntity::Point { p: [3.0, 3.0] },
+        ];
+        let c = vec![
+            SketchConstraint::Midpoint(PointRef::new(1, 0), 0),
+            SketchConstraint::Collinear(0, 2),
+            SketchConstraint::Symmetry(PointRef::new(4, 0), PointRef::new(5, 0), 3),
+        ];
+        solve(&mut e, &c, None).unwrap();
+        let (SketchEntity::Line { a, b }, SketchEntity::Point { p }) = (e[0].clone(), e[1].clone()) else { panic!() };
+        assert!((p[0] - (a[0] + b[0]) / 2.0).abs() < 1e-6 && (p[1] - (a[1] + b[1]) / 2.0).abs() < 1e-6);
+        let SketchEntity::Line { a: c2, b: d2 } = e[2] else { panic!() };
+        let d = [b[0] - a[0], b[1] - a[1]];
+        for q in [c2, d2] {
+            assert!(((q[0] - a[0]) * d[1] - (q[1] - a[1]) * d[0]).abs() < 1e-5);
+        }
+        let (SketchEntity::Point { p: s1 }, SketchEntity::Point { p: s2 }, SketchEntity::Line { a: la, b: lb }) = (e[4].clone(), e[5].clone(), e[3].clone()) else { panic!() };
+        // The symmetry line stays vertical-ish here: check the mirror relation.
+        let ld = [lb[0] - la[0], lb[1] - la[1]];
+        assert!(((s2[0] - s1[0]) * ld[0] + (s2[1] - s1[1]) * ld[1]).abs() < 1e-5);
+        let m = [(s1[0] + s2[0]) / 2.0 - la[0], (s1[1] + s2[1]) / 2.0 - la[1]];
+        assert!((m[0] * ld[1] - m[1] * ld[0]).abs() < 1e-5);
+    }
 
     fn lens(e: &[SketchEntity]) -> Vec<f64> {
         e.iter()

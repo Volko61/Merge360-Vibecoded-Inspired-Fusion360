@@ -9,6 +9,7 @@
 //! mdrag c 0.4 0.5 c 0.6 0.5 shift   # middle drag (+ optional modifier)
 //! scroll c 0.5 0.5 -120
 //! key S [ctrl|shift]      # key press
+//! click w x y z [shift]   # click (+ optional modifier)
 //! text 25 mm              # text input
 //! tool box                # run a toolbar tool by id
 //! ok                      # press OK on the command dialog
@@ -33,7 +34,7 @@ pub enum P {
 enum Step {
     Wait(u32),
     Move(P),
-    Click(P, PointerButton, bool),
+    Click(P, PointerButton, bool, Modifiers),
     Drag(P, P, PointerButton, Modifiers),
     Scroll(P, f32),
     Key(Key, Modifiers),
@@ -99,9 +100,11 @@ impl Script {
             let step = match t[0] {
                 "wait" => Step::Wait(rest.first().and_then(|s| s.parse().ok()).unwrap_or(10)),
                 "move" => Step::Move(parse_p(rest)?.0),
-                "click" => Step::Click(parse_p(rest)?.0, PointerButton::Primary, false),
-                "rclick" => Step::Click(parse_p(rest)?.0, PointerButton::Secondary, false),
-                "dclick" => Step::Click(parse_p(rest)?.0, PointerButton::Primary, true),
+                "click" | "rclick" | "dclick" => {
+                    let (p, n) = parse_p(rest)?;
+                    let button = if t[0] == "rclick" { PointerButton::Secondary } else { PointerButton::Primary };
+                    Step::Click(p, button, t[0] == "dclick", mods(rest.get(n)))
+                }
                 "drag" | "mdrag" => {
                     let (a, n) = parse_p(rest)?;
                     let (b, m) = parse_p(&rest[n..])?;
@@ -152,19 +155,22 @@ impl Script {
         match &step {
             Step::Wait(n) => self.wait = *n,
             Step::Move(p) => ev.push(egui::Event::PointerMoved(pos(p))),
-            Step::Click(p, button, double) => {
+            Step::Click(p, button, double, m) => {
                 let at = pos(p);
                 let clicks = if *double { 2 } else { 1 };
                 match self.phase {
                     0 => {
                         ev.push(egui::Event::PointerMoved(at));
+                        ev.push(egui::Event::ModifiersChanged(*m));
                         next = false;
                     }
                     k if k <= 2 * clicks => {
                         let pressed = k % 2 == 1;
-                        ev.push(egui::Event::PointerButton { pos: at, button: *button, pressed, modifiers: Modifiers::NONE });
-                        next = k == 2 * clicks;
+                        ev.push(egui::Event::PointerButton { pos: at, button: *button, pressed, modifiers: *m });
+                        ev.push(egui::Event::ModifiersChanged(*m));
+                        next = false;
                     }
+                    k if k == 2 * clicks + 1 => ev.push(egui::Event::ModifiersChanged(Modifiers::NONE)),
                     _ => {}
                 }
             }

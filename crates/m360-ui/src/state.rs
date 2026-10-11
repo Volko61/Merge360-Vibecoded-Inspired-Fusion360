@@ -142,6 +142,12 @@ pub enum SketchTool {
     Offset,
     Fillet,
     Text,
+    Slot,
+    Mirror,
+    CircPattern,
+    RectPattern,
+    Move,
+    Scale,
 }
 
 /// Geometric constraint tools of the SKETCH tab.
@@ -155,6 +161,9 @@ pub enum ConKind {
     Perpendicular,
     Fix,
     Concentric,
+    Midpoint,
+    Collinear,
+    Symmetry,
 }
 
 impl ConKind {
@@ -168,18 +177,30 @@ impl ConKind {
             ConKind::Perpendicular => "Perpendicular",
             ConKind::Fix => "Fix",
             ConKind::Concentric => "Concentric",
+            ConKind::Midpoint => "Midpoint",
+            ConKind::Collinear => "Collinear",
+            ConKind::Symmetry => "Symmetry",
         }
     }
     /// Number of picks needed.
     pub fn picks(self) -> usize {
         match self {
             ConKind::HorizontalVertical | ConKind::Fix => 1,
+            ConKind::Symmetry => 3,
             _ => 2,
         }
     }
     /// Whether the tool picks points (else entities).
     pub fn wants_points(self) -> bool {
         matches!(self, ConKind::Coincident | ConKind::Fix)
+    }
+    /// Number of point picks of tools that pick points and then a line.
+    pub fn mixed_points(self) -> Option<usize> {
+        match self {
+            ConKind::Midpoint => Some(1),
+            ConKind::Symmetry => Some(2),
+            _ => None,
+        }
     }
 }
 
@@ -193,6 +214,19 @@ pub enum EditPurpose {
     Fillet(usize, usize),
     /// Place text at a point (the editor holds the text; height in mm).
     Text([f64; 2], f64),
+    /// Circular pattern of entities around a center (text: count).
+    CircPattern(Vec<usize>, [f64; 2]),
+    /// Rectangular pattern along a spacing vector (text: "N" or "N x M").
+    RectPattern(Vec<usize>, [f64; 2]),
+    /// Scale entities about a base point (text: factor).
+    Scale(Vec<usize>, [f64; 2]),
+}
+
+impl EditPurpose {
+    /// The editor holds free text rather than a length.
+    pub fn raw_text(&self) -> bool {
+        matches!(self, EditPurpose::Text(..) | EditPurpose::CircPattern(..) | EditPurpose::RectPattern(..) | EditPurpose::Scale(..))
+    }
 }
 
 /// An open inline dimension editor in sketch mode.
@@ -223,8 +257,38 @@ impl SketchTool {
             SketchTool::Offset => "Offset",
             SketchTool::Fillet => "Fillet",
             SketchTool::Text => "Text",
+            SketchTool::Slot => "Center to Center Slot",
+            SketchTool::Mirror => "Mirror",
+            SketchTool::CircPattern => "Circular Pattern",
+            SketchTool::RectPattern => "Rectangular Pattern",
+            SketchTool::Move => "Move/Copy",
+            SketchTool::Scale => "Sketch Scale",
             SketchTool::Constrain(k) => k.label(),
         }
+    }
+
+    /// Tools that transform the sketch geometry selected beforehand.
+    pub fn acts_on_selection(self) -> bool {
+        matches!(self, SketchTool::Mirror | SketchTool::CircPattern | SketchTool::RectPattern | SketchTool::Move | SketchTool::Scale)
+    }
+
+    /// Tools that edit existing geometry (clicks pick, they do not draw).
+    pub fn is_edit(self) -> bool {
+        matches!(self, SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text) || self.acts_on_selection()
+    }
+
+    /// Prompt shown next to the cursor.
+    pub fn prompt(self, clicks: usize) -> Option<&'static str> {
+        Some(match (self, clicks) {
+            (SketchTool::Mirror, _) => "Select the mirror line",
+            (SketchTool::CircPattern, _) => "Click the center point",
+            (SketchTool::RectPattern, 0) => "Click the start of the spacing vector",
+            (SketchTool::RectPattern, _) => "Click the end of the spacing vector",
+            (SketchTool::Move, 0) => "Click the base point",
+            (SketchTool::Move, _) => "Click the target point",
+            (SketchTool::Scale, _) => "Click the base point",
+            _ => return None,
+        })
     }
 }
 
@@ -243,6 +307,8 @@ pub struct SketchSession {
     pub dim_edit: Option<DimEdit>,
     /// Point being dragged with the Select tool.
     pub drag: Option<m360_core::solver::PointRef>,
+    /// Entities the Mirror / Pattern / Move / Scale tools act on.
+    pub targets: Vec<usize>,
 }
 
 /// Context for editing an existing feature from the timeline.

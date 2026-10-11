@@ -41,8 +41,10 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   rectangle, circle, 3-point arc, polygon, point; **parametric**: sketch dimensions (lengths,
   distances, diameters) and constraints (horizontal/vertical, coincident, parallel,
   perpendicular, equal, tangent, concentric, fix) solved by a built-in constraint solver;
-  drag points with the Select tool; automatic H/V constraints; trim, offset, sketch fillet;
-  sketch text (font outlines, extrudable).
+  drag points with the Select tool; automatic H/V constraints; midpoint, collinear and
+  symmetry constraints; center-to-center slot; trim, offset, sketch fillet; mirror (linked by
+  symmetry constraints), circular / rectangular pattern, move, scale; sketch text (font
+  outlines, extrudable).
 * **Create:** Extrude (new body / join / cut / intersect, one side or symmetric, taper angle,
   profiles with holes), Revolve (around X/Y/Z or a sketch line), Sweep and Pipe (along connected lines/arcs,
   hollow pipes), Loft, Hole (simple / counterbore / countersink, distance or through all,

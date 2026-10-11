@@ -183,8 +183,96 @@ pub fn polygon(c: [f64; 2], v: [f64; 2], sides: usize) -> Vec<SketchEntity> {
     (0..sides).map(|i| SketchEntity::Line { a: pts[i], b: pts[(i + 1) % sides] }).collect()
 }
 
+/// Center-to-center slot: two lines and two half-circle arcs around the
+/// segment `c1`-`c2` with half width `w`.
+pub fn slot(c1: [f64; 2], c2: [f64; 2], w: f64) -> Vec<SketchEntity> {
+    let d = [c2[0] - c1[0], c2[1] - c1[1]];
+    let l = d[0].hypot(d[1]);
+    if l < 1e-9 || w < 1e-9 {
+        return Vec::new();
+    }
+    let n = [-d[1] / l * w, d[0] / l * w];
+    let t = [d[0] / l * w, d[1] / l * w];
+    let p = |c: [f64; 2], k: f64, v: [f64; 2]| [c[0] + k * v[0], c[1] + k * v[1]];
+    vec![
+        SketchEntity::Line { a: p(c1, -1.0, n), b: p(c2, -1.0, n) },
+        SketchEntity::Arc { a: p(c2, -1.0, n), m: p(c2, 1.0, t), b: p(c2, 1.0, n) },
+        SketchEntity::Line { a: p(c2, 1.0, n), b: p(c1, 1.0, n) },
+        SketchEntity::Arc { a: p(c1, 1.0, n), m: p(c1, -1.0, t), b: p(c1, -1.0, n) },
+    ]
+}
+
+/// Apply a point map to an entity; circle radii are multiplied by `rs`.
+pub fn map_entity(e: &SketchEntity, f: impl Fn([f64; 2]) -> [f64; 2], rs: f64) -> SketchEntity {
+    match *e {
+        SketchEntity::Line { a, b } => SketchEntity::Line { a: f(a), b: f(b) },
+        SketchEntity::Circle { c, r } => SketchEntity::Circle { c: f(c), r: r * rs },
+        SketchEntity::Point { p } => SketchEntity::Point { p: f(p) },
+        SketchEntity::Arc { a, m, b } => SketchEntity::Arc { a: f(a), m: f(m), b: f(b) },
+    }
+}
+
+/// Mirror of `p` about the line through `a` and `b`.
+pub fn mirror_point(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> [f64; 2] {
+    let d = sub(b, a);
+    let l2 = dot(d, d).max(1e-24);
+    let foot = add(a, mul(d, dot(sub(p, a), d) / l2));
+    sub(mul(foot, 2.0), p)
+}
+
+/// Copies of entities rotated around `center` (`count` instances over
+/// `total_deg`, the originals being the first instance).
+pub fn circular_pattern(entities: &[SketchEntity], targets: &[usize], center: [f64; 2], count: usize, total_deg: f64) -> Vec<SketchEntity> {
+    let full = (total_deg.abs() - 360.0).abs() < 1e-9;
+    let steps = if full { count } else { count.saturating_sub(1).max(1) };
+    let mut out = Vec::new();
+    for k in 1..count {
+        let ang = (total_deg / steps as f64 * k as f64).to_radians();
+        let (s, c) = ang.sin_cos();
+        let rot = |p: [f64; 2]| {
+            let q = sub(p, center);
+            add(center, [q[0] * c - q[1] * s, q[0] * s + q[1] * c])
+        };
+        out.extend(targets.iter().filter_map(|&i| entities.get(i)).map(|e| map_entity(e, rot, 1.0)));
+    }
+    out
+}
+
+/// Copies of entities on a grid: `n1` along `d1` and `n2` along `d2`.
+pub fn rectangular_pattern(entities: &[SketchEntity], targets: &[usize], d1: [f64; 2], n1: usize, d2: [f64; 2], n2: usize) -> Vec<SketchEntity> {
+    let mut out = Vec::new();
+    for j in 0..n2.max(1) {
+        for i in 0..n1.max(1) {
+            if i == 0 && j == 0 {
+                continue;
+            }
+            let off = add(mul(d1, i as f64), mul(d2, j as f64));
+            out.extend(targets.iter().filter_map(|&k| entities.get(k)).map(|e| map_entity(e, |p| add(p, off), 1.0)));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn slot_is_one_profile() {
+        let e = super::slot([0.0, 0.0], [20.0, 0.0], 5.0);
+        let p = super::profiles(&e);
+        assert_eq!(p.len(), 1);
+        let expect = 20.0 * 10.0 + std::f64::consts::PI * 25.0;
+        assert!((p[0].area() - expect).abs() < 1.5, "{}", p[0].area());
+    }
+
+    #[test]
+    fn patterns_and_mirror() {
+        let e = vec![crate::SketchEntity::Circle { c: [10.0, 0.0], r: 1.0 }];
+        assert_eq!(super::circular_pattern(&e, &[0], [0.0, 0.0], 6, 360.0).len(), 5);
+        assert_eq!(super::rectangular_pattern(&e, &[0], [5.0, 0.0], 3, [0.0, 5.0], 2).len(), 5);
+        let m = super::mirror_point([3.0, 1.0], [0.0, 0.0], [0.0, 1.0]);
+        assert!((m[0] + 3.0).abs() < 1e-12 && (m[1] - 1.0).abs() < 1e-12);
+    }
+
     use super::*;
 
     #[test]

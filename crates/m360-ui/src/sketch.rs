@@ -29,8 +29,18 @@ pub fn rubber_band(s: &SketchSession, cursor: [f64; 2]) -> Vec<SketchEntity> {
             _ => arc_or_line(first, s.pending[1], cursor),
         },
         SketchTool::Polygon => m360_core::sketch::polygon(first, cursor, POLYGON_SIDES),
+        SketchTool::Slot => match s.pending.len() {
+            1 => vec![SketchEntity::Line { a: first, b: cursor }],
+            _ => m360_core::sketch::slot(first, s.pending[1], line_dist(first, s.pending[1], cursor)),
+        },
         _ => Vec::new(),
     }
+}
+
+/// Distance from `p` to the infinite line through `a` and `b`.
+fn line_dist(a: [f64; 2], b: [f64; 2], p: [f64; 2]) -> f64 {
+    let d = [b[0] - a[0], b[1] - a[1]];
+    ((p[0] - a[0]) * d[1] - (p[1] - a[1]) * d[0]).abs() / d[0].hypot(d[1]).max(1e-12)
 }
 
 pub const POLYGON_SIDES: usize = 6;
@@ -70,6 +80,8 @@ pub fn rubber_band_label(s: &SketchSession, cursor: [f64; 2], units: Units) -> O
             None => return None,
         },
         SketchTool::Polygon => format!("{} sides, R {}", POLYGON_SIDES, units.format(dist(first, cursor))),
+        SketchTool::Slot if s.pending.len() == 1 => units.format(dist(first, cursor)),
+        SketchTool::Slot => format!("width {}", units.format(2.0 * line_dist(first, s.pending[1], cursor))),
         _ => return None,
     })
 }
@@ -121,7 +133,7 @@ impl Merge360App {
             self.constraint_pick(hover);
             return;
         }
-        if self.tabs[self.active].sketch.as_ref().is_some_and(|s| matches!(s.tool, SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text)) {
+        if self.tabs[self.active].sketch.as_ref().is_some_and(|s| s.tool.is_edit()) {
             self.edit_tool_pick(hover);
             return;
         }
@@ -162,6 +174,17 @@ impl Merge360App {
                     s.pending.clear();
                 }
             }
+            SketchTool::Slot => {
+                if s.pending.len() < 2 {
+                    if s.pending.last().is_none_or(|p| dist(*p, cur) > 1e-9) {
+                        s.pending.push(cur);
+                    }
+                } else {
+                    new = rubber_band(s, cur);
+                    label = "Slot";
+                    s.pending.clear();
+                }
+            }
             SketchTool::Rect | SketchTool::CenterRect | SketchTool::Circle | SketchTool::Polygon => {
                 if s.pending.is_empty() {
                     s.pending.push(cur);
@@ -182,7 +205,7 @@ impl Merge360App {
                     s.pending.clear();
                 }
             }
-            SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text => {}
+            _ => {}
         }
         if new.is_empty() {
             return;
@@ -197,6 +220,12 @@ impl Merge360App {
                     } else if (a[0] - b[0]).abs() < 1e-9 {
                         constraints.push(SketchConstraint::Vertical(base + k));
                     }
+                }
+            }
+            if label == "Slot" && new.len() == 4 {
+                // Keep the slot's lines tangent to its end arcs.
+                for (l, a) in [(0, 1), (2, 1), (2, 3), (0, 3)] {
+                    constraints.push(SketchConstraint::Tangent(base + l, base + a));
                 }
             }
             entities.extend(new);
@@ -274,6 +303,69 @@ impl Merge360App {
                     _ => vec![i],
                 };
                 open(self, EditPurpose::Offset(chain), 2.0);
+            }
+            (SketchTool::Mirror, Some(SelItem::SketchEntity(_, l))) => {
+                let targets = tab.sketch.as_ref().map(|s| s.targets.clone()).unwrap_or_default();
+                let Some(SketchEntity::Line { a, b }) = ents.get(l).cloned() else {
+                    return self.toast(ToastKind::Info, "Select a line as the mirror line.");
+                };
+                let targets: Vec<usize> = targets.into_iter().filter(|&i| i != l && i < ents.len()).collect();
+                if self.sketch_edit("Sketch Mirror", |e, c| {
+                    for &i in &targets {
+                        let j = e.len();
+                        let m = m360_core::sketch::map_entity(&e[i], |p| m360_core::sketch::mirror_point(p, a, b), 1.0);
+                        e.push(m);
+                        // Keep the copy linked to the original.
+                        for p in m360_core::solver::points_of(e, i) {
+                            let q = PointRef::new(j, p.index);
+                            if dist(point_of(e, p).unwrap(), point_of(e, q).unwrap()) > 1e-9 {
+                                c.push(SketchConstraint::Symmetry(p, q, l));
+                            }
+                        }
+                        if matches!(e[i], SketchEntity::Circle { .. }) {
+                            c.push(SketchConstraint::Equal(i, j));
+                        }
+                    }
+                }) {
+                    self.finish_selection_tool();
+                }
+            }
+            (SketchTool::CircPattern, _) => {
+                let Some(at) = self.canvas.sketch_cursor else { return };
+                let targets = tab.sketch.as_ref().map(|s| s.targets.clone()).unwrap_or_default();
+                self.open_raw_edit(EditPurpose::CircPattern(targets, at), "6", pointer);
+            }
+            (SketchTool::Scale, _) => {
+                let Some(at) = self.canvas.sketch_cursor else { return };
+                let targets = tab.sketch.as_ref().map(|s| s.targets.clone()).unwrap_or_default();
+                self.open_raw_edit(EditPurpose::Scale(targets, at), "2", pointer);
+            }
+            (SketchTool::RectPattern | SketchTool::Move, _) => {
+                let Some(at) = self.canvas.sketch_cursor else { return };
+                let Some(s) = &mut self.tab().sketch else { return };
+                let Some(&base) = s.pending.first() else {
+                    s.pending.push(at);
+                    return;
+                };
+                s.pending.clear();
+                let targets = s.targets.clone();
+                let v = [at[0] - base[0], at[1] - base[1]];
+                if v[0].hypot(v[1]) < 1e-9 {
+                    return;
+                }
+                if tool == SketchTool::Move {
+                    if self.sketch_edit("Sketch Move", |e, _| {
+                        for &i in &targets {
+                            if let Some(x) = e.get(i) {
+                                e[i] = m360_core::sketch::map_entity(x, |p| [p[0] + v[0], p[1] + v[1]], 1.0);
+                            }
+                        }
+                    }) {
+                        self.finish_selection_tool();
+                    }
+                } else {
+                    self.open_raw_edit(EditPurpose::RectPattern(targets, v), "3", pointer);
+                }
             }
             (SketchTool::Text, _) => {
                 let Some(at) = self.canvas.sketch_cursor else { return };
@@ -380,14 +472,30 @@ impl Merge360App {
                 }
             }
             SketchTool::Constrain(kind) => {
-                // Normalise the pick: points for point tools, entities otherwise.
-                let pick = match (kind.wants_points(), hover) {
+                let mut picks = self.tabs[self.active].sketch.as_ref().map(|s| s.picked.clone()).unwrap_or_default();
+                // Normalise the pick: points for point tools, entities otherwise;
+                // point(s) first, then a line for Midpoint/Symmetry.
+                let pick = if let Some(np) = kind.mixed_points() {
+                    let have = picks.iter().filter(|p| matches!(p, SelItem::SketchPoint(..))).count();
+                    match hover {
+                        SelItem::SketchPoint(u, p) if have >= np => SelItem::SketchEntity(u, p.entity),
+                        SelItem::SketchEntity(u, i) if have < np && matches!(ents.get(i), Some(SketchEntity::Point { .. })) => {
+                            SelItem::SketchPoint(u, PointRef::new(i, 0))
+                        }
+                        SelItem::SketchEntity(..) if have < np => {
+                            return self.toast(ToastKind::Info, format!("{}: select {} first, then a line.", kind.label(), if np == 1 { "a point" } else { "two points" }));
+                        }
+                        SelItem::SketchPoint(..) | SelItem::SketchEntity(..) => hover,
+                        _ => return,
+                    }
+                } else {
+                    match (kind.wants_points(), hover) {
                     (true, SelItem::SketchPoint(..)) | (false, SelItem::SketchEntity(..)) => hover,
                     (true, SelItem::SketchEntity(u, i)) if kind == ConKind::Fix => SelItem::SketchEntity(u, i),
                     (false, SelItem::SketchPoint(u, p)) => SelItem::SketchEntity(u, p.entity),
                     _ => return,
+                    }
                 };
-                let mut picks = self.tabs[self.active].sketch.as_ref().map(|s| s.picked.clone()).unwrap_or_default();
                 picks.push(pick);
                 if picks.len() < kind.picks() {
                     if let Some(s) = &mut self.tab().sketch {
@@ -446,6 +554,20 @@ impl Merge360App {
                         (Some(a), Some(b)) if round(a) && line(b) => new.push(SketchConstraint::Tangent(b, a)),
                         _ => return bad(self, "Select a line and a circle or arc."),
                     },
+                    ConKind::Midpoint => match (pt(&picks[0]), ent(&picks[1])) {
+                        (Some(p), Some(l)) if line(l) && p.entity != l => new.push(SketchConstraint::Midpoint(p, l)),
+                        _ => return bad(self, "Select a point, then a line."),
+                    },
+                    ConKind::Collinear => match (ent(&picks[0]), ent(&picks[1])) {
+                        (Some(a), Some(b)) if a != b && line(a) && line(b) => new.push(SketchConstraint::Collinear(a, b)),
+                        _ => return bad(self, "Select two lines."),
+                    },
+                    ConKind::Symmetry => match (pt(&picks[0]), pt(&picks[1]), ent(&picks[2])) {
+                        (Some(a), Some(b), Some(l)) if a != b && line(l) && a.entity != l && b.entity != l => {
+                            new.push(SketchConstraint::Symmetry(a, b, l))
+                        }
+                        _ => return bad(self, "Select two points, then the symmetry line."),
+                    },
                     ConKind::Concentric => match (ent(&picks[0]), ent(&picks[1])) {
                         (Some(a), Some(b)) if a != b && round(a) && round(b) => new.push(SketchConstraint::Concentric(a, b)),
                         _ => return bad(self, "Select two circles or arcs."),
@@ -454,6 +576,91 @@ impl Merge360App {
                 self.sketch_edit(kind.label(), |_, c| c.extend(new));
             }
             _ => {}
+        }
+    }
+
+    /// Open the inline editor for a free-text value.
+    fn open_raw_edit(&mut self, purpose: EditPurpose, text: &str, pos: eframe::egui::Pos2) {
+        if let Some(s) = &mut self.tab().sketch {
+            s.dim_edit = Some(DimEdit { purpose, index: None, draft: SketchConstraint::Fix(PointRef::new(0, 0)), text: text.into(), pos, focus: 3 });
+        }
+    }
+
+    /// Back to the Select tool after Mirror / Pattern / Move / Scale.
+    fn finish_selection_tool(&mut self) {
+        let tab = self.tab();
+        tab.selection.clear();
+        if let Some(s) = &mut tab.sketch {
+            s.tool = SketchTool::Select;
+            s.targets.clear();
+            s.pending.clear();
+        }
+    }
+
+    fn commit_raw_edit(&mut self, purpose: EditPurpose, t: &str) {
+        use m360_core::sketch::{circular_pattern, map_entity, rectangular_pattern};
+        let done = match purpose {
+            EditPurpose::Text(at, height) => {
+                if !t.is_empty() {
+                    self.sketch_edit("Text", |e, _| e.extend(m360_core::text::text_entities(t, at, height)));
+                }
+                return;
+            }
+            EditPurpose::CircPattern(targets, c) => match t.parse::<usize>() {
+                Ok(n) if (2..=360).contains(&n) => self.sketch_edit("Sketch Circular Pattern", |e, _| {
+                    let new = circular_pattern(e, &targets, c, n, 360.0);
+                    e.extend(new);
+                }),
+                _ => {
+                    self.toast(ToastKind::Warning, "Enter a quantity between 2 and 360.");
+                    false
+                }
+            },
+            EditPurpose::RectPattern(targets, v) => {
+                let parts: Vec<Option<usize>> = t.split(['x', 'X', '*', '×']).map(|p| p.trim().parse().ok()).collect();
+                match parts.as_slice() {
+                    [Some(n1)] | [Some(n1), Some(1)] if (2..=200).contains(n1) => self.sketch_edit("Sketch Rectangular Pattern", |e, _| {
+                        let new = rectangular_pattern(e, &targets, v, *n1, [0.0, 0.0], 1);
+                        e.extend(new);
+                    }),
+                    [Some(n1), Some(n2)] if (1..=200).contains(n1) && (1..=200).contains(n2) && n1 * n2 > 1 => {
+                        self.sketch_edit("Sketch Rectangular Pattern", |e, _| {
+                            let new = rectangular_pattern(e, &targets, v, *n1, [-v[1], v[0]], *n2);
+                            e.extend(new);
+                        })
+                    }
+                    _ => {
+                        self.toast(ToastKind::Warning, "Enter a quantity (e.g. 4) or a grid (e.g. 4 x 3).");
+                        false
+                    }
+                }
+            }
+            EditPurpose::Scale(targets, base) => match t.parse::<f64>() {
+                Ok(k) if k > 1e-6 && k.is_finite() => self.sketch_edit("Sketch Scale", |e, cs| {
+                    let f = |p: [f64; 2]| [base[0] + (p[0] - base[0]) * k, base[1] + (p[1] - base[1]) * k];
+                    for &i in &targets {
+                        if let Some(x) = e.get(i) {
+                            e[i] = map_entity(x, f, k);
+                        }
+                    }
+                    // Dimensions of scaled geometry scale too.
+                    for c in cs.iter_mut() {
+                        if c.entities().iter().all(|i| targets.contains(i)) {
+                            if let SketchConstraint::Distance { value, .. } | SketchConstraint::Diameter { value, .. } = c {
+                                *value *= k;
+                            }
+                        }
+                    }
+                }),
+                _ => {
+                    self.toast(ToastKind::Warning, "Enter a positive scale factor.");
+                    false
+                }
+            },
+            EditPurpose::Dimension | EditPurpose::Offset(_) | EditPurpose::Fillet(..) => false,
+        };
+        if done {
+            self.finish_selection_tool();
         }
     }
 
@@ -483,9 +690,15 @@ impl Merge360App {
                 if ed.focus > 0 {
                     ed.focus -= 1;
                     r.request_focus();
+                    // Select the whole value so typing replaces it.
+                    if let Some(mut st) = egui::TextEdit::load_state(ui.ctx(), r.id) {
+                        let n = ed.text.chars().count();
+                        st.cursor.set_char_range(Some(egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(n))));
+                        st.store(ui.ctx(), r.id);
+                    }
                 }
                 if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    if let EditPurpose::Text(..) = ed.purpose {
+                    if ed.purpose.raw_text() {
                         text_commit = Some(ed.text.clone());
                     } else {
                         commit = units.parse(&ed.text);
@@ -504,11 +717,7 @@ impl Merge360App {
         }
         if let Some(t) = text_commit {
             let ed = s.dim_edit.take().unwrap();
-            if let EditPurpose::Text(at, height) = ed.purpose {
-                if !t.trim().is_empty() {
-                    self.sketch_edit("Text", |e, _| e.extend(m360_core::text::text_entities(&t, at, height)));
-                }
-            }
+            self.commit_raw_edit(ed.purpose, t.trim());
             return;
         }
         let Some(v) = commit else { return };
@@ -539,7 +748,8 @@ impl Merge360App {
                 }
                 return;
             }
-            EditPurpose::Text(..) | EditPurpose::Dimension => {}
+            EditPurpose::Dimension => {}
+            _ => return,
         }
         if v <= 0.0 {
             self.toast(ToastKind::Warning, "Dimensions must be positive.");

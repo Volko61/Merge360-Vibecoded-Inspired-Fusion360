@@ -339,9 +339,25 @@ impl Merge360App {
             self.last_tool = Some(id);
         }
         let in_sketch = self.tab().sketch.is_some();
-        if let Some(tool) = sketch_tool(id) {
+        let in_sketch_now = self.tabs[self.active].sketch.is_some();
+        if let Some(tool) = sketch_tool(id).filter(|_| id != "select" || in_sketch_now) {
+            let tab = self.tab();
+            let uid = tab.sketch.as_ref().map(|s| s.uid);
+            let targets: Vec<usize> = tab
+                .selection
+                .iter()
+                .filter_map(|s| match s {
+                    SelItem::SketchEntity(u, i) if Some(*u) == uid => Some(*i),
+                    _ => None,
+                })
+                .collect();
+            if tool.acts_on_selection() && uid.is_some() && targets.is_empty() {
+                self.toast(ToastKind::Info, format!("{}: select sketch geometry first, then choose the tool.", tool.label()));
+                return;
+            }
             if let Some(s) = &mut self.tab().sketch {
                 s.tool = tool;
+                s.targets = targets;
                 s.pending.clear();
                 s.picked.clear();
             } else {
@@ -688,6 +704,7 @@ impl Merge360App {
             picked: Vec::new(),
             dim_edit: None,
             drag: None,
+            targets: Vec::new(),
         });
         look_at_plane(tab, plane, now);
     }
@@ -717,6 +734,7 @@ impl Merge360App {
             picked: Vec::new(),
             dim_edit: None,
             drag: None,
+            targets: Vec::new(),
         });
         tab.selection.clear();
         look_at_plane(tab, plane, now);
@@ -1234,6 +1252,7 @@ fn selected_profiles(tab: &DocTab) -> (Option<u64>, Vec<usize>) {
 
 pub(crate) fn sketch_tool(id: &str) -> Option<SketchTool> {
     Some(match id {
+        "select" => SketchTool::Select,
         "sk_line" => SketchTool::Line,
         "sk_rect" => SketchTool::Rect,
         "sk_center_rect" => SketchTool::CenterRect,
@@ -1253,7 +1272,16 @@ pub(crate) fn sketch_tool(id: &str) -> Option<SketchTool> {
         "con_perpendicular" => SketchTool::Constrain(crate::state::ConKind::Perpendicular),
         "con_fix" => SketchTool::Constrain(crate::state::ConKind::Fix),
         "con_concentric" => SketchTool::Constrain(crate::state::ConKind::Concentric),
+        "con_midpoint" => SketchTool::Constrain(crate::state::ConKind::Midpoint),
+        "con_collinear" => SketchTool::Constrain(crate::state::ConKind::Collinear),
+        "con_symmetry" => SketchTool::Constrain(crate::state::ConKind::Symmetry),
         "sk_polygon" => SketchTool::Polygon,
+        "sk_slot" => SketchTool::Slot,
+        "sk_mirror" => SketchTool::Mirror,
+        "sk_circ_pattern" => SketchTool::CircPattern,
+        "sk_rect_pattern" => SketchTool::RectPattern,
+        "sk_move" => SketchTool::Move,
+        "sk_scale" => SketchTool::Scale,
         _ => return None,
     })
 }

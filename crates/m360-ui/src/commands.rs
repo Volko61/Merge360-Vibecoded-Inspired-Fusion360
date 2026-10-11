@@ -115,7 +115,11 @@ impl Merge360App {
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Plane");
                     let plane_text = match kind {
-                        FeatureKind::Box { plane, .. } | FeatureKind::Cylinder { plane, .. } | FeatureKind::Sphere { plane, .. } | FeatureKind::Torus { plane, .. } => {
+                        FeatureKind::Box { plane, .. }
+                        | FeatureKind::Cylinder { plane, .. }
+                        | FeatureKind::Sphere { plane, .. }
+                        | FeatureKind::Torus { plane, .. }
+                        | FeatureKind::Coil { plane, .. } => {
                             if *plane_chosen { plane.label() } else { "Select".into() }
                         }
                         _ => String::new(),
@@ -160,6 +164,49 @@ impl Merge360App {
                                 ui.end_row();
                                 row_label(ui, "Torus Diameter");
                                 length_field(ui, "tdia", torus_diameter, units);
+                                ui.end_row();
+                            }
+                            FeatureKind::Coil { center, diameter, turns, height, taper, section, size, position, clockwise, .. } => {
+                                center_rows(ui, center, units);
+                                row_label(ui, "Diameter");
+                                length_field(ui, "dia", diameter, units);
+                                ui.end_row();
+                                row_label(ui, "Rotation");
+                                egui::ComboBox::from_id_salt("coil_rot")
+                                    .selected_text(if *clockwise { "Clockwise" } else { "Counterclockwise" })
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(clockwise, true, "Clockwise");
+                                        ui.selectable_value(clockwise, false, "Counterclockwise");
+                                    });
+                                ui.end_row();
+                                row_label(ui, "Revolutions");
+                                ui.add(egui::DragValue::new(turns).speed(0.05).range(0.05..=200.0).max_decimals(2));
+                                ui.end_row();
+                                row_label(ui, "Height");
+                                length_field(ui, "hei", height, units);
+                                ui.end_row();
+                                row_label(ui, "Pitch");
+                                ui.label(units.format(*height / turns.max(1e-9)));
+                                ui.end_row();
+                                row_label(ui, "Angle");
+                                angle_field(ui, "coil_ang", taper);
+                                ui.end_row();
+                                row_label(ui, "Section");
+                                egui::ComboBox::from_id_salt("coil_sec").selected_text(section.label()).show_ui(ui, |ui| {
+                                    for s in m360_core::CoilSectionType::ALL {
+                                        ui.selectable_value(section, s, s.label());
+                                    }
+                                });
+                                ui.end_row();
+                                row_label(ui, "Section Position");
+                                egui::ComboBox::from_id_salt("coil_pos").selected_text(position.label()).show_ui(ui, |ui| {
+                                    for p in m360_core::CoilPosition::ALL {
+                                        ui.selectable_value(position, p, p.label());
+                                    }
+                                });
+                                ui.end_row();
+                                row_label(ui, "Section Size");
+                                length_field(ui, "coil_size", size, units);
                                 ui.end_row();
                             }
                             _ => {}

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use m360_kernel::{fillet, ops, ops::BooleanOp, primitives, profile, tessellate, tessellate_smooth, BodyMesh, Solid, SMOOTH_COS};
 
 use crate::document::Document;
-use crate::feature::{ExtrudeOp, Feature, FeatureKind, HoleType, RevolveAxis, SketchEntity};
+use crate::feature::{CoilPosition, CoilSectionType, ExtrudeOp, Feature, FeatureKind, HoleType, RevolveAxis, SketchEntity};
 use crate::PlaneRef;
 
 /// Stable body identifier. A body created by a feature takes that feature's
@@ -168,6 +168,29 @@ pub fn build_primitive(kind: &FeatureKind) -> Result<Option<Solid>, String> {
         }
         FeatureKind::Torus { plane, center, inner_diameter, torus_diameter } => {
             primitives::make_torus(&plane.frame(*center), *inner_diameter, *torus_diameter)
+        }
+        FeatureKind::Coil { plane, center, diameter, turns, height, taper, section, size, position, clockwise } => {
+            use m360_kernel::coil::{make_coil, CoilSection, CoilSpec, SectionPosition};
+            let spec = CoilSpec {
+                diameter: *diameter,
+                turns: *turns,
+                height: *height,
+                taper_deg: *taper,
+                section: match section {
+                    CoilSectionType::Circular => CoilSection::Circular,
+                    CoilSectionType::Square => CoilSection::Square,
+                    CoilSectionType::TriangularExternal => CoilSection::TriangularExternal,
+                    CoilSectionType::TriangularInternal => CoilSection::TriangularInternal,
+                },
+                size: *size,
+                position: match position {
+                    CoilPosition::Inside => SectionPosition::Inside,
+                    CoilPosition::Center => SectionPosition::Center,
+                    CoilPosition::Outside => SectionPosition::Outside,
+                },
+                clockwise: *clockwise,
+            };
+            make_coil(&plane.frame(*center), &spec)
         }
         _ => return Ok(None),
     };
@@ -468,7 +491,9 @@ pub fn resolve_edges(mesh: &BodyMesh, edges: &[[[f64; 3]; 2]]) -> Result<Vec<fil
 
 fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
     if let Some(solid) = build_primitive(&f.kind)? {
-        model.bodies.push(new_body(f.uid, solid, f.uid));
+        // Coils are made of many ruled facets along the helix: shade smoothly.
+        let cos = if matches!(f.kind, FeatureKind::Coil { .. }) { 0.9 } else { SMOOTH_COS };
+        model.bodies.push(new_body_smooth(f.uid, solid, f.uid, cos));
         return Ok(());
     }
     match &f.kind {

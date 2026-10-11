@@ -138,6 +138,19 @@ pub enum FeatureKind {
         inner_diameter: f64,
         torus_diameter: f64,
     },
+    /// Helical coil around the plane normal through `center`.
+    Coil {
+        plane: PlaneRef,
+        center: [f64; 2],
+        diameter: f64,
+        turns: f64,
+        height: f64,
+        taper: f64,
+        section: CoilSectionType,
+        size: f64,
+        position: CoilPosition,
+        clockwise: bool,
+    },
     Combine {
         target: BodyId,
         tools: Vec<BodyId>,
@@ -367,6 +380,46 @@ impl HoleType {
     }
 }
 
+/// Coil section shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CoilSectionType {
+    Circular,
+    Square,
+    TriangularExternal,
+    TriangularInternal,
+}
+
+impl CoilSectionType {
+    pub const ALL: [CoilSectionType; 4] = [Self::Circular, Self::Square, Self::TriangularExternal, Self::TriangularInternal];
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Circular => "Circular",
+            Self::Square => "Square",
+            Self::TriangularExternal => "Triangular (External)",
+            Self::TriangularInternal => "Triangular (Internal)",
+        }
+    }
+}
+
+/// Position of the coil section relative to the coil diameter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CoilPosition {
+    Inside,
+    Center,
+    Outside,
+}
+
+impl CoilPosition {
+    pub const ALL: [CoilPosition; 3] = [Self::Inside, Self::Center, Self::Outside];
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Inside => "Inside",
+            Self::Center => "On Center",
+            Self::Outside => "Outside",
+        }
+    }
+}
+
 /// Axis of a Revolve feature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RevolveAxis {
@@ -416,6 +469,7 @@ impl FeatureKind {
         match self {
             FeatureKind::Box { .. } => "Box",
             FeatureKind::Cylinder { .. } => "Cylinder",
+            FeatureKind::Coil { .. } => "Coil",
             FeatureKind::Sphere { .. } => "Sphere",
             FeatureKind::Torus { .. } => "Torus",
             FeatureKind::Combine { .. } => "Combine",
@@ -450,6 +504,7 @@ impl FeatureKind {
                 | FeatureKind::Cylinder { .. }
                 | FeatureKind::Sphere { .. }
                 | FeatureKind::Torus { .. }
+                | FeatureKind::Coil { .. }
                 | FeatureKind::Extrude { op: ExtrudeOp::NewBody, .. }
                 | FeatureKind::Revolve { op: ExtrudeOp::NewBody, .. }
                 | FeatureKind::Sweep { op: ExtrudeOp::NewBody, .. }
@@ -474,6 +529,13 @@ impl FeatureKind {
             Cylinder { diameter, height, .. } => vec![("Diameter", false, diameter), ("Height", false, height)],
             Sphere { diameter, .. } => vec![("Diameter", false, diameter)],
             Torus { inner_diameter, torus_diameter, .. } => vec![("Inner Diameter", false, inner_diameter), ("Torus Diameter", false, torus_diameter)],
+            Coil { diameter, turns, height, taper, size, .. } => vec![
+                ("Diameter", false, diameter),
+                ("Revolutions", true, turns),
+                ("Height", false, height),
+                ("Angle", true, taper),
+                ("Section Size", false, size),
+            ],
             Extrude { distance, taper, .. } => vec![("Distance", false, distance), ("Taper Angle", true, taper)],
             Revolve { angle_deg, .. } => vec![("Angle", true, angle_deg)],
             Hole { diameter, depth, .. } => vec![("Diameter", false, diameter), ("Depth", false, depth)],

@@ -399,6 +399,7 @@ impl Command {
                 FeatureKind::Box { .. } => "BOX",
                 FeatureKind::Cylinder { .. } => "CYLINDER",
                 FeatureKind::Sphere { .. } => "SPHERE",
+                FeatureKind::Coil { .. } => "COIL",
                 _ => "TORUS",
             },
             Command::Extrude { .. } => "EXTRUDE",

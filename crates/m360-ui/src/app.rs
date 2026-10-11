@@ -208,10 +208,21 @@ impl Merge360App {
                         }
                     }
                     (Some(Command::Primitive { kind, .. }), key) => match (kind, key) {
-                        (FeatureKind::Box { height, .. } | FeatureKind::Cylinder { height, .. }, "height") => *height = num.unwrap_or(*height),
+                        (FeatureKind::Coil { turns, .. }, "turns") => *turns = num.unwrap_or(*turns),
+                        (FeatureKind::Coil { size, .. }, "size") => *size = num.unwrap_or(*size),
+                        (FeatureKind::Coil { taper, .. }, "angle") => *taper = num.unwrap_or(*taper),
+                        (FeatureKind::Coil { section, .. }, "section") => {
+                            *section = match v.as_str() {
+                                "square" => m360_core::CoilSectionType::Square,
+                                "tri_ext" => m360_core::CoilSectionType::TriangularExternal,
+                                "tri_int" => m360_core::CoilSectionType::TriangularInternal,
+                                _ => m360_core::CoilSectionType::Circular,
+                            }
+                        }
+                        (FeatureKind::Box { height, .. } | FeatureKind::Cylinder { height, .. } | FeatureKind::Coil { height, .. }, "height") => *height = num.unwrap_or(*height),
                         (FeatureKind::Box { length, .. }, "length") => *length = num.unwrap_or(*length),
                         (FeatureKind::Box { width, .. }, "width") => *width = num.unwrap_or(*width),
-                        (FeatureKind::Cylinder { diameter, .. } | FeatureKind::Sphere { diameter, .. }, "diameter") => *diameter = num.unwrap_or(*diameter),
+                        (FeatureKind::Cylinder { diameter, .. } | FeatureKind::Sphere { diameter, .. } | FeatureKind::Coil { diameter, .. }, "diameter") => *diameter = num.unwrap_or(*diameter),
                         _ => eprintln!("script: unknown param {k}"),
                     },
                     (Some(Command::Combine { op, .. }), "op") => {
@@ -345,13 +356,25 @@ impl Merge360App {
         let tab = self.tab();
         let sel_bodies = tab.selected_bodies();
         match id {
-            "box" | "cylinder" | "sphere" | "torus" => {
+            "box" | "cylinder" | "sphere" | "torus" | "coil" => {
                 let plane = PlaneRef::XZ;
                 let c = [0.0, 0.0];
                 let kind = match id {
                     "box" => FeatureKind::Box { plane, center: c, length: 50.0, width: 50.0, height: 50.0 },
                     "cylinder" => FeatureKind::Cylinder { plane, center: c, diameter: 50.0, height: 50.0 },
                     "sphere" => FeatureKind::Sphere { plane, center: c, diameter: 50.0 },
+                    "coil" => FeatureKind::Coil {
+                        plane,
+                        center: c,
+                        diameter: 50.0,
+                        turns: 5.0,
+                        height: 50.0,
+                        taper: 0.0,
+                        section: m360_core::CoilSectionType::Circular,
+                        size: 5.0,
+                        position: m360_core::CoilPosition::Center,
+                        clockwise: false,
+                    },
                     _ => FeatureKind::Torus { plane, center: c, inner_diameter: 50.0, torus_diameter: 10.0 },
                 };
                 tab.selection.clear();
@@ -731,7 +754,7 @@ impl Merge360App {
         let editing = Some(EditCtx { uid, before });
         tab.selection.clear();
         tab.command = Some(match kind {
-            FeatureKind::Box { .. } | FeatureKind::Cylinder { .. } | FeatureKind::Sphere { .. } | FeatureKind::Torus { .. } => {
+            FeatureKind::Box { .. } | FeatureKind::Cylinder { .. } | FeatureKind::Sphere { .. } | FeatureKind::Torus { .. } | FeatureKind::Coil { .. } => {
                 Command::Primitive { kind, plane_chosen: true, editing }
             }
             FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, taper, .. } => {

@@ -43,10 +43,11 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   perpendicular, equal, tangent, concentric, fix) solved by a built-in constraint solver;
   drag points with the Select tool; automatic H/V constraints; trim, offset, sketch fillet;
   sketch text (font outlines, extrudable).
-* **Create:** Extrude (new body / join / cut / intersect, one side or symmetric, profiles with
-  holes), Revolve (around X/Y/Z or a sketch line), Sweep and Pipe (along connected lines/arcs,
+* **Create:** Extrude (new body / join / cut / intersect, one side or symmetric, taper angle,
+  profiles with holes), Revolve (around X/Y/Z or a sketch line), Sweep and Pipe (along connected lines/arcs,
   hollow pipes), Loft, Hole (simple / counterbore / countersink, distance or through all,
-  multiple points), Box, Cylinder, Sphere, Torus, Rectangular & Circular Pattern, Mirror —
+  multiple points), Box, Cylinder, Sphere, Torus, Coil (circular / square / triangular
+  sections, tapered), Rectangular & Circular Pattern, Mirror —
   all with live preview and drag manipulators.
 * **Modify:** Fillet and Chamfer (straight edges between planar faces, incl. face loops),
   Shell (prismatic bodies, open faces), Combine (join / cut / intersect), Split Body, Scale,
@@ -68,7 +69,7 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
 * Fully parametric: every feature is re-editable from the timeline (double-click), roll back with
   the marker, suppress features; undo/redo for everything.
 
-Tools that are not implemented yet (draft, thread, coil, the Animation / Simulation /
+Tools that are not implemented yet (draft, thread, the Animation / Simulation /
 Manufacture / Generative Design workspaces, …) are present
 in the UI and report “not available yet”. Kernel limitations (truck): fillets meeting three at a
 corner, shells of non-prismatic bodies and booleans of exactly coplanar faces may fail; such

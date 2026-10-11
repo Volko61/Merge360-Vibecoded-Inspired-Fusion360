@@ -3,6 +3,7 @@
 //! Everything in Merge360 is modeled in millimetres in a right-handed,
 //! Y-up world (Fusion's default orientation).
 
+pub mod coil;
 pub mod io;
 pub mod mesh;
 pub mod ops;

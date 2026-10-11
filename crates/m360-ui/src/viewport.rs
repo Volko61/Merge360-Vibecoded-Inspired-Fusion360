@@ -461,7 +461,9 @@ impl Merge360App {
             Some(Command::Primitive { kind, plane_chosen: true, .. }) => {
                 let green = [0.18, 0.66, 0.31];
                 match kind {
-                    FeatureKind::Box { plane, center, height, .. } | FeatureKind::Cylinder { plane, center, height, .. } => {
+                    FeatureKind::Box { plane, center, height, .. }
+                    | FeatureKind::Cylinder { plane, center, height, .. }
+                    | FeatureKind::Coil { plane, center, height, .. } => {
                         let f = plane.frame(*center);
                         let top = f.to_world(DVec3::new(0.0, 0.0, *height)).as_vec3();
                         out.push(Manip { origin: top, dir: f.n.as_vec3() * height.signum() as f32, color: green, slot: 0 });
@@ -550,6 +552,7 @@ impl Merge360App {
         let tab = self.tab();
         match &mut tab.command {
             Some(Command::Primitive { kind, .. }) => match kind {
+                FeatureKind::Coil { height, .. } => *height = (*height + delta).max(0.0),
                 FeatureKind::Box { height, .. } | FeatureKind::Cylinder { height, .. } => {
                     let sign = height.signum();
                     *height += delta * sign;
@@ -840,7 +843,8 @@ impl Merge360App {
                         FeatureKind::Box { plane, center, .. }
                         | FeatureKind::Cylinder { plane, center, .. }
                         | FeatureKind::Sphere { plane, center, .. }
-                        | FeatureKind::Torus { plane, center, .. } => {
+                        | FeatureKind::Torus { plane, center, .. }
+                        | FeatureKind::Coil { plane, center, .. } => {
                             *plane = p;
                             *center = c;
                         }

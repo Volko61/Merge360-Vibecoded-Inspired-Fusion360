@@ -485,6 +485,7 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Cylinder { .. } => Icon::Cylinder,
         FeatureKind::Sphere { .. } => Icon::Sphere,
         FeatureKind::Torus { .. } => Icon::Torus,
+        FeatureKind::Coil { .. } => Icon::Coil,
         FeatureKind::Combine { .. } => Icon::Combine,
         FeatureKind::Move { .. } => Icon::Move,
         FeatureKind::Remove { .. } => Icon::Delete,

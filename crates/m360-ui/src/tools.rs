@@ -459,6 +459,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "cylinder",
     "sphere",
     "torus",
+    "coil",
     "combine",
     "revolve",
     "hole",

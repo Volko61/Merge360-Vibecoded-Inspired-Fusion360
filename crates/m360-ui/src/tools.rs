@@ -469,6 +469,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "joint",
     "as_built_joint",
     "new_component",
+    "insert_mesh",
     "sweep",
     "pipe",
     "loft",

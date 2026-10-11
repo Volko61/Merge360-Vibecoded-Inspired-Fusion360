@@ -64,6 +64,24 @@ impl BodyMesh {
         out
     }
 
+    /// Smooth shading: average the normals of coincident vertices whose
+    /// normals differ by less than `acos(cos)` (for polyhedral imported meshes).
+    pub fn smooth_shading(&mut self, cos: f32) {
+        let key = |p: [f32; 3]| [(p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64, (p[2] * 1e4).round() as i64];
+        let mut groups: HashMap<[i64; 3], Vec<usize>> = HashMap::new();
+        for (i, p) in self.positions.iter().enumerate() {
+            groups.entry(key(*p)).or_default().push(i);
+        }
+        let old = self.normals.clone();
+        for idx in groups.values() {
+            for &i in idx {
+                let ni = Vec3::from(old[i]);
+                let sum: Vec3 = idx.iter().map(|&j| Vec3::from(old[j])).filter(|nj| nj.dot(ni) >= cos).sum();
+                self.normals[i] = sum.normalize_or_zero().to_array();
+            }
+        }
+    }
+
     /// A copy transformed by `m` (normals and winding fixed for reflections).
     pub fn transformed(&self, m: glam::DMat4) -> BodyMesh {
         let mf = m.as_mat4();

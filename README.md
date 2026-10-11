@@ -41,7 +41,8 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   rectangle, circle, 3-point arc, polygon, point; **parametric**: sketch dimensions (lengths,
   distances, diameters) and constraints (horizontal/vertical, coincident, parallel,
   perpendicular, equal, tangent, concentric, fix) solved by a built-in constraint solver;
-  drag points with the Select tool; automatic H/V constraints.
+  drag points with the Select tool; automatic H/V constraints; trim, offset, sketch fillet;
+  sketch text (font outlines, extrudable).
 * **Create:** Extrude (new body / join / cut / intersect, one side or symmetric, profiles with
   holes), Revolve (around X/Y/Z or a sketch line), Sweep and Pipe (along connected lines/arcs,
   hollow pipes), Loft, Hole (simple / counterbore / countersink, distance or through all,
@@ -52,6 +53,10 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   Move/Copy, Press Pull (edges → fillet, profiles → extrude), Delete, Appearance,
   Change Parameters, Compute All.
 * **Construct:** Offset Plane.
+* **Assemble:** Components (new / activate / visibility), Joints (rigid, revolute, slider with
+  live motion value).
+* **Parameters:** user parameters and expressions (`width * 2 + 5 mm`) for any feature value.
+* **Insert:** Insert Mesh (STL, binary/ASCII) as polyhedral bodies that take part in booleans.
 * **Inspect:** Measure (edge length, face area, body volume, minimum distance), Section Analysis
   (with section caps), Center of Mass, Properties.
 * **DRAWING workspace:** A3 sheet with title block, Front / Top / Right / Isometric views in
@@ -59,11 +64,11 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   automatic standard scale, overall dimensions, SVG export.
 * **RENDER workspace:** presentation view (environments, soft ground shadow, optional edges) and
   high-resolution image rendering to PNG (HD to 4K).
-* **Files:** native `.m360` (RON, full parametric history), STL and STEP export.
+* **Files:** native `.m360` (RON, full parametric history), STL import, STL and STEP export.
 * Fully parametric: every feature is re-editable from the timeline (double-click), roll back with
   the marker, suppress features; undo/redo for everything.
 
-Tools that are not implemented yet (joints, draft, thread, the Animation / Simulation /
+Tools that are not implemented yet (draft, thread, coil, the Animation / Simulation /
 Manufacture / Generative Design workspaces, …) are present
 in the UI and report “not available yet”. Kernel limitations (truck): fillets meeting three at a
 corner, shells of non-prismatic bodies and booleans of exactly coplanar faces may fail; such

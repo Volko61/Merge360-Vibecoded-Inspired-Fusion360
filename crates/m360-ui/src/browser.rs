@@ -496,6 +496,7 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Mirror { .. } => Icon::Mirror,
         FeatureKind::ConstructionPlane { .. } => Icon::Plane,
         FeatureKind::Joint { .. } => Icon::Joint,
+        FeatureKind::ImportMesh { .. } => Icon::Insert,
         FeatureKind::Sweep { .. } => Icon::Sweep,
         FeatureKind::Pipe { .. } => Icon::Pipe,
         FeatureKind::Loft { .. } => Icon::Loft,

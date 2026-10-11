@@ -473,6 +473,10 @@ impl Merge360App {
                 tab.selection.clear();
                 tab.command = Some(Command::Scale { bodies: sel_bodies, point: [0.0; 3], factor: 2.0, editing: None });
             }
+            "insert_mesh" => {
+                let dir = self.default_dir();
+                self.file_dialog = Some(FileDialog::new(FileMode::ImportStl, dir, ""));
+            }
             "joint" | "as_built_joint" => {
                 tab.selection.clear();
                 tab.command = Some(Command::Joint { b: None, a: None, motion: m360_core::JointMotion::Rigid, editing: None });
@@ -984,6 +988,7 @@ impl Merge360App {
             return;
         }
         let res = match mode {
+            FileMode::ImportStl => return,
             FileMode::ExportStl => {
                 let meshes: Vec<_> = bodies.iter().map(|b| b.mesh.as_ref()).collect();
                 m360_kernel::io::write_stl(&path.with_extension("stl"), &meshes)

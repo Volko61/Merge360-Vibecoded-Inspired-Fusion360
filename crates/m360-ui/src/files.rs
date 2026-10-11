@@ -14,6 +14,7 @@ pub enum FileMode {
     Save,
     ExportStl,
     ExportStep,
+    ImportStl,
 }
 
 impl FileMode {
@@ -23,12 +24,13 @@ impl FileMode {
             FileMode::Save => "Save As",
             FileMode::ExportStl => "Export STL",
             FileMode::ExportStep => "Export STEP",
+            FileMode::ImportStl => "Insert Mesh",
         }
     }
     fn ext(self) -> &'static str {
         match self {
             FileMode::Open | FileMode::Save => "m360",
-            FileMode::ExportStl => "stl",
+            FileMode::ExportStl | FileMode::ImportStl => "stl",
             FileMode::ExportStep => "step",
         }
     }
@@ -96,6 +98,34 @@ fn list_dir(dir: &Path, ext: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
 }
 
 impl Merge360App {
+    /// Insert ▸ Insert Mesh: add an STL file as a polyhedral body.
+    pub(crate) fn import_stl(&mut self, path: &Path) {
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(e) => return self.toast(crate::app::ToastKind::Error, format!("Could not read {}: {e}", path.display())),
+        };
+        match m360_kernel::io::read_stl(&bytes) {
+            Ok(tris) if tris.len() > 60_000 => self.toast(
+                crate::app::ToastKind::Warning,
+                format!("The mesh has {} triangles; meshes up to 60 000 triangles are supported.", tris.len()),
+            ),
+            Ok(triangles) => {
+                let name = path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+                let n = triangles.len();
+                self.tab().edit("Insert Mesh", |d| {
+                    d.add_feature(m360_core::FeatureKind::ImportMesh { name, triangles });
+                });
+                let err = self.tabs[self.active].model.errors.values().next().cloned();
+                match err {
+                    Some(e) => self.toast(crate::app::ToastKind::Warning, format!("Mesh inserted with errors: {e}")),
+                    None => self.toast(crate::app::ToastKind::Info, format!("Inserted mesh with {n} triangles")),
+                }
+                self.tab().fit_pending = true;
+            }
+            Err(e) => self.toast(crate::app::ToastKind::Error, format!("Not a valid STL file: {e}")),
+        }
+    }
+
     pub(crate) fn file_dialog_ui(&mut self, ctx: &egui::Context) {
         let Some(dlg) = &mut self.file_dialog else { return };
         let mut open = true;
@@ -179,7 +209,11 @@ impl Merge360App {
                         if theme::secondary_button(ui, "Cancel").clicked() {
                             close = true;
                         }
-                        let label = if dlg.mode == FileMode::Open { "Open" } else { "Save" };
+                        let label = match dlg.mode {
+                            FileMode::Open => "Open",
+                            FileMode::ImportStl => "Insert",
+                            _ => "Save",
+                        };
                         if (theme::primary_button(ui, label).clicked() || enter) && !dlg.name.trim().is_empty() {
                             let mut p = dlg.dir.join(dlg.name.trim());
                             if p.extension().is_none_or(|e| !e.eq_ignore_ascii_case(dlg.mode.ext())) {
@@ -200,6 +234,12 @@ impl Merge360App {
                     if p.exists() {
                         self.file_dialog = None;
                         self.open_path(&p);
+                    }
+                }
+                FileMode::ImportStl => {
+                    if p.exists() {
+                        self.file_dialog = None;
+                        self.import_stl(&p);
                     }
                 }
                 _ => {

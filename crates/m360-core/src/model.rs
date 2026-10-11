@@ -139,7 +139,12 @@ fn new_body(id: BodyId, solid: Solid, feature: u64) -> Body {
 }
 
 fn new_body_smooth(id: BodyId, solid: Solid, feature: u64, smooth_cos: f32) -> Body {
-    let mesh = Arc::new(if smooth_cos < SMOOTH_COS { tessellate_smooth(&solid, smooth_cos) } else { tessellate(&solid) });
+    let mut mesh = if smooth_cos < SMOOTH_COS { tessellate_smooth(&solid, smooth_cos) } else { tessellate(&solid) };
+    if smooth_cos < 0.95 {
+        // Polyhedral (imported) bodies: smooth-shade across facets too.
+        mesh.smooth_shading(smooth_cos);
+    }
+    let mesh = Arc::new(mesh);
     Body { id, solid, mesh, last_feature: feature, smooth_cos }
 }
 
@@ -655,6 +660,11 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                 let s = ops::scale(&b.solid, glam::DVec3::from(*point), *factor).map_err(|e| e.to_string())?;
                 replace(model, rebuilt(model, *id, s, f.uid));
             }
+            Ok(())
+        }
+        FeatureKind::ImportMesh { triangles, .. } => {
+            let solid = m360_kernel::io::mesh_to_solid(triangles).map_err(|e| e.to_string())?;
+            model.bodies.push(new_body_smooth(f.uid, solid, f.uid, 0.9));
             Ok(())
         }
         FeatureKind::Joint { moving, a, b, motion } => {

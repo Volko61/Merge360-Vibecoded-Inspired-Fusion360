@@ -228,6 +228,11 @@ pub enum FeatureKind {
         b: JointGeo,
         motion: JointMotion,
     },
+    /// An imported triangle mesh (Insert ▸ Insert Mesh), as a polyhedral body.
+    ImportMesh {
+        name: String,
+        triangles: Vec<[[f32; 3]; 3]>,
+    },
     /// A construction plane (Construct ▸ Offset Plane).
     ConstructionPlane {
         plane: PlaneRef,
@@ -423,6 +428,7 @@ impl FeatureKind {
             FeatureKind::Mirror { .. } => "Mirror",
             FeatureKind::ConstructionPlane { .. } => "Plane",
             FeatureKind::Joint { .. } => "Joint",
+            FeatureKind::ImportMesh { .. } => "Mesh",
             FeatureKind::Sweep { .. } => "Sweep",
             FeatureKind::Pipe { .. } => "Pipe",
             FeatureKind::Loft { .. } => "Loft",
@@ -447,6 +453,7 @@ impl FeatureKind {
                 | FeatureKind::Pipe { op: ExtrudeOp::NewBody, .. }
                 | FeatureKind::Loft { op: ExtrudeOp::NewBody, .. }
                 | FeatureKind::SplitBody { .. }
+                | FeatureKind::ImportMesh { .. }
         ) || matches!(self,
             FeatureKind::Extrude { participants, op: ExtrudeOp::Join, .. }
             | FeatureKind::Revolve { participants, op: ExtrudeOp::Join, .. }

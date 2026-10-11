@@ -265,6 +265,7 @@ pub enum Command {
         profiles: Vec<usize>,
         distance: f64,
         symmetric: bool,
+        taper: f64,
         op: ExtrudeOp,
         editing: Option<EditCtx>,
     },
@@ -693,8 +694,8 @@ impl DocTab {
                 }
                 (key, build_primitive(kind).map(|o| o.unwrap()))
             }
-            Command::Extrude { sketch: Some(sk), profiles, distance, symmetric, .. } if !profiles.is_empty() => {
-                let key = format!("{sk}{profiles:?}{distance}{symmetric}");
+            Command::Extrude { sketch: Some(sk), profiles, distance, symmetric, taper, .. } if !profiles.is_empty() => {
+                let key = format!("{sk}{profiles:?}{distance}{symmetric}{taper}");
                 if self.preview.as_ref().is_some_and(|p| p.key == key) {
                     return;
                 }
@@ -702,7 +703,7 @@ impl DocTab {
                     self.preview = None;
                     return;
                 };
-                (key, m360_core::model::extrude_tool(&plane, &ents, profiles, *distance, *symmetric))
+                (key, m360_core::model::extrude_tool(&plane, &ents, profiles, *distance, *symmetric, *taper))
             }
             Command::Revolve { sketch: Some(sk), profiles, axis: Some(axis), angle_deg, .. } if !profiles.is_empty() => {
                 let key = format!("rev{sk}{profiles:?}{axis:?}{angle_deg}");

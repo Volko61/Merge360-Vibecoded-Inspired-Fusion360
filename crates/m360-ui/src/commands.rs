@@ -179,7 +179,7 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
-            Command::Extrude { sketch, profiles, distance, symmetric, op, .. } => {
+            Command::Extrude { sketch, profiles, distance, symmetric, taper, op, .. } => {
                 let ok = sketch.is_some() && !profiles.is_empty() && preview_err.is_none();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Profiles");
@@ -216,6 +216,9 @@ impl Merge360App {
                             *distance = -*distance;
                         }
                     });
+                    ui.end_row();
+                    row_label(ui, "Taper Angle");
+                    angle_field(ui, "ex_taper", taper);
                     ui.end_row();
                     row_label(ui, "Operation");
                     egui::ComboBox::from_id_salt("ex_op").selected_text(op.label()).show_ui(ui, |ui| {
@@ -952,13 +955,13 @@ impl Merge360App {
     fn commit_command(&mut self, cmd: Command) {
         match cmd {
             Command::Primitive { kind, editing, .. } => self.commit_feature(kind, editing),
-            Command::Extrude { sketch: Some(sketch), profiles, distance, symmetric, op, editing } => {
+            Command::Extrude { sketch: Some(sketch), profiles, distance, symmetric, taper, op, editing } => {
                 let participants = self.overlapping_bodies(op);
                 if matches!(op, ExtrudeOp::Cut | ExtrudeOp::Intersect) && participants.is_empty() {
                     self.toast(crate::app::ToastKind::Warning, "No bodies intersect the extrusion; nothing to cut.");
                 }
                 let new = editing.is_none();
-                self.commit_feature(FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, participants }, editing);
+                self.commit_feature(FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, participants, taper }, editing);
                 if new {
                     // Fusion hides a sketch once a feature consumes it.
                     self.tab().doc.sketch_visible.insert(sketch, false);

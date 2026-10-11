@@ -186,8 +186,14 @@ pub fn offset_polygon(p: &[[f64; 2]], t: f64) -> Option<Vec<[f64; 2]>> {
         let k = t / cosh;
         out.push([b[0] + bis[0] / bl * k, b[1] + bis[1] / bl * k]);
     }
+    // Every edge must keep its direction (no inverted, collapsed edges).
+    let flipped = (0..n).any(|i| {
+        let j = (i + 1) % n;
+        let (d0, d1) = ([p[j][0] - p[i][0], p[j][1] - p[i][1]], [out[j][0] - out[i][0], out[j][1] - out[i][1]]);
+        d0[0] * d1[0] + d0[1] * d1[1] <= 0.0
+    });
     let na = Loop2::Polygon(out.clone()).signed_area();
-    (na.signum() == area.signum() && na.abs() > 1e-9).then_some(out)
+    (!flipped && na.signum() == area.signum() && na.abs() > 1e-9).then_some(out)
 }
 
 /// Hollow out a prismatic solid with walls of `thickness`.

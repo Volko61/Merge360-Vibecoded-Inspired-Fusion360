@@ -198,6 +198,7 @@ impl Merge360App {
                         }
                     }
                     (Some(Command::Extrude { symmetric, .. }), "symmetric") => *symmetric = v == "true",
+                    (Some(Command::Extrude { taper, .. }), "taper") => *taper = num.unwrap_or(*taper),
                     (Some(Command::Extrude { op, .. }), "op") => {
                         *op = match v.as_str() {
                             "cut" => ExtrudeOp::Cut,
@@ -383,6 +384,7 @@ impl Merge360App {
                     profiles,
                     distance: 10.0,
                     symmetric: false,
+                    taper: 0.0,
                     op: ExtrudeOp::NewBody,
                     editing: None,
                 });
@@ -732,8 +734,8 @@ impl Merge360App {
             FeatureKind::Box { .. } | FeatureKind::Cylinder { .. } | FeatureKind::Sphere { .. } | FeatureKind::Torus { .. } => {
                 Command::Primitive { kind, plane_chosen: true, editing }
             }
-            FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, .. } => {
-                Command::Extrude { sketch: Some(sketch), profiles, distance, symmetric, op, editing }
+            FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, taper, .. } => {
+                Command::Extrude { sketch: Some(sketch), profiles, distance, symmetric, taper, op, editing }
             }
             FeatureKind::Combine { target, tools, op, keep_tools } => Command::Combine {
                 target: Some(target),

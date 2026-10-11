@@ -22,6 +22,7 @@ pub fn sample_document() -> Document {
     entities.extend(rectangle([-20.0, -12.0], [20.0, 12.0]));
     let sk = d.add_feature(FeatureKind::Sketch { plane: top, entities, constraints: vec![] });
     d.add_feature(FeatureKind::Extrude {
+        taper: 0.0,
         sketch: sk,
         profiles: vec![0, 1, 2, 3],
         distance: -20.0,
@@ -30,6 +31,7 @@ pub fn sample_document() -> Document {
         participants: vec![base],
     });
     d.add_feature(FeatureKind::Extrude {
+        taper: 0.0,
         sketch: sk,
         profiles: vec![4],
         distance: 30.0,

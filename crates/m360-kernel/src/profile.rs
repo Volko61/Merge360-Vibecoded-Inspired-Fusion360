@@ -142,6 +142,65 @@ impl Loop2 {
         }
     }
 
+    /// Offset the loop by `t` (positive = grow, negative = shrink). Corners
+    /// are mitered; arcs keep their centers. Returns `None` when the loop
+    /// collapses.
+    pub fn offset(&self, t: f64) -> Option<Loop2> {
+        if t == 0.0 {
+            return Some(self.clone());
+        }
+        match self {
+            Loop2::Circle { c, r } => (r + t > 1e-9).then_some(Loop2::Circle { c: *c, r: r + t }),
+            Loop2::Polygon(p) => crate::shell::offset_polygon(p, t).map(Loop2::Polygon),
+            Loop2::Path(segs) => {
+                let n = segs.len();
+                let s = self.signed_area().signum();
+                let start = |i: usize| segs[(i + n - 1) % n].end;
+                // Unit tangent of segment i at point p (in travel direction).
+                let tangent = |i: usize, p: [f64; 2]| -> [f64; 2] {
+                    let (a, b) = (start(i), segs[i].end);
+                    let d = match segs[i].transit.and_then(|m| circumcircle(a, m, b).map(|c| (m, c))) {
+                        Some((m, (c, _))) => {
+                            let ccw = (m[0] - a[0]) * (b[1] - m[1]) - (m[1] - a[1]) * (b[0] - m[0]) > 0.0;
+                            let r = [p[0] - c[0], p[1] - c[1]];
+                            if ccw { [-r[1], r[0]] } else { [r[1], -r[0]] }
+                        }
+                        None => [b[0] - a[0], b[1] - a[1]],
+                    };
+                    let l = d[0].hypot(d[1]).max(1e-12);
+                    [d[0] / l, d[1] / l]
+                };
+                let normal = |d: [f64; 2]| [s * d[1], -s * d[0]];
+                let mut out = Vec::with_capacity(n);
+                for i in 0..n {
+                    let v = segs[i].end;
+                    let (n1, n2) = (normal(tangent(i, v)), normal(tangent((i + 1) % n, v)));
+                    let bis = [n1[0] + n2[0], n1[1] + n2[1]];
+                    let bl = bis[0].hypot(bis[1]);
+                    if bl < 1e-9 {
+                        return None;
+                    }
+                    let k = t / (bl / 2.0).max(0.2);
+                    let end = [v[0] + bis[0] / bl * k, v[1] + bis[1] / bl * k];
+                    let transit = segs[i].transit.map(|m| {
+                        let nm = normal(tangent(i, m));
+                        [m[0] + nm[0] * t, m[1] + nm[1] * t]
+                    });
+                    out.push(Seg2 { end, transit });
+                }
+                // Straight segments must keep their direction.
+                let flipped = (0..n).any(|i| {
+                    let (a0, b0) = (start(i), segs[i].end);
+                    let (a1, b1) = (out[(i + n - 1) % n].end, out[i].end);
+                    (b0[0] - a0[0]) * (b1[0] - a1[0]) + (b0[1] - a0[1]) * (b1[1] - a1[1]) <= 0.0
+                });
+                let l = Loop2::Path(out);
+                let na = l.signed_area();
+                (!flipped && na.signum() == s && na.abs() > 1e-9).then_some(l)
+            }
+        }
+    }
+
     fn wire(&self, z: f64, ccw: bool) -> Result<Wire> {
         let mut w = match self {
             Loop2::Circle { c, r } => {
@@ -252,6 +311,54 @@ pub fn extrude_range(frame: &Frame, region: &Region, z0: f64, z1: f64) -> Result
     Ok(builder::transformed(&solid, to_truck(frame.matrix())))
 }
 
+/// Solid lofted through the region at several heights, each loop offset by
+/// `offset(z)` (holes the opposite way), in frame-local coordinates.
+fn loft_region(region: &Region, heights: &[f64], offset: impl Fn(f64) -> f64) -> Result<Solid> {
+    let too_large = || KernelError::InvalidParameter("the taper angle is too large for this profile".into());
+    let loops = std::iter::once((&region.outer, true)).chain(region.holes.iter().map(|h| (h, false)));
+    let mut shell = truck_modeling::Shell::new();
+    let (mut bottom, mut top) = (Vec::new(), Vec::new());
+    for (l, outer) in loops {
+        let sign = if outer { 1.0 } else { -1.0 };
+        let wires: Vec<Wire> = heights
+            .iter()
+            .map(|&z| l.offset(sign * offset(z)).ok_or_else(too_large)?.wire(z, outer))
+            .collect::<Result<_>>()?;
+        for w in wires.windows(2) {
+            shell.extend(builder::try_wire_homotopy(&w[0], &w[1]).map_err(|e| KernelError::OperationFailed(format!("taper: {e:?}")))?);
+        }
+        bottom.push(wires[0].clone());
+        top.push(wires[wires.len() - 1].clone());
+    }
+    let cap = |ws: &[Wire]| builder::try_attach_plane(ws).map_err(|e| KernelError::OperationFailed(format!("taper cap: {e:?}")));
+    shell.push(cap(&bottom)?.inverse());
+    shell.push(cap(&top)?);
+    let mut solid = Solid::try_new(vec![shell]).map_err(|e| KernelError::OperationFailed(format!("taper: {e:?}")))?;
+    if crate::tessellate(&solid).volume() < 0.0 {
+        solid.not();
+    }
+    Ok(solid)
+}
+
+/// Extrude a region between `z0` and `z1` with side walls inclined by
+/// `taper_deg` (positive = the profile grows away from the sketch plane).
+pub fn extrude_tapered(frame: &Frame, region: &Region, z0: f64, z1: f64, taper_deg: f64) -> Result<Solid> {
+    if taper_deg.abs() < 1e-9 {
+        return extrude_range(frame, region, z0, z1);
+    }
+    if z1 - z0 <= 1e-6 || z1.is_nan() || z0.is_nan() {
+        return Err(KernelError::InvalidParameter("distance must not be zero".into()));
+    }
+    if taper_deg.abs() >= 89.0 || !taper_deg.is_finite() {
+        return Err(KernelError::InvalidParameter("the taper angle must be between -89° and 89°".into()));
+    }
+    let k = taper_deg.to_radians().tan();
+    // The profile is unchanged on the sketch plane (z = 0).
+    let heights = if z0 < 0.0 && z1 > 0.0 { vec![z0, 0.0, z1] } else { vec![z0, z1] };
+    let solid = loft_region(region, &heights, |z| k * z.abs())?;
+    Ok(builder::transformed(&solid, to_truck(frame.matrix())))
+}
+
 /// Revolve a region (in `frame`) around a world-space axis by `angle_deg`
 /// (positive = right-handed around `axis_dir`; 360 for a full revolution).
 pub fn revolve(frame: &Frame, region: &Region, axis_point: glam::DVec3, axis_dir: glam::DVec3, angle_deg: f64) -> Result<Solid> {
@@ -324,6 +431,42 @@ mod tests {
 
     fn xy() -> Frame {
         Frame::new(DVec3::ZERO, DVec3::X, DVec3::Y)
+    }
+
+    #[test]
+    fn tapered_extrusions() {
+        let k = 10f64.to_radians().tan();
+        // Square, inward taper: frustum of a pyramid.
+        let sq = Region { outer: Loop2::Polygon(vec![[-10.0, -10.0], [10.0, -10.0], [10.0, 10.0], [-10.0, 10.0]]), holes: vec![] };
+        let v = tessellate(&extrude_tapered(&xy(), &sq, 0.0, 20.0, -10.0).unwrap()).volume();
+        let (a1, a2) = (400.0, (20.0 - 2.0 * 20.0 * k).powi(2));
+        let expect = 20.0 / 3.0 * (a1 + a2 + (a1 * a2).sqrt());
+        assert!((v - expect).abs() / expect < 0.01, "square {v} vs {expect}");
+        // Circle, outward, symmetric: two cone frustums.
+        let c = Region { outer: Loop2::Circle { c: [0.0, 0.0], r: 5.0 }, holes: vec![] };
+        let v = tessellate(&extrude_tapered(&xy(), &c, -10.0, 10.0, 10.0).unwrap()).volume();
+        let r1 = 5.0 + 10.0 * k;
+        let expect = 2.0 * PI * 10.0 / 3.0 * (25.0 + r1 * r1 + 5.0 * r1);
+        assert!((v - expect).abs() / expect < 0.02, "circle {v} vs {expect}");
+        // Square with a round hole: the hole shrinks as the outside grows.
+        let holed = Region { holes: vec![Loop2::Circle { c: [0.0, 0.0], r: 4.0 }], ..sq.clone() };
+        let v = tessellate(&extrude_tapered(&xy(), &holed, 0.0, 5.0, 5.0).unwrap()).volume();
+        assert!(v > 5.0 * holed.area(), "holed {v}");
+        // Rounded slot (lines + arcs).
+        let slot = Region {
+            outer: Loop2::Path(vec![
+                Seg2::line([10.0, -5.0]),
+                Seg2::arc([15.0, 0.0], [10.0, 5.0]),
+                Seg2::line([-10.0, 5.0]),
+                Seg2::arc([-15.0, 0.0], [-10.0, -5.0]),
+            ]),
+            holes: vec![],
+        };
+        let v = tessellate(&extrude_tapered(&xy(), &slot, 0.0, 10.0, -5.0).unwrap()).volume();
+        let base = 20.0 * 10.0 + PI * 25.0;
+        assert!(v < 10.0 * base && v > 0.6 * 10.0 * base, "slot {v} vs {}", 10.0 * base);
+        // Taper that collapses the profile.
+        assert!(extrude_tapered(&xy(), &sq, 0.0, 100.0, -45.0).is_err());
     }
 
     #[test]

@@ -263,6 +263,9 @@ pub enum FeatureKind {
         op: ExtrudeOp,
         /// Bodies a Join/Cut/Intersect acts on.
         participants: Vec<BodyId>,
+        /// Side wall angle in degrees (positive = outwards).
+        #[serde(default)]
+        taper: f64,
     },
 }
 
@@ -471,7 +474,7 @@ impl FeatureKind {
             Cylinder { diameter, height, .. } => vec![("Diameter", false, diameter), ("Height", false, height)],
             Sphere { diameter, .. } => vec![("Diameter", false, diameter)],
             Torus { inner_diameter, torus_diameter, .. } => vec![("Inner Diameter", false, inner_diameter), ("Torus Diameter", false, torus_diameter)],
-            Extrude { distance, .. } => vec![("Distance", false, distance)],
+            Extrude { distance, taper, .. } => vec![("Distance", false, distance), ("Taper Angle", true, taper)],
             Revolve { angle_deg, .. } => vec![("Angle", true, angle_deg)],
             Hole { diameter, depth, .. } => vec![("Diameter", false, diameter), ("Depth", false, depth)],
             Pipe { diameter, wall, .. } => vec![("Section Size", false, diameter), ("Thickness", false, wall)],

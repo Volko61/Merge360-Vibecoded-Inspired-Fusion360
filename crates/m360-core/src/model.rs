@@ -214,11 +214,12 @@ pub fn extrude_tool_range(
     profiles: &[usize],
     z0: f64,
     z1: f64,
+    taper: f64,
 ) -> Result<Solid, String> {
     let frame = plane.frame([0.0, 0.0]);
     let mut shells = Vec::new();
     for r in &selected_regions(entities, profiles)? {
-        let s = profile::extrude_range(&frame, r, z0, z1).map_err(|e| e.to_string())?;
+        let s = profile::extrude_tapered(&frame, r, z0, z1, taper).map_err(|e| e.to_string())?;
         shells.extend(s.into_boundaries());
     }
     Ok(Solid::new(shells))
@@ -230,9 +231,10 @@ pub fn extrude_tool(
     profiles: &[usize],
     distance: f64,
     symmetric: bool,
+    taper: f64,
 ) -> Result<Solid, String> {
     let (z0, z1) = profile::extent(distance, symmetric);
-    extrude_tool_range(plane, entities, profiles, z0, z1)
+    extrude_tool_range(plane, entities, profiles, z0, z1, taper)
 }
 
 /// Extent of a body along the plane normal, measured from the plane.
@@ -555,14 +557,14 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             });
             Ok(())
         }
-        FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, participants } => {
+        FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, participants, taper } => {
             let sk = model
                 .sketches
                 .iter()
                 .find(|s| s.uid == *sketch)
                 .ok_or("the sketch used by this feature no longer exists")?;
             let (plane, entities) = (sk.plane, sk.entities.clone());
-            let tool = extrude_tool(&plane, &entities, profiles, *distance, *symmetric)?;
+            let tool = extrude_tool(&plane, &entities, profiles, *distance, *symmetric, *taper)?;
             let live: Vec<BodyId> =
                 participants.iter().copied().filter(|id| model.body(*id).is_some()).collect();
             // Curves approximated by many short lines (e.g. text): hide facet edges.
@@ -599,7 +601,7 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                         let t0 = if lo >= z0 - eps { z0 - pad } else { z0 };
                         let t1 = if hi <= z1 + eps { z1 + pad } else { z1 };
                         let tool = if bop == BooleanOp::Cut {
-                            extrude_tool_range(&plane, &entities, profiles, t0, t1)?
+                            extrude_tool_range(&plane, &entities, profiles, t0, t1, *taper)?
                         } else {
                             tool.clone()
                         };

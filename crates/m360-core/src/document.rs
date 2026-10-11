@@ -364,6 +364,44 @@ mod tests {
     }
 
     #[test]
+    fn sweep_pipe_loft_split_scale() {
+        use crate::{BasePlane, ExtrudeOp, SketchEntity};
+        let mut d = Document::default();
+        // Path in the XY plane: line along X then an arc turning to +Y.
+        let path = d.add_feature(FeatureKind::Sketch {
+            constraints: vec![],
+            plane: PlaneRef::XY,
+            entities: vec![
+                SketchEntity::Arc { a: [30.0, 0.0], m: [30.0 + 14.142135623730951, 5.857864376269049], b: [50.0, 20.0] },
+                SketchEntity::Line { a: [0.0, 0.0], b: [30.0, 0.0] },
+            ],
+        });
+        d.add_feature(FeatureKind::Pipe { path_sketch: path, path: vec![0, 1], diameter: 6.0, wall: 1.0, op: ExtrudeOp::NewBody, participants: vec![] });
+        // Profile on the YZ plane at the path start (square 4x4).
+        let prof = d.add_feature(FeatureKind::Sketch {
+            constraints: vec![],
+            plane: PlaneRef::YZ,
+            entities: crate::sketch::rectangle([-2.0, -2.0], [2.0, 2.0]),
+        });
+        d.add_feature(FeatureKind::Sweep { sketch: prof, profiles: vec![0], path_sketch: path, path: vec![1, 0], op: ExtrudeOp::NewBody, participants: vec![] });
+        // Loft between two squares on parallel planes.
+        let s1 = d.add_feature(FeatureKind::Sketch { constraints: vec![], plane: PlaneRef { base: BasePlane::XZ, offset: 40.0, flip: false }, entities: crate::sketch::rectangle([-10.0, -10.0], [10.0, 10.0]) });
+        let s2 = d.add_feature(FeatureKind::Sketch { constraints: vec![], plane: PlaneRef { base: BasePlane::XZ, offset: 60.0, flip: false }, entities: crate::sketch::rectangle([-4.0, -4.0], [4.0, 4.0]) });
+        let loft = d.add_feature(FeatureKind::Loft { sections: vec![(s1, 0), (s2, 0)], op: ExtrudeOp::NewBody, participants: vec![] });
+        d.add_feature(FeatureKind::SplitBody { body: loft, plane: PlaneRef { base: BasePlane::XZ, offset: 50.0, flip: false } });
+        d.add_feature(FeatureKind::Scale { bodies: vec![loft], point: [0.0, 0.0, 0.0], factor: 0.5 });
+        let m = Regenerator::default().regenerate(&d);
+        assert!(m.errors.is_empty(), "{:?}", m.errors);
+        assert_eq!(m.bodies.len(), 4);
+        let pi = std::f64::consts::PI;
+        let len = 30.0 + pi * 20.0 / 2.0;
+        let pipe = pi * (9.0 - 4.0) * len;
+        assert!((m.bodies[0].mesh.volume() - pipe).abs() / pipe < 0.02, "{} vs {pipe}", m.bodies[0].mesh.volume());
+        let sweep = 16.0 * len;
+        assert!((m.bodies[1].mesh.volume() - sweep).abs() / sweep < 0.02, "{}", m.bodies[1].mesh.volume());
+    }
+
+    #[test]
     fn ron_roundtrip() {
         let mut d = Document::new("Part");
         d.add_feature(boxf(0.0));

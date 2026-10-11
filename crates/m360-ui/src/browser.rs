@@ -428,6 +428,11 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Pattern { .. } => Icon::Pattern,
         FeatureKind::Mirror { .. } => Icon::Mirror,
         FeatureKind::ConstructionPlane { .. } => Icon::Plane,
+        FeatureKind::Sweep { .. } => Icon::Sweep,
+        FeatureKind::Pipe { .. } => Icon::Pipe,
+        FeatureKind::Loft { .. } => Icon::Loft,
+        FeatureKind::SplitBody { .. } => Icon::Section,
+        FeatureKind::Scale { .. } => Icon::Generic,
         FeatureKind::Fillet { chamfer: true, .. } => Icon::Chamfer,
         FeatureKind::Fillet { .. } => Icon::Fillet,
     }

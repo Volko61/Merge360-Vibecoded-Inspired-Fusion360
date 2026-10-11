@@ -391,6 +391,52 @@ impl Merge360App {
                     editing: None,
                 });
             }
+            "sweep" => {
+                let (sketch, profiles) = selected_profiles(tab);
+                tab.selection.clear();
+                tab.command = Some(Command::Sweep {
+                    sketch,
+                    picking_path: !profiles.is_empty(),
+                    profiles,
+                    path_sketch: None,
+                    path: Vec::new(),
+                    op: if tab.model.bodies.is_empty() { ExtrudeOp::NewBody } else { ExtrudeOp::Join },
+                    editing: None,
+                });
+            }
+            "pipe" => {
+                tab.selection.clear();
+                tab.command = Some(Command::Pipe {
+                    path_sketch: None,
+                    path: Vec::new(),
+                    diameter: 10.0,
+                    wall: 1.0,
+                    hollow: false,
+                    op: if tab.model.bodies.is_empty() { ExtrudeOp::NewBody } else { ExtrudeOp::Join },
+                    editing: None,
+                });
+            }
+            "loft" => {
+                let sections: Vec<(u64, usize)> = tab
+                    .selection
+                    .iter()
+                    .filter_map(|s| match s {
+                        SelItem::Profile(sk, i) => Some((*sk, *i)),
+                        _ => None,
+                    })
+                    .collect();
+                tab.selection.clear();
+                tab.command = Some(Command::Loft { sections, op: ExtrudeOp::NewBody, editing: None });
+            }
+            "split_body" => {
+                let body = sel_bodies.first().copied();
+                tab.selection.clear();
+                tab.command = Some(Command::SplitBody { body, plane: None, picking_plane: body.is_some(), editing: None });
+            }
+            "scale" => {
+                tab.selection.clear();
+                tab.command = Some(Command::Scale { bodies: sel_bodies, point: [0.0; 3], factor: 2.0, editing: None });
+            }
             "offset_plane" => {
                 let base = tab.selection.iter().find_map(|s| tab.plane_of(s));
                 tab.selection.clear();
@@ -649,6 +695,21 @@ impl Merge360App {
                 Command::Move { bodies, translate, axis, angle_deg, copy, editing }
             }
             FeatureKind::Pattern { bodies, pattern } => Command::Pattern { bodies, pattern, editing },
+            FeatureKind::Sweep { sketch, profiles, path_sketch, path, op, .. } => Command::Sweep {
+                sketch: Some(sketch),
+                profiles,
+                path_sketch: Some(path_sketch),
+                path,
+                picking_path: false,
+                op,
+                editing,
+            },
+            FeatureKind::Pipe { path_sketch, path, diameter, wall, op, .. } => {
+                Command::Pipe { path_sketch: Some(path_sketch), path, diameter, wall: if wall > 0.0 { wall } else { 1.0 }, hollow: wall > 0.0, op, editing }
+            }
+            FeatureKind::Loft { sections, op, .. } => Command::Loft { sections, op, editing },
+            FeatureKind::SplitBody { body, plane } => Command::SplitBody { body: Some(body), plane: Some(plane), picking_plane: false, editing },
+            FeatureKind::Scale { bodies, point, factor } => Command::Scale { bodies, point, factor, editing },
             FeatureKind::ConstructionPlane { plane } => Command::OffsetPlane { base: Some(PlaneRef { offset: 0.0, ..plane }), distance: if plane.flip { -plane.offset } else { plane.offset }, editing },
             FeatureKind::Mirror { bodies, plane } => Command::Mirror { bodies, plane: Some(plane), picking_plane: false, editing },
             FeatureKind::Hole { plane, points, diameter, depth, through_all, kind, .. } => {
@@ -1049,6 +1110,21 @@ impl Merge360App {
             }
         }
     }
+}
+
+/// Profiles of the first sketch in the selection.
+fn selected_profiles(tab: &DocTab) -> (Option<u64>, Vec<usize>) {
+    let mut sketch = None;
+    let mut profiles = Vec::new();
+    for s in &tab.selection {
+        if let SelItem::Profile(sk, i) = s {
+            if sketch.is_none() || sketch == Some(*sk) {
+                sketch = Some(*sk);
+                profiles.push(*i);
+            }
+        }
+    }
+    (sketch, profiles)
 }
 
 pub(crate) fn sketch_tool(id: &str) -> Option<SketchTool> {

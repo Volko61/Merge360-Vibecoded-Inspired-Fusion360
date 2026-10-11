@@ -278,6 +278,76 @@ pub fn hole_tools(plane: &PlaneRef, points: &[[f64; 2]], diameter: f64, depth: f
     Ok(out)
 }
 
+fn sketch_of(model: &Model, uid: u64) -> Result<(PlaneRef, Vec<SketchEntity>), String> {
+    model
+        .sketches
+        .iter()
+        .find(|s| s.uid == uid)
+        .map(|s| (s.plane, s.entities.clone()))
+        .ok_or_else(|| "a sketch used by this feature no longer exists".to_string())
+}
+
+/// Order sketch lines/arcs into a connected 3D path.
+pub fn path_segments(model: &Model, sketch: u64, path: &[usize]) -> Result<Vec<m360_kernel::sweep::PathSeg>, String> {
+    use m360_kernel::sweep::PathSeg;
+    let (plane, ents) = sketch_of(model, sketch)?;
+    // (start, end, arc midpoint) in plane coordinates.
+    let mut segs: Vec<([f64; 2], [f64; 2], Option<[f64; 2]>)> = Vec::new();
+    for &i in path {
+        match ents.get(i) {
+            Some(SketchEntity::Line { a, b }) => segs.push((*a, *b, None)),
+            Some(SketchEntity::Arc { a, m, b }) => segs.push((*a, *b, Some(*m))),
+            _ => return Err("the path must consist of sketch lines and arcs".into()),
+        }
+    }
+    if segs.is_empty() {
+        return Err("no path selected".into());
+    }
+    let same = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]) < 1e-6;
+    let degree = |p: [f64; 2], segs: &[([f64; 2], [f64; 2], Option<[f64; 2]>)]| {
+        segs.iter().filter(|s| same(s.0, p) || same(s.1, p)).count()
+    };
+    // Start at an open end if there is one.
+    let start_idx = segs.iter().position(|s| degree(s.0, &segs) == 1 || degree(s.1, &segs) == 1).unwrap_or(0);
+    let mut first = segs.remove(start_idx);
+    if degree(first.0, &segs) > 0 && degree(first.1, &segs) == 0 {
+        first = (first.1, first.0, first.2);
+    }
+    let mut ordered = vec![first];
+    while !segs.is_empty() {
+        let tail = ordered.last().unwrap().1;
+        let Some(k) = segs.iter().position(|s| same(s.0, tail) || same(s.1, tail)) else {
+            return Err("the path is not connected".into());
+        };
+        let s = segs.remove(k);
+        ordered.push(if same(s.0, tail) { s } else { (s.1, s.0, s.2) });
+    }
+    let f = plane.frame([0.0, 0.0]);
+    let w = |p: [f64; 2]| f.to_world(glam::DVec3::new(p[0], p[1], 0.0));
+    Ok(ordered
+        .into_iter()
+        .map(|(a, b, m)| match m {
+            None => PathSeg::Line { a: w(a), b: w(b) },
+            Some(m) => PathSeg::Arc { a: w(a), m: w(m), b: w(b) },
+        })
+        .collect())
+}
+
+/// Tool solid of a Pipe feature.
+pub fn pipe_tool(segs: &[m360_kernel::sweep::PathSeg], diameter: f64, wall: f64) -> Result<Solid, String> {
+    use m360_kernel::profile::{Loop2, Region};
+    let r = diameter / 2.0;
+    if r <= 1e-6 {
+        return Err("diameter must be greater than zero".into());
+    }
+    let t = segs.first().ok_or("no path selected")?.start_tangent();
+    let u = t.any_orthonormal_vector();
+    let frame = m360_kernel::Frame::new(segs[0].start(), u, t.cross(u));
+    let holes = if wall > 1e-6 && wall < r { vec![Loop2::Circle { c: [0.0, 0.0], r: r - wall }] } else { vec![] };
+    let region = Region { outer: Loop2::Circle { c: [0.0, 0.0], r }, holes };
+    m360_kernel::sweep::sweep_region(&frame, &region, segs).map_err(|e| e.to_string())
+}
+
 /// Apply a tool body with a Fusion-style operation to the participants.
 fn apply_op(model: &mut Model, uid: u64, tool: Solid, op: ExtrudeOp, participants: &[BodyId]) -> Result<(), String> {
     let live: Vec<BodyId> = participants.iter().copied().filter(|id| model.body(*id).is_some()).collect();
@@ -472,6 +542,49 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                         replace(model, rebuilt(model, id, res, f.uid));
                     }
                 }
+            }
+            Ok(())
+        }
+        FeatureKind::Sweep { sketch, profiles, path_sketch, path, op, participants } => {
+            let (plane, ents) = sketch_of(model, *sketch)?;
+            let segs = path_segments(model, *path_sketch, path)?;
+            let frame = plane.frame([0.0, 0.0]);
+            let mut shells = Vec::new();
+            for r in &selected_regions(&ents, profiles)? {
+                let s = m360_kernel::sweep::sweep_region(&frame, r, &segs).map_err(|e| e.to_string())?;
+                shells.extend(s.into_boundaries());
+            }
+            apply_op(model, f.uid, Solid::new(shells), *op, participants)
+        }
+        FeatureKind::Pipe { path_sketch, path, diameter, wall, op, participants } => {
+            let segs = path_segments(model, *path_sketch, path)?;
+            let tool = pipe_tool(&segs, *diameter, *wall)?;
+            apply_op(model, f.uid, tool, *op, participants)
+        }
+        FeatureKind::Loft { sections, op, participants } => {
+            let mut secs = Vec::new();
+            for (sk, i) in sections {
+                let (plane, ents) = sketch_of(model, *sk)?;
+                let r = crate::sketch::profiles(&ents).get(*i).cloned().ok_or("a loft profile no longer exists")?;
+                secs.push((plane.frame([0.0, 0.0]), r));
+            }
+            let tool = m360_kernel::sweep::loft(&secs).map_err(|e| e.to_string())?;
+            apply_op(model, f.uid, tool, *op, participants)
+        }
+        FeatureKind::SplitBody { body, plane } => {
+            let b = model.body(*body).ok_or("the body to split no longer exists")?;
+            let fr = plane.frame([0.0, 0.0]);
+            let (front, back) = ops::split(&b.solid, fr.origin, fr.n).map_err(|e| e.to_string())?;
+            let cos = b.smooth_cos;
+            replace(model, rebuilt(model, *body, front, f.uid));
+            model.bodies.push(new_body_smooth(f.uid, back, f.uid, cos));
+            Ok(())
+        }
+        FeatureKind::Scale { bodies, point, factor } => {
+            for id in bodies {
+                let b = model.body(*id).ok_or("a scaled body no longer exists")?;
+                let s = ops::scale(&b.solid, glam::DVec3::from(*point), *factor).map_err(|e| e.to_string())?;
+                replace(model, rebuilt(model, *id, s, f.uid));
             }
             Ok(())
         }

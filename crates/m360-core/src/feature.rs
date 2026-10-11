@@ -180,6 +180,41 @@ pub enum FeatureKind {
         kind: HoleType,
         participants: Vec<BodyId>,
     },
+    /// Sweep sketch profiles along a path of sketch lines/arcs.
+    Sweep {
+        sketch: u64,
+        profiles: Vec<usize>,
+        path_sketch: u64,
+        path: Vec<usize>,
+        op: ExtrudeOp,
+        participants: Vec<BodyId>,
+    },
+    /// Circular pipe along a path (hollow when `wall` > 0).
+    Pipe {
+        path_sketch: u64,
+        path: Vec<usize>,
+        diameter: f64,
+        wall: f64,
+        op: ExtrudeOp,
+        participants: Vec<BodyId>,
+    },
+    /// Loft through profiles (sketch uid, profile index), in order.
+    Loft {
+        sections: Vec<(u64, usize)>,
+        op: ExtrudeOp,
+        participants: Vec<BodyId>,
+    },
+    /// Split a body with a plane (the far side becomes a new body).
+    SplitBody {
+        body: BodyId,
+        plane: PlaneRef,
+    },
+    /// Uniform scale of bodies about a point.
+    Scale {
+        bodies: Vec<BodyId>,
+        point: [f64; 3],
+        factor: f64,
+    },
     /// A construction plane (Construct ▸ Offset Plane).
     ConstructionPlane {
         plane: PlaneRef,
@@ -329,6 +364,11 @@ impl FeatureKind {
             FeatureKind::Pattern { .. } => "RectangularPattern",
             FeatureKind::Mirror { .. } => "Mirror",
             FeatureKind::ConstructionPlane { .. } => "Plane",
+            FeatureKind::Sweep { .. } => "Sweep",
+            FeatureKind::Pipe { .. } => "Pipe",
+            FeatureKind::Loft { .. } => "Loft",
+            FeatureKind::SplitBody { .. } => "SplitBody",
+            FeatureKind::Scale { .. } => "Scale",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }
@@ -343,7 +383,17 @@ impl FeatureKind {
                 | FeatureKind::Torus { .. }
                 | FeatureKind::Extrude { op: ExtrudeOp::NewBody, .. }
                 | FeatureKind::Revolve { op: ExtrudeOp::NewBody, .. }
-        ) || matches!(self, FeatureKind::Extrude { participants, op: ExtrudeOp::Join, .. } | FeatureKind::Revolve { participants, op: ExtrudeOp::Join, .. } if participants.is_empty())
+                | FeatureKind::Sweep { op: ExtrudeOp::NewBody, .. }
+                | FeatureKind::Pipe { op: ExtrudeOp::NewBody, .. }
+                | FeatureKind::Loft { op: ExtrudeOp::NewBody, .. }
+                | FeatureKind::SplitBody { .. }
+        ) || matches!(self,
+            FeatureKind::Extrude { participants, op: ExtrudeOp::Join, .. }
+            | FeatureKind::Revolve { participants, op: ExtrudeOp::Join, .. }
+            | FeatureKind::Sweep { participants, op: ExtrudeOp::Join, .. }
+            | FeatureKind::Pipe { participants, op: ExtrudeOp::Join, .. }
+            | FeatureKind::Loft { participants, op: ExtrudeOp::Join, .. }
+            if participants.is_empty())
     }
 
     /// For features that create copies of bodies: the source bodies and the

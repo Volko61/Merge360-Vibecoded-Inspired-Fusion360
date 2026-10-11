@@ -74,6 +74,34 @@ fn guarded<T>(f: impl FnOnce() -> Option<T>) -> Result<Option<T>> {
     crate::quiet_catch(f).ok_or_else(|| KernelError::OperationFailed("boolean failed: degenerate geometry".into()))
 }
 
+/// Split a solid by a plane (point + normal). Returns (front, back) where
+/// front lies on the side the normal points to.
+pub fn split(solid: &Solid, point: glam::DVec3, normal: glam::DVec3) -> Result<(Solid, Solid)> {
+    let mesh = crate::mesh::tessellate_with(solid, 0.5);
+    let size = ((mesh.bbox_max - mesh.bbox_min).length() as f64).max(1.0) * 4.0;
+    let n = normal.normalize();
+    let u = n.any_orthonormal_vector();
+    let v = n.cross(u);
+    let half = |sign: f64| -> Result<Solid> {
+        let frame = crate::Frame::new(point, u, v);
+        crate::primitives::make_box(&frame, size, size, sign * size)
+    };
+    let front = boolean(solid, &[half(1.0)?], BooleanOp::Intersect)
+        .map_err(|_| KernelError::OperationFailed("the plane does not split the body (or touches a face)".into()))?;
+    let back = boolean(solid, &[half(-1.0)?], BooleanOp::Intersect)
+        .map_err(|_| KernelError::OperationFailed("the plane does not split the body (or touches a face)".into()))?;
+    Ok((front, back))
+}
+
+/// Uniform scale about a point.
+pub fn scale(solid: &Solid, point: glam::DVec3, factor: f64) -> Result<Solid> {
+    if !(factor > 1e-9) {
+        return Err(KernelError::InvalidParameter("scale factor must be positive".into()));
+    }
+    let m = DMat4::from_translation(point) * DMat4::from_scale(glam::DVec3::splat(factor)) * DMat4::from_translation(-point);
+    Ok(transform(solid, m))
+}
+
 pub fn transform(solid: &Solid, m: DMat4) -> Solid {
     builder::transformed(solid, to_truck(m))
 }
@@ -96,6 +124,16 @@ mod tests {
         let c = boolean(&a, &[b], BooleanOp::Cut).unwrap();
         let v = tessellate(&c).volume();
         assert!((v - 500.0).abs() < 5.0, "{v}");
+    }
+
+    #[test]
+    fn split_and_scale() {
+        let a = make_box(&xy(), 10.0, 10.0, 10.0).unwrap();
+        let (f, b) = split(&a, DVec3::new(2.0, 0.0, 0.0), DVec3::X).unwrap();
+        assert!((tessellate(&f).volume() - 300.0).abs() < 1.0);
+        assert!((tessellate(&b).volume() - 700.0).abs() < 1.0);
+        let s = scale(&a, DVec3::ZERO, 2.0).unwrap();
+        assert!((tessellate(&s).volume() - 8000.0).abs() < 1.0);
     }
 
     #[test]

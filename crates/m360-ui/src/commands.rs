@@ -356,6 +356,147 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Sweep { sketch, profiles, path_sketch, path, picking_path, op, .. } => {
+                let ok = sketch.is_some() && !profiles.is_empty() && path_sketch.is_some() && !path.is_empty() && preview_err.is_none();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Type");
+                    ui.label("Single path");
+                    ui.end_row();
+                    row_label(ui, "Profile");
+                    let t = if profiles.is_empty() { "Select".to_string() } else { format!("{} selected", profiles.len()) };
+                    if selection_field(ui, !*picking_path, &t).clicked() {
+                        *picking_path = false;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Path");
+                    let t = if path.is_empty() { "Select".to_string() } else { format!("{} curves", path.len()) };
+                    if selection_field(ui, *picking_path, &t).clicked() {
+                        *picking_path = true;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Operation");
+                    egui::ComboBox::from_id_salt("sw_op").selected_text(op.label()).show_ui(ui, |ui| {
+                        for o in ExtrudeOp::ALL {
+                            ui.selectable_value(op, o, o.label());
+                        }
+                    });
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::Pipe { path, diameter, wall, hollow, op, .. } => {
+                let ok = !path.is_empty() && preview_err.is_none();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Path");
+                    let t = if path.is_empty() { "Select".to_string() } else { format!("{} curves", path.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        path.clear();
+                    }
+                    ui.end_row();
+                    row_label(ui, "Section");
+                    ui.label("Circular");
+                    ui.end_row();
+                    row_label(ui, "Section Size");
+                    length_field(ui, "pipe_d", diameter, units);
+                    ui.end_row();
+                    row_label(ui, "Hollow");
+                    ui.checkbox(hollow, "");
+                    ui.end_row();
+                    if *hollow {
+                        row_label(ui, "Section Thickness");
+                        length_field(ui, "pipe_w", wall, units);
+                        ui.end_row();
+                    }
+                    row_label(ui, "Operation");
+                    egui::ComboBox::from_id_salt("pipe_op").selected_text(op.label()).show_ui(ui, |ui| {
+                        for o in ExtrudeOp::ALL {
+                            ui.selectable_value(op, o, o.label());
+                        }
+                    });
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::Loft { sections, op, .. } => {
+                let ok = sections.len() >= 2 && preview_err.is_none();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Profiles");
+                    let t = if sections.is_empty() { "Select".to_string() } else { format!("{} profiles", sections.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        sections.clear();
+                    }
+                    ui.end_row();
+                    row_label(ui, "");
+                    ui.label(egui::RichText::new("Select profiles in order").small().color(theme::TEXT_DIM));
+                    ui.end_row();
+                    row_label(ui, "Operation");
+                    egui::ComboBox::from_id_salt("loft_op").selected_text(op.label()).show_ui(ui, |ui| {
+                        for o in ExtrudeOp::ALL {
+                            ui.selectable_value(op, o, o.label());
+                        }
+                    });
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::SplitBody { body, plane, picking_plane, .. } => {
+                let ok = body.is_some() && plane.is_some();
+                let bname = body.map_or("Select".to_string(), |b| self.tabs[self.active].doc.body_meta(b).name);
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Body to Split");
+                    if selection_field(ui, !*picking_plane, &bname).clicked() {
+                        *picking_plane = false;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Splitting Tool");
+                    let t = plane.map_or("Select".to_string(), |p| p.label());
+                    if selection_field(ui, *picking_plane, &t).clicked() {
+                        *picking_plane = true;
+                    }
+                    ui.end_row();
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::Scale { bodies, point, factor, .. } => {
+                let ok = !bodies.is_empty();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Entities");
+                    let t = if bodies.is_empty() { "Select".to_string() } else { format!("{} Bodies", bodies.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        bodies.clear();
+                    }
+                    ui.end_row();
+                    for (i, n) in ["Point X", "Point Y", "Point Z"].iter().enumerate() {
+                        row_label(ui, n);
+                        length_field(ui, ("sc_p", i), &mut point[i], units);
+                        ui.end_row();
+                    }
+                    row_label(ui, "Scale Factor");
+                    ui.add(egui::DragValue::new(factor).speed(0.01).range(0.001..=1000.0));
+                    ui.end_row();
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::OffsetPlane { base, distance, .. } => {
                 let ok = base.is_some();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
@@ -763,6 +904,28 @@ impl Merge360App {
             Command::Pattern { bodies, pattern, editing } => {
                 self.commit_feature(FeatureKind::Pattern { bodies, pattern }, editing);
             }
+            Command::Sweep { sketch: Some(sketch), profiles, path_sketch: Some(path_sketch), path, op, editing, .. } => {
+                let participants = self.overlapping_bodies(op);
+                let new = editing.is_none();
+                self.commit_feature(FeatureKind::Sweep { sketch, profiles, path_sketch, path, op, participants }, editing);
+                if new {
+                    self.tab().doc.sketch_visible.insert(sketch, false);
+                }
+            }
+            Command::Pipe { path_sketch: Some(path_sketch), path, diameter, wall, hollow, op, editing } => {
+                let participants = self.overlapping_bodies(op);
+                self.commit_feature(FeatureKind::Pipe { path_sketch, path, diameter, wall: if hollow { wall } else { 0.0 }, op, participants }, editing);
+            }
+            Command::Loft { sections, op, editing } => {
+                let participants = self.overlapping_bodies(op);
+                self.commit_feature(FeatureKind::Loft { sections, op, participants }, editing);
+            }
+            Command::SplitBody { body: Some(body), plane: Some(plane), editing, .. } => {
+                self.commit_feature(FeatureKind::SplitBody { body, plane }, editing);
+            }
+            Command::Scale { bodies, point, factor, editing } => {
+                self.commit_feature(FeatureKind::Scale { bodies, point, factor }, editing);
+            }
             Command::OffsetPlane { base: Some(base), distance, editing } => {
                 let plane = m360_core::PlaneRef { offset: base.offset + if base.flip { -distance } else { distance }, ..base };
                 self.commit_feature(FeatureKind::ConstructionPlane { plane }, editing);
@@ -953,6 +1116,7 @@ impl Merge360App {
                             ui.end_row();
                         }
                         FeatureKind::ConstructionPlane { plane } => row(ui, "Offset", &mut plane.offset, "po"),
+                        FeatureKind::Pipe { diameter, .. } => row(ui, "Section Size", diameter, "pd"),
                         FeatureKind::Hole { diameter, depth, .. } => {
                             row(ui, "Diameter", diameter, "hd");
                             row(ui, "Depth", depth, "hp");

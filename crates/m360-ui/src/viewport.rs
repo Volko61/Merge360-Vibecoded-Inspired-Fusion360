@@ -150,6 +150,8 @@ enum PickMode {
     Edges,
     /// Lines of a given sketch (revolve axis).
     Axis(u64),
+    /// Lines/arcs of visible sketches (sweep paths).
+    Curves,
 }
 
 impl Merge360App {
@@ -173,6 +175,10 @@ impl Merge360App {
             Some(Command::Hole { .. }) => PickMode::Planes,
             Some(Command::OffsetPlane { base: None, .. }) | Some(Command::Section { plane: None, .. }) => PickMode::Planes,
             Some(Command::Mirror { picking_plane: true, .. }) => PickMode::Planes,
+            Some(Command::Sweep { picking_path: true, .. }) | Some(Command::Pipe { .. }) => PickMode::Curves,
+            Some(Command::Sweep { .. }) | Some(Command::Loft { .. }) => PickMode::Profiles,
+            Some(Command::SplitBody { picking_plane: true, .. }) => PickMode::Planes,
+            Some(Command::SplitBody { .. }) | Some(Command::Scale { .. }) => PickMode::Bodies,
             Some(Command::Mirror { .. }) | Some(Command::Pattern { .. }) => PickMode::Bodies,
             _ => PickMode::Default,
         }
@@ -251,6 +257,30 @@ impl Merge360App {
                     }
                 }
             }
+        }
+
+        // Sweep paths: lines and arcs of visible sketches.
+        if mode == PickMode::Curves {
+            let tab = &self.tabs[active];
+            let mut best_c: Option<(f32, SelItem, Vec3)> = None;
+            for sk in &tab.model.sketches {
+                let visible = tab.doc.sketches_folder_visible && tab.doc.sketch_visible.get(&sk.uid).copied().unwrap_or(true);
+                if !visible {
+                    continue;
+                }
+                for (i, e) in sk.entities.iter().enumerate() {
+                    if !matches!(e, SketchEntity::Line { .. } | SketchEntity::Arc { .. }) {
+                        continue;
+                    }
+                    let d = self.entity_screen_dist(&cam, &sk.plane, e, pos);
+                    if d < 8.0 && best_c.as_ref().is_none_or(|b| d < b.0) {
+                        let (o, _, _, n) = plane_frame(&sk.plane);
+                        let w = ray_plane(&ray, o, n).map(|t| ray.origin + ray.dir * t).unwrap_or(Vec3::ZERO);
+                        best_c = Some((d, SelItem::SketchEntity(sk.uid, i), w));
+                    }
+                }
+            }
+            return best_c.map(|(_, i, w)| (i, w));
         }
 
         // Revolve axis: lines of the profile's sketch.
@@ -809,6 +839,65 @@ impl Merge360App {
                     *plane_chosen = true;
                 }
             }
+            Some(Command::Sweep { sketch, profiles, path_sketch, path, picking_path, .. }) => match hover {
+                Some(SelItem::SketchEntity(uid, i)) if *picking_path => {
+                    *path_sketch = Some(uid);
+                    *path = chain_of(&tab.model, uid, i);
+                    *picking_path = false;
+                }
+                Some(SelItem::Profile(uid, i)) => {
+                    if *sketch != Some(uid) {
+                        *sketch = Some(uid);
+                        profiles.clear();
+                    }
+                    if let Some(k) = profiles.iter().position(|x| *x == i) {
+                        profiles.remove(k);
+                    } else {
+                        profiles.push(i);
+                    }
+                    if path.is_empty() {
+                        *picking_path = true;
+                    }
+                }
+                _ => {}
+            },
+            Some(Command::Pipe { path_sketch, path, .. }) => {
+                if let Some(SelItem::SketchEntity(uid, i)) = hover {
+                    *path_sketch = Some(uid);
+                    *path = chain_of(&tab.model, uid, i);
+                }
+            }
+            Some(Command::Loft { sections, .. }) => {
+                if let Some(SelItem::Profile(uid, i)) = hover {
+                    if let Some(k) = sections.iter().position(|x| *x == (uid, i)) {
+                        sections.remove(k);
+                    } else {
+                        sections.push((uid, i));
+                    }
+                }
+            }
+            Some(Command::SplitBody { body, plane, picking_plane, .. }) => {
+                if *picking_plane {
+                    if hover_plane.is_some() {
+                        *plane = hover_plane;
+                        *picking_plane = false;
+                    }
+                } else if let Some(b) = hover.and_then(|h| h.body()) {
+                    *body = Some(b);
+                    if plane.is_none() {
+                        *picking_plane = true;
+                    }
+                }
+            }
+            Some(Command::Scale { bodies, .. }) => {
+                if let Some(b) = hover.and_then(|h| h.body()) {
+                    if let Some(k) = bodies.iter().position(|x| *x == b) {
+                        bodies.remove(k);
+                    } else {
+                        bodies.push(b);
+                    }
+                }
+            }
             Some(Command::Mirror { plane, picking_plane: true, .. }) => {
                 if hover_plane.is_some() {
                     *plane = hover_plane;
@@ -1149,6 +1238,28 @@ impl Merge360App {
             scene.bodies.push(d);
         }
 
+        // Sweep / pipe paths.
+        let path_hl = match &tab.command {
+            Some(Command::Sweep { path_sketch: Some(ps), path, .. }) | Some(Command::Pipe { path_sketch: Some(ps), path, .. }) => Some((*ps, path.clone())),
+            _ => None,
+        };
+        if let Some((ps, path)) = path_hl {
+            if let Some((plane, ents)) = tab.sketch_entities(ps) {
+                for i in path {
+                    if let Some(e) = ents.get(i) {
+                        entity_lines(&mut scene.lines, &plane, e, srgb(0.02, 0.35, 0.9, 1.0), 3.0);
+                    }
+                }
+            }
+        }
+        if let Some(SelItem::SketchEntity(uid, i)) = tab.hover.filter(|_| self.pick_mode() == PickMode::Curves) {
+            if let Some((plane, ents)) = tab.sketch_entities(uid) {
+                if let Some(e) = ents.get(i) {
+                    entity_lines(&mut scene.lines, &plane, e, srgb(0.25, 0.65, 1.0, 1.0), 3.0);
+                }
+            }
+        }
+
         // Revolve axis line.
         if let Some(Command::Revolve { sketch: Some(sk), axis: Some(axis), .. }) = &tab.command {
             if let Some((plane, ents)) = tab.sketch_entities(*sk) {
@@ -1325,7 +1436,8 @@ impl Merge360App {
                         for (i, tris) in cache.tris.iter().enumerate() {
                             let item = SelItem::Profile(sk.uid, i);
                             let selected = tab.selection.contains(&item)
-                                || matches!(&tab.command, Some(Command::Extrude { sketch: Some(s), profiles, .. }) | Some(Command::Revolve { sketch: Some(s), profiles, .. }) if *s == sk.uid && profiles.contains(&i));
+                                || matches!(&tab.command, Some(Command::Extrude { sketch: Some(s), profiles, .. }) | Some(Command::Revolve { sketch: Some(s), profiles, .. }) | Some(Command::Sweep { sketch: Some(s), profiles, .. }) if *s == sk.uid && profiles.contains(&i))
+                                || matches!(&tab.command, Some(Command::Loft { sections, .. }) if sections.contains(&(sk.uid, i)));
                             let hovered = tab.hover == Some(item);
                             let fill = if selected {
                                 srgb(0.25, 0.6, 1.0, 0.45)
@@ -1534,6 +1646,33 @@ impl Merge360App {
             painter.galley(pos, galley, Color32::WHITE);
         }
     }
+}
+
+/// Connected chain of lines/arcs containing entity `start` (chain selection).
+pub fn chain_of(model: &m360_core::Model, sketch: u64, start: usize) -> Vec<usize> {
+    let Some(sk) = model.sketches.iter().find(|s| s.uid == sketch) else { return vec![start] };
+    let ends = |e: &SketchEntity| match e {
+        SketchEntity::Line { a, b } | SketchEntity::Arc { a, b, .. } => Some([*a, *b]),
+        _ => None,
+    };
+    let same = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]) < 1e-6;
+    let mut out = vec![start];
+    let mut stack = vec![start];
+    while let Some(i) = stack.pop() {
+        let Some(ei) = sk.entities.get(i).and_then(ends) else { continue };
+        for (j, e) in sk.entities.iter().enumerate() {
+            if out.contains(&j) {
+                continue;
+            }
+            if let Some(ej) = ends(e) {
+                if ei.iter().any(|p| ej.iter().any(|q| same(*p, *q))) {
+                    out.push(j);
+                    stack.push(j);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Bounds of all visible bodies (falls back to a default box).

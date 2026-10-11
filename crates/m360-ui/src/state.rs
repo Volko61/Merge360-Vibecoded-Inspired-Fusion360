@@ -273,6 +273,42 @@ pub enum Command {
         picking_axis: bool,
         editing: Option<EditCtx>,
     },
+    Sweep {
+        sketch: Option<u64>,
+        profiles: Vec<usize>,
+        path_sketch: Option<u64>,
+        path: Vec<usize>,
+        /// True while the Path field is active.
+        picking_path: bool,
+        op: ExtrudeOp,
+        editing: Option<EditCtx>,
+    },
+    Pipe {
+        path_sketch: Option<u64>,
+        path: Vec<usize>,
+        diameter: f64,
+        wall: f64,
+        hollow: bool,
+        op: ExtrudeOp,
+        editing: Option<EditCtx>,
+    },
+    Loft {
+        sections: Vec<(u64, usize)>,
+        op: ExtrudeOp,
+        editing: Option<EditCtx>,
+    },
+    SplitBody {
+        body: Option<BodyId>,
+        plane: Option<PlaneRef>,
+        picking_plane: bool,
+        editing: Option<EditCtx>,
+    },
+    Scale {
+        bodies: Vec<BodyId>,
+        point: [f64; 3],
+        factor: f64,
+        editing: Option<EditCtx>,
+    },
     OffsetPlane {
         base: Option<PlaneRef>,
         distance: f64,
@@ -338,6 +374,11 @@ impl Command {
             Command::Pattern { .. } => "RECTANGULAR PATTERN",
             Command::Mirror { .. } => "MIRROR",
             Command::OffsetPlane { .. } => "OFFSET PLANE",
+            Command::Sweep { .. } => "SWEEP",
+            Command::Pipe { .. } => "PIPE",
+            Command::Loft { .. } => "LOFT",
+            Command::SplitBody { .. } => "SPLIT BODY",
+            Command::Scale { .. } => "SCALE",
             Command::Section { .. } => "SECTION ANALYSIS",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
             Command::Fillet { .. } => "FILLET",
@@ -362,7 +403,12 @@ impl Command {
             | Command::Hole { editing, .. }
             | Command::Pattern { editing, .. }
             | Command::Mirror { editing, .. }
-            | Command::OffsetPlane { editing, .. } => editing.as_ref(),
+            | Command::OffsetPlane { editing, .. }
+            | Command::Sweep { editing, .. }
+            | Command::Pipe { editing, .. }
+            | Command::Loft { editing, .. }
+            | Command::SplitBody { editing, .. }
+            | Command::Scale { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
@@ -612,6 +658,51 @@ impl DocTab {
                     return;
                 };
                 (key, m360_core::model::revolve_tool(&plane, &ents, profiles, axis, *angle_deg))
+            }
+            Command::Sweep { sketch: Some(sk), profiles, path_sketch: Some(ps), path, .. } if !profiles.is_empty() && !path.is_empty() => {
+                let key = format!("sweep{sk}{profiles:?}{ps}{path:?}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let r = (|| {
+                    let (plane, ents) = self.sketch_entities(*sk).ok_or("sketch missing")?;
+                    let segs = m360_core::model::path_segments(&self.model, *ps, path)?;
+                    let frame = plane.frame([0.0, 0.0]);
+                    let regions = m360_core::sketch::profiles(&ents);
+                    let mut shells = Vec::new();
+                    for &i in profiles {
+                        let r = regions.get(i).ok_or("profile missing")?;
+                        let s = m360_kernel::sweep::sweep_region(&frame, r, &segs).map_err(|e| e.to_string())?;
+                        shells.extend(s.into_boundaries());
+                    }
+                    Ok::<_, String>(m360_kernel::Solid::new(shells))
+                })();
+                (key, r)
+            }
+            Command::Pipe { path_sketch: Some(ps), path, diameter, wall, hollow, .. } if !path.is_empty() => {
+                let key = format!("pipe{ps}{path:?}{diameter}{wall}{hollow}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let r = m360_core::model::path_segments(&self.model, *ps, path)
+                    .and_then(|segs| m360_core::model::pipe_tool(&segs, *diameter, if *hollow { *wall } else { 0.0 }));
+                (key, r)
+            }
+            Command::Loft { sections, .. } if sections.len() >= 2 => {
+                let key = format!("loft{sections:?}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let r = (|| {
+                    let mut secs = Vec::new();
+                    for (sk, i) in sections {
+                        let (plane, ents) = self.sketch_entities(*sk).ok_or("sketch missing")?;
+                        let r = m360_core::sketch::profiles(&ents).get(*i).cloned().ok_or("profile missing")?;
+                        secs.push((plane.frame([0.0, 0.0]), r));
+                    }
+                    m360_kernel::sweep::loft(&secs).map_err(|e| e.to_string())
+                })();
+                (key, r)
             }
             Command::Move { .. } | Command::Pattern { .. } | Command::Mirror { .. } => {
                 let kind = match cmd {

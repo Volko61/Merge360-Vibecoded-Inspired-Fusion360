@@ -205,6 +205,11 @@ impl Region {
         self.outer.area() - self.holes.iter().map(|h| h.area()).sum::<f64>()
     }
 
+    /// Planar face of the region at height `z` (outer loop CCW, holes CW).
+    pub fn face_at_public(&self, z: f64) -> Result<truck_modeling::Face> {
+        self.face_at(z)
+    }
+
     fn face_at(&self, z: f64) -> Result<truck_modeling::Face> {
         let mut wires = vec![self.outer.wire(z, true)?];
         for h in &self.holes {

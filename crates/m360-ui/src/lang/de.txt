@@ -668,3 +668,18 @@ click profiles in the view	Profile in der Ansicht anklicken
 Side	Seite
 Pecking depth	Entspantiefe
 Toolpath	Werkzeugweg
+TRANSFORM	TRANSFORMIEREN
+Transform Components	Komponenten transformieren
+Auto Explode	Automatisch explodieren
+PLAYBACK	WIEDERGABE
+Play	Abspielen
+PUBLISH	VERÖFFENTLICHEN
+Publish Video	Video veröffentlichen
+Storyboard	Storyboard
+Select bodies and click Transform Components, or use Auto Explode.	Wählen Sie Körper und klicken Sie auf Komponenten transformieren, oder verwenden Sie Automatisch explodieren.
+Duration	Dauer
+Move X / Y / Z	Verschiebung X / Y / Z
+Auto Explode needs at least two bodies.	Automatisch explodieren benötigt mindestens zwei Körper.
+The storyboard is empty.	Das Storyboard ist leer.
+Video frames saved in	Videobilder gespeichert in
+frames, 24 fps	Bilder, 24 fps

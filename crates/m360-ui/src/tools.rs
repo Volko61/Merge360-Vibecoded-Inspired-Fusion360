@@ -439,6 +439,7 @@ pub const SKETCH_TAB: Tab = Tab {
 
 pub const WS_DESIGN: usize = 0;
 pub const WS_RENDER: usize = 2;
+pub const WS_ANIMATION: usize = 3;
 pub const WS_MANUFACTURE: usize = 5;
 pub const WS_DRAWING: usize = 6;
 
@@ -446,7 +447,7 @@ pub const WORKSPACES: &[(&str, bool)] = &[
     ("DESIGN", true),
     ("GENERATIVE DESIGN", false),
     ("RENDER", true),
-    ("ANIMATION", false),
+    ("ANIMATION", true),
     ("SIMULATION", false),
     ("MANUFACTURE", true),
     ("DRAWING", true),
@@ -463,6 +464,10 @@ pub const IMPLEMENTED: &[&str] = &[
     "coil",
     "draft",
     "cam_setup",
+    "anim_transform",
+    "anim_explode",
+    "anim_play",
+    "anim_publish",
     "cam_face",
     "cam_contour",
     "cam_pocket",
@@ -602,12 +607,21 @@ pub const CAM_TOOLS: &[Tool] = &[
     t("cam_post", "Post Process", Generic),
 ];
 
+/// ANIMATION workspace actions.
+pub const ANIM_TOOLS: &[Tool] = &[
+    t("anim_transform", "Transform Components", Move),
+    t("anim_explode", "Auto Explode", Generic),
+    t("anim_play", "Play", Generic),
+    t("anim_publish", "Publish Video", Generic),
+];
+
 pub fn find(id: &str) -> Option<Tool> {
     std::iter::once(&SKETCH_TAB)
         .chain(DESIGN_TABS.iter())
         .flat_map(|t| t.panels.iter())
         .flat_map(|p| p.tools.iter())
         .chain(CAM_TOOLS.iter())
+        .chain(ANIM_TOOLS.iter())
         .find(|t| t.id == id)
         .copied()
 }

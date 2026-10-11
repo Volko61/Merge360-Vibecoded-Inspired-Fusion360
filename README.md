@@ -77,6 +77,8 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   2D Contour (inside/outside), 2D Pocket (with islands), Drill (peck) operations from sketch
   geometry, tool/feeds/stepdown settings, toolpath display, simulation and G-code post
   processing (`.nc`, generic Fanuc/GRBL dialect).
+* **ANIMATION workspace:** storyboard of timed body moves/rotations, Auto Explode, playback and
+  video export (PNG frames at 24 fps).
 * **RENDER workspace:** presentation view (environments, soft ground shadow, optional edges) and
   high-resolution image rendering to PNG (HD to 4K).
 * **Preferences** (user menu ▸ Preferences, saved in `~/.config/merge360/preferences.ron`):
@@ -89,7 +91,7 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
 * Fully parametric: every feature is re-editable from the timeline (double-click), roll back with
   the marker, suppress features; undo/redo for everything.
 
-Tools that are not implemented yet (modeled threads, the Animation / Simulation /
+Tools that are not implemented yet (modeled threads, the Simulation /
 Generative Design workspaces, …) are present
 in the UI and report “not available yet”. Kernel limitations (truck): fillets meeting three at a
 corner, shells of non-prismatic bodies and booleans of exactly coplanar faces may fail; such

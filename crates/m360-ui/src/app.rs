@@ -84,6 +84,7 @@ pub struct Merge360App {
     pub prefs: crate::prefs::Preferences,
     pub prefs_ui: PrefsUi,
     pub cam: crate::cam_ws::CamUi,
+    pub anim: crate::anim_ws::AnimUi,
     pub last_autosave: f64,
 }
 
@@ -138,6 +139,7 @@ impl Merge360App {
             prefs: crate::prefs::Preferences::load(),
             prefs_ui: PrefsUi::default(),
             cam: Default::default(),
+            anim: Default::default(),
             last_autosave: 0.0,
         };
         cc.egui_ctx.set_zoom_factor(app.prefs.ui_scale);
@@ -275,6 +277,7 @@ impl Merge360App {
                     (Some(Command::SurfaceRevolve { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
                     (Some(Command::Draft { fixed_top, .. }), "fixed_top") => *fixed_top = v == "true",
                     (_, "cam_sim") => self.cam.sim = num.unwrap_or(0.0) as f32,
+                    (_, "anim_time") => self.anim.time = num.unwrap_or(0.0),
                     (Some(Command::Thread { pitch, .. }), "pitch") => *pitch = num.unwrap_or(*pitch),
                     (Some(Command::Thread { full_length, length, .. }), "length") => {
                         *full_length = false;
@@ -821,6 +824,7 @@ impl Merge360App {
             "doc_settings" => tab.command = Some(Command::DocSettings),
             "preferences" => self.prefs_ui.open = true,
             id if id.starts_with("cam_") => self.cam_action(id),
+            id if id.starts_with("anim_") => self.anim_action(id),
             "properties" => tab.command = Some(Command::Properties),
             "compute_all" => {
                 tab.regen.clear();
@@ -1630,6 +1634,7 @@ impl eframe::App for Merge360App {
         if self.flags.data_panel {
             self.data_panel(ui);
         }
+        self.anim_tick(&ctx);
         let drawing = self.flags.workspace == crate::tools::WS_DRAWING;
         egui::CentralPanel::no_frame().show(ui, |ui| {
             if drawing {

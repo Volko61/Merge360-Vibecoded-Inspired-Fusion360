@@ -1,5 +1,6 @@
 //! Merge360 user interface (egui), modeled on the Fusion 360 layout.
 
+mod anim_ws;
 mod app;
 mod app_bar;
 mod browser;

@@ -64,6 +64,9 @@ pub struct Document {
     /// Manufacture workspace setups.
     #[serde(default)]
     pub cam: Vec<crate::cam::CamSetup>,
+    /// Animation workspace storyboard.
+    #[serde(default)]
+    pub animation: crate::animation::Storyboard,
 }
 
 impl Default for Document {
@@ -84,6 +87,7 @@ impl Default for Document {
             components: Vec::new(),
             params: Vec::new(),
             cam: Vec::new(),
+            animation: Default::default(),
         }
     }
 }

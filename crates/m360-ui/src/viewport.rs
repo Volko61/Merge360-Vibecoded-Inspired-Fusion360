@@ -1422,7 +1422,13 @@ impl Merge360App {
                 continue;
             }
             let meta = tab.doc.body_meta(b.id);
-            let mut d = BodyDraw::new(b.mesh.clone(), srgb(meta.color[0], meta.color[1], meta.color[2], 1.0));
+            let mesh = if self.flags.workspace == crate::tools::WS_ANIMATION {
+                let m = self.anim_transform(b.id);
+                if m == glam::DMat4::IDENTITY { b.mesh.clone() } else { Arc::new(b.mesh.transformed(m)) }
+            } else {
+                b.mesh.clone()
+            };
+            let mut d = BodyDraw::new(mesh, srgb(meta.color[0], meta.color[1], meta.color[2], 1.0));
             if dark_env {
                 d.edge_color = srgb(0.0, 0.0, 0.0, 1.0);
             }

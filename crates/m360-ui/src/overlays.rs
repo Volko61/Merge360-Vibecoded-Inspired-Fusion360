@@ -52,6 +52,9 @@ impl Merge360App {
         } else {
             self.browser(ctx);
         }
+        if self.flags.workspace == crate::tools::WS_ANIMATION {
+            self.storyboard_ui(ctx);
+        }
         if self.prefs.show_view_cube {
             self.view_cube(ctx);
         }

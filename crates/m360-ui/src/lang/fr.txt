@@ -668,3 +668,18 @@ click profiles in the view	cliquez sur les profils dans la vue
 Side	Côté
 Pecking depth	Profondeur de débourrage
 Toolpath	Parcours
+TRANSFORM	TRANSFORMER
+Transform Components	Transformer les composants
+Auto Explode	Éclatement automatique
+PLAYBACK	LECTURE
+Play	Lire
+PUBLISH	PUBLIER
+Publish Video	Publier la vidéo
+Storyboard	Story-board
+Select bodies and click Transform Components, or use Auto Explode.	Sélectionnez des corps et cliquez sur Transformer les composants, ou utilisez l'éclatement automatique.
+Duration	Durée
+Move X / Y / Z	Déplacement X / Y / Z
+Auto Explode needs at least two bodies.	L'éclatement automatique nécessite au moins deux corps.
+The storyboard is empty.	Le story-board est vide.
+Video frames saved in	Images de la vidéo enregistrées dans
+frames, 24 fps	images, 24 i/s

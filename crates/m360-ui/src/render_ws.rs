@@ -18,11 +18,13 @@ pub struct RenderSettings {
     pub show_edges: bool,
     /// Pending capture request (processed by the canvas, which owns the GPU).
     pub capture: Option<(u32, u32)>,
+    /// Where the next capture goes (animation frames); default next to the design.
+    pub capture_path: Option<std::path::PathBuf>,
 }
 
 impl Default for RenderSettings {
     fn default() -> Self {
-        Self { resolution: 1, ground_shadow: true, show_edges: false, capture: None }
+        Self { resolution: 1, ground_shadow: true, show_edges: false, capture: None, capture_path: None }
     }
 }
 
@@ -58,6 +60,14 @@ impl Merge360App {
 
     /// Save a captured image as PNG next to the design.
     pub(crate) fn save_render(&mut self, w: u32, h: u32, rgba: Vec<u8>) {
+        if let Some(path) = self.render_settings.capture_path.take() {
+            if let Some(img) = image::RgbaImage::from_raw(w, h, rgba) {
+                if let Err(e) = img.save(&path) {
+                    self.toast(ToastKind::Error, format!("Could not save image: {e}"));
+                }
+            }
+            return;
+        }
         let name = self.tabs[self.active].doc.name.replace(['/', '\\'], "_");
         let path = self.default_dir().join(format!("{name}-render-{w}x{h}.png"));
         match image::RgbaImage::from_raw(w, h, rgba).map(|img| img.save(&path)) {

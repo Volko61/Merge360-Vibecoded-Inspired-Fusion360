@@ -668,3 +668,18 @@ click profiles in the view	haga clic en los perfiles en la vista
 Side	Lado
 Pecking depth	Profundidad de picoteo
 Toolpath	Trayectoria
+TRANSFORM	TRANSFORMAR
+Transform Components	Transformar componentes
+Auto Explode	Explosión automática
+PLAYBACK	REPRODUCCIÓN
+Play	Reproducir
+PUBLISH	PUBLICAR
+Publish Video	Publicar vídeo
+Storyboard	Guion gráfico
+Select bodies and click Transform Components, or use Auto Explode.	Seleccione cuerpos y haga clic en Transformar componentes, o use la explosión automática.
+Duration	Duración
+Move X / Y / Z	Mover X / Y / Z
+Auto Explode needs at least two bodies.	La explosión automática necesita al menos dos cuerpos.
+The storyboard is empty.	El guion gráfico está vacío.
+Video frames saved in	Fotogramas del vídeo guardados en
+frames, 24 fps	fotogramas, 24 fps

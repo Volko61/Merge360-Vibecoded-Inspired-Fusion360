@@ -141,6 +141,7 @@ enum PickMode {
     Profiles,
     Measure,
     Sketch,
+    Edges,
 }
 
 impl Merge360App {
@@ -158,6 +159,7 @@ impl Merge360App {
             | Some(Command::CenterOfMass)
             | Some(Command::Properties) => PickMode::Bodies,
             Some(Command::Measure { .. }) => PickMode::Measure,
+            Some(Command::Fillet { .. }) => PickMode::Edges,
             _ => PickMode::Default,
         }
     }
@@ -275,6 +277,38 @@ impl Merge360App {
             }
         }
 
+        // Edges (screen-space proximity, only if not hidden behind a face).
+        if matches!(mode, PickMode::Default | PickMode::Measure | PickMode::Edges) {
+            let face_t = best.map(|b| b.0);
+            let tab = &self.tabs[active];
+            let mut best_edge: Option<(f32, SelItem, Vec3)> = None;
+            for b in &tab.model.bodies {
+                if !tab.body_visible(b.id) {
+                    continue;
+                }
+                for (ei, pts) in b.mesh.edges.iter().enumerate() {
+                    for w in pts.windows(2) {
+                        let (pa, pb) = (Vec3::from(w[0]), Vec3::from(w[1]));
+                        let (Some(sa), Some(sb)) = (self.to_screen(&cam, pa), self.to_screen(&cam, pb)) else { continue };
+                        let d = seg_dist(pos, sa, sb);
+                        if d > 6.0 || best_edge.as_ref().is_some_and(|x| x.0 <= d) {
+                            continue;
+                        }
+                        let ab = sb - sa;
+                        let k = ((pos - sa).dot(ab) / ab.length_sq().max(1e-6)).clamp(0.0, 1.0);
+                        let wp = pa.lerp(pb, k);
+                        let te = (wp - ray.origin).dot(ray.dir);
+                        if face_t.is_none_or(|ft| te <= ft + cam.distance * 0.004) {
+                            best_edge = Some((d, SelItem::Edge(b.id, ei as u32), wp));
+                        }
+                    }
+                }
+            }
+            if let Some((_, item, wp)) = best_edge {
+                return Some((item, wp));
+            }
+        }
+
         let (t, item) = best?;
         let hit = ray.origin + ray.dir * t;
         // Upgrade faces to sketchable planes when choosing a plane.
@@ -358,6 +392,19 @@ impl Merge360App {
                     }
                 }
             }
+            Some(Command::Fillet { body: Some(b), edges, size, .. }) if !edges.is_empty() => {
+                if let Some(bd) = tab.model.body(*b) {
+                    let i = edges[0] as usize;
+                    if let (Some(pts), Some(info)) = (bd.mesh.edges.get(i), bd.mesh.edge_info.get(i)) {
+                        if let (Some(n), Some(d)) = (info.normals, info.dirs) {
+                            let mid = (Vec3::from(pts[0]) + Vec3::from(pts[pts.len() - 1])) * 0.5;
+                            // Handle sits on the first face at the fillet tangent line, pointing into it.
+                            let origin = mid + d[0] * *size as f32 + n[0] * 0.0;
+                            out.push(Manip { origin, dir: d[0], color: [0.18, 0.66, 0.31], slot: 0 });
+                        }
+                    }
+                }
+            }
             Some(Command::Move { bodies, translate, .. }) if !bodies.is_empty() => {
                 let mut min = Vec3::splat(f32::MAX);
                 let mut max = Vec3::splat(f32::MIN);
@@ -413,6 +460,7 @@ impl Merge360App {
                 }
             }
             Some(Command::Move { translate, .. }) => translate[slot] += delta,
+            Some(Command::Fillet { size, .. }) => *size = (*size + delta).max(0.01),
             _ => {}
         }
     }
@@ -615,6 +663,10 @@ impl Merge360App {
             self.sketch_click();
             return;
         }
+        if matches!(self.tabs[self.active].command, Some(Command::Fillet { .. })) {
+            self.fillet_click(hover);
+            return;
+        }
         let point = self.canvas.cursor_world;
         let tab = self.tab();
         match &mut tab.command {
@@ -718,6 +770,62 @@ impl Merge360App {
             },
         }
     }
+
+
+    fn fillet_click(&mut self, hover: Option<SelItem>) {
+                let tab = &self.tabs[self.active];
+                // A face adds all of its eligible edges; an edge toggles itself.
+                let picked: Vec<(u64, u32)> = match hover {
+                    Some(SelItem::Edge(b, e)) => vec![(b, e)],
+                    Some(SelItem::Face(b, f)) => tab
+                        .model
+                        .body(b)
+                        .map(|bd| {
+                            bd.mesh
+                                .edge_info
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, info)| info.faces.contains(&f) && info.normals.is_some())
+                                .map(|(i, _)| (b, i as u32))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    _ => Vec::new(),
+                };
+                let eligible = |b: u64, e: u32| {
+                    tab.model.body(b).and_then(|bd| bd.mesh.edge_info.get(e as usize)).is_some_and(|i| i.normals.is_some())
+                };
+                let mut rejected = false;
+                let (mut nb, mut ne) = match &tab.command {
+                    Some(Command::Fillet { body, edges, .. }) => (*body, edges.clone()),
+                    _ => return,
+                };
+                for (b, e) in picked {
+                    if !eligible(b, e) {
+                        rejected = true;
+                        continue;
+                    }
+                    if nb != Some(b) {
+                        nb = Some(b);
+                        ne.clear();
+                    }
+                    if let Some(k) = ne.iter().position(|x| *x == e) {
+                        if !matches!(hover, Some(SelItem::Face(..))) {
+                            ne.remove(k);
+                        }
+                    } else {
+                        ne.push(e);
+                    }
+                }
+                let tab = self.tab();
+                if let Some(Command::Fillet { body, edges, .. }) = &mut tab.command {
+                    *body = nb;
+                    *edges = ne;
+                }
+                if rejected {
+                    self.toast(crate::app::ToastKind::Info, "Only straight edges between flat faces can be filleted for now.");
+                }
+                }
 
     fn window_select(&mut self, a: Pos2, b: Pos2, additive: bool) {
         let r = egui::Rect::from_two_pos(a, b);
@@ -856,6 +964,31 @@ impl Merge360App {
                 }
             }
             scene.bodies.push(d);
+        }
+
+        // Edge highlights (hover / selection / fillet edges).
+        {
+            let mut hl: Vec<(u64, u32, [f32; 4])> = Vec::new();
+            for sitem in &tab.selection {
+                if let SelItem::Edge(b, e) = sitem {
+                    hl.push((*b, *e, srgb(0.02, 0.35, 0.9, 1.0)));
+                }
+            }
+            if let Some(Command::Fillet { body: Some(b), edges, .. }) = &tab.command {
+                for e in edges {
+                    hl.push((*b, *e, srgb(0.02, 0.35, 0.9, 1.0)));
+                }
+            }
+            if let Some(SelItem::Edge(b, e)) = tab.hover {
+                hl.push((b, e, srgb(0.25, 0.65, 1.0, 1.0)));
+            }
+            for (b, e, c) in hl {
+                if let Some(pts) = tab.model.body(b).and_then(|bd| bd.mesh.edges.get(e as usize)) {
+                    for w in pts.windows(2) {
+                        scene.lines.push(LineInst::new(Vec3::from(w[0]), Vec3::from(w[1]), c, 3.2));
+                    }
+                }
+            }
         }
 
         // Command preview body.

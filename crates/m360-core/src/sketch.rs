@@ -109,21 +109,26 @@ pub fn profiles(entities: &[SketchEntity]) -> Vec<Region> {
         .collect()
 }
 
+fn polyline_dist(pts: &[[f64; 2]], p: [f64; 2]) -> f64 {
+    let n = pts.len();
+    (0..n)
+        .map(|i| {
+            let a = pts[i];
+            let b = pts[(i + 1) % n];
+            let ab = [b[0] - a[0], b[1] - a[1]];
+            let ap = [p[0] - a[0], p[1] - a[1]];
+            let len2 = (ab[0] * ab[0] + ab[1] * ab[1]).max(1e-18);
+            let t = ((ap[0] * ab[0] + ap[1] * ab[1]) / len2).clamp(0.0, 1.0);
+            (a[0] + ab[0] * t - p[0]).hypot(a[1] + ab[1] * t - p[1])
+        })
+        .fold(f64::MAX, f64::min)
+}
+
 fn on_boundary(l: &Loop2, p: [f64; 2]) -> bool {
     match l {
         Loop2::Circle { c, r } => ((p[0] - c[0]).hypot(p[1] - c[1]) - r).abs() < 1e-6,
-        Loop2::Polygon(pts) => {
-            let n = pts.len();
-            (0..n).any(|i| {
-                let a = pts[i];
-                let b = pts[(i + 1) % n];
-                let ab = [b[0] - a[0], b[1] - a[1]];
-                let ap = [p[0] - a[0], p[1] - a[1]];
-                let len2 = ab[0] * ab[0] + ab[1] * ab[1];
-                let t = ((ap[0] * ab[0] + ap[1] * ab[1]) / len2).clamp(0.0, 1.0);
-                (a[0] + ab[0] * t - p[0]).hypot(a[1] + ab[1] * t - p[1]) < 1e-6
-            })
-        }
+        Loop2::Polygon(pts) => polyline_dist(pts, p) < 1e-6,
+        Loop2::Path(_) => polyline_dist(&l.points(256), p) < 1e-3,
     }
 }
 

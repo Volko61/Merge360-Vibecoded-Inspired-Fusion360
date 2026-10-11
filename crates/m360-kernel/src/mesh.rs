@@ -16,12 +16,70 @@ pub struct BodyMesh {
     pub face_ids: Vec<u32>,
     pub indices: Vec<u32>,
     pub edges: Vec<Vec<[f32; 3]>>,
+    /// Topological info for each entry of `edges`.
+    pub edge_info: Vec<EdgeInfo>,
     pub face_count: u32,
     pub bbox_min: Vec3,
     pub bbox_max: Vec3,
 }
 
+/// Adjacency information of a visible B-rep edge, used by Fillet/Chamfer.
+#[derive(Debug, Clone, Default)]
+pub struct EdgeInfo {
+    /// Adjacent face ids (two for manifold edges).
+    pub faces: Vec<u32>,
+    /// The edge is a straight segment.
+    pub straight: bool,
+    /// Outward normals of the adjacent faces when both are planar.
+    pub normals: Option<[Vec3; 2]>,
+    /// Directions (perpendicular to the edge) from the edge into each face.
+    pub dirs: Option<[Vec3; 2]>,
+}
+
+impl EdgeInfo {
+    /// Convex edges (material angle < 180°) are filleted by removing material.
+    pub fn convex(&self) -> Option<bool> {
+        let (n, d) = (self.normals?, self.dirs?);
+        Some(d[1].dot(n[0]) < 0.0)
+    }
+}
+
 impl BodyMesh {
+    /// Unit normal of a face if it is planar.
+    pub fn planar_normal(&self, face: u32) -> Option<Vec3> {
+        let mut n0: Option<Vec3> = None;
+        for (t, f) in self.triangles() {
+            if f != face {
+                continue;
+            }
+            let n = (t[1] - t[0]).cross(t[2] - t[0]);
+            if n.length_squared() < 1e-12 {
+                continue;
+            }
+            let n = n.normalize();
+            match n0 {
+                None => n0 = Some(n),
+                Some(a) if a.dot(n) < 0.9999 => return None,
+                _ => {}
+            }
+        }
+        n0
+    }
+
+    /// Area-weighted centroid of a face.
+    pub fn face_centroid(&self, face: u32) -> Option<Vec3> {
+        let mut c = Vec3::ZERO;
+        let mut w = 0.0;
+        for (t, f) in self.triangles() {
+            if f == face {
+                let a = (t[1] - t[0]).cross(t[2] - t[0]).length();
+                c += (t[0] + t[1] + t[2]) / 3.0 * a;
+                w += a;
+            }
+        }
+        (w > 0.0).then(|| c / w)
+    }
+
     /// Signed volume via the divergence theorem (mm³).
     pub fn volume(&self) -> f64 {
         self.indices
@@ -88,7 +146,22 @@ pub fn tessellate(solid: &Solid) -> BodyMesh {
     tessellate_with(solid, tol)
 }
 
+/// Default cosine threshold above which an edge between two faces is
+/// considered tangent-continuous (hidden).
+pub const SMOOTH_COS: f32 = 0.999;
+
+/// Tessellate, hiding edges whose adjacent faces meet at less than
+/// `acos(smooth_cos)` (used to hide facet edges of approximated fillets).
+pub fn tessellate_smooth(solid: &Solid, smooth_cos: f32) -> BodyMesh {
+    let tol = (bounding_size(solid) * 0.001).clamp(1e-3, 0.5);
+    tessellate_impl(solid, tol, smooth_cos)
+}
+
 pub fn tessellate_with(solid: &Solid, tol: f64) -> BodyMesh {
+    tessellate_impl(solid, tol, SMOOTH_COS)
+}
+
+fn tessellate_impl(solid: &Solid, tol: f64, smooth_cos: f32) -> BodyMesh {
     let meshed = solid.robust_triangulation(tol);
     let mut out = BodyMesh {
         bbox_min: Vec3::splat(f32::MAX),
@@ -173,6 +246,7 @@ pub fn tessellate_with(solid: &Solid, tol: f64) -> BodyMesh {
         if pts.len() < 2 {
             continue;
         }
+        let faces_of = edge_faces.get(&edge.id()).cloned().unwrap_or_default();
         if let Some(faces) = edge_faces.get(&edge.id()) {
             if faces.len() == 2 {
                 if faces[0] == faces[1] {
@@ -180,7 +254,7 @@ pub fn tessellate_with(solid: &Solid, tol: f64) -> BodyMesh {
                 }
                 let samples = [pts[0], pts[pts.len() / 2], pts[pts.len() - 1]];
                 let smooth = samples.iter().all(|p| match (normal_of(*p, faces[0]), normal_of(*p, faces[1])) {
-                    (Some(a), Some(b)) => a.dot(b) > 0.999,
+                    (Some(a), Some(b)) => a.dot(b) > smooth_cos,
                     _ => false,
                 });
                 if smooth {
@@ -188,7 +262,38 @@ pub fn tessellate_with(solid: &Solid, tol: f64) -> BodyMesh {
                 }
             }
         }
+        let p0 = Vec3::from(pts[0]);
+        let p1 = Vec3::from(pts[pts.len() - 1]);
+        let dir = (p1 - p0).normalize_or_zero();
+        let straight = dir != Vec3::ZERO
+            && pts.iter().all(|p| {
+                let v = Vec3::from(*p) - p0;
+                (v - dir * v.dot(dir)).length() < 1e-3 * (p1 - p0).length().max(1.0)
+            });
         out.edges.push(pts);
+        out.edge_info.push(EdgeInfo { faces: faces_of, straight, normals: None, dirs: None });
+    }
+    // Planar adjacency for straight edges (normals + in-face directions).
+    for i in 0..out.edges.len() {
+        let info = &out.edge_info[i];
+        if !info.straight || info.faces.len() != 2 {
+            continue;
+        }
+        let (f1, f2) = (info.faces[0], info.faces[1]);
+        let pts = &out.edges[i];
+        let p0 = Vec3::from(pts[0]);
+        let dir = (Vec3::from(pts[pts.len() - 1]) - p0).normalize();
+        let (Some(n1), Some(n2)) = (out.planar_normal(f1), out.planar_normal(f2)) else { continue };
+        let into = |n: Vec3, f: u32| -> Option<Vec3> {
+            // In-plane direction perpendicular to the edge, pointing into the face.
+            let d = n.cross(dir).normalize_or_zero();
+            let c = out.face_centroid(f)?;
+            Some(if (c - p0).dot(d) >= 0.0 { d } else { -d })
+        };
+        if let (Some(d1), Some(d2)) = (into(n1, f1), into(n2, f2)) {
+            out.edge_info[i].normals = Some([n1, n2]);
+            out.edge_info[i].dirs = Some([d1, d2]);
+        }
     }
 
     if out.positions.is_empty() {

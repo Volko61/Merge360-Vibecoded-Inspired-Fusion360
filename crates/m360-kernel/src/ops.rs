@@ -18,20 +18,40 @@ const BOOL_TOL: f64 = 0.05;
 
 /// Combine `target` with each of `tools` in sequence.
 pub fn boolean(target: &Solid, tools: &[Solid], op: BooleanOp) -> Result<Solid> {
+    boolean_with_tol(target, tools, op, BOOL_TOL)
+}
+
+/// [`boolean`] with an explicit intersection tolerance (mm).
+pub fn boolean_with_tol(target: &Solid, tools: &[Solid], op: BooleanOp, tol: f64) -> Result<Solid> {
     let mut acc = target.clone();
     for tool in tools {
         let res = guarded(|| match op {
-            BooleanOp::Join => truck_shapeops::or(&acc, tool, BOOL_TOL),
-            BooleanOp::Intersect => truck_shapeops::and(&acc, tool, BOOL_TOL),
+            BooleanOp::Join => truck_shapeops::or(&acc, tool, tol),
+            BooleanOp::Intersect => truck_shapeops::and(&acc, tool, tol),
             BooleanOp::Cut => {
                 let mut inv = tool.clone();
                 inv.not();
-                truck_shapeops::and(&acc, &inv, BOOL_TOL)
+                truck_shapeops::and(&acc, &inv, tol)
             }
         })?;
-        acc = res.ok_or_else(|| {
-            KernelError::OperationFailed(format!("{op:?} failed: bodies could not be intersected"))
-        })?;
+        acc = match res {
+            Some(r) => r,
+            // truck reports disjoint bodies as a failure: handle them here.
+            None if disjoint(&acc, tool) => match op {
+                BooleanOp::Join => {
+                    let mut shells = acc.boundaries().clone();
+                    shells.extend(tool.boundaries().iter().cloned());
+                    Solid::new(shells)
+                }
+                BooleanOp::Cut => acc,
+                BooleanOp::Intersect => {
+                    return Err(KernelError::OperationFailed("Intersect produced an empty body".into()))
+                }
+            },
+            None => {
+                return Err(KernelError::OperationFailed(format!("{op:?} failed: bodies could not be intersected")))
+            }
+        };
         if acc.boundaries().is_empty() {
             return Err(KernelError::OperationFailed(format!("{op:?} produced an empty body")));
         }
@@ -39,17 +59,19 @@ pub fn boolean(target: &Solid, tools: &[Solid], op: BooleanOp) -> Result<Solid> 
     Ok(acc)
 }
 
+/// Conservative bounding-box test (from a coarse tessellation).
+fn disjoint(a: &Solid, b: &Solid) -> bool {
+    let ma = crate::mesh::tessellate_with(a, 0.5);
+    let mb = crate::mesh::tessellate_with(b, 0.5);
+    let pad = glam::Vec3::splat(0.6);
+    let overlap = (ma.bbox_min - pad).cmple(mb.bbox_max).all() && (mb.bbox_min - pad).cmple(ma.bbox_max).all();
+    !overlap
+}
+
 /// truck's boolean code can panic on degenerate input (e.g. coplanar faces);
 /// turn such panics into a recoverable error.
 fn guarded<T>(f: impl FnOnce() -> Option<T>) -> Result<Option<T>> {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|e| {
-        let msg = e
-            .downcast_ref::<&str>()
-            .map(|s| s.to_string())
-            .or_else(|| e.downcast_ref::<String>().cloned())
-            .unwrap_or_else(|| "kernel panic".into());
-        KernelError::OperationFailed(format!("boolean failed: {msg}"))
-    })
+    crate::quiet_catch(f).ok_or_else(|| KernelError::OperationFailed("boolean failed: degenerate geometry".into()))
 }
 
 pub fn transform(solid: &Solid, m: DMat4) -> Solid {

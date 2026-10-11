@@ -364,5 +364,7 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Remove { .. } => Icon::Delete,
         FeatureKind::Sketch { .. } => Icon::SketchSmall,
         FeatureKind::Extrude { .. } => Icon::Extrude,
+        FeatureKind::Fillet { chamfer: true, .. } => Icon::Chamfer,
+        FeatureKind::Fillet { .. } => Icon::Fillet,
     }
 }

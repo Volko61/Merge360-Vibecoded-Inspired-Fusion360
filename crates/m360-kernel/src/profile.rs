@@ -13,6 +13,53 @@ use crate::{Frame, KernelError, Result, Solid};
 pub enum Loop2 {
     Polygon(Vec<[f64; 2]>),
     Circle { c: [f64; 2], r: f64 },
+    /// Closed path of lines and arcs. Each segment ends at `end`; the start is
+    /// the previous segment's end (wrapping around).
+    Path(Vec<Seg2>),
+}
+
+/// One segment of a [`Loop2::Path`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Seg2 {
+    pub end: [f64; 2],
+    /// For arcs: a point on the arc strictly between its start and end.
+    pub transit: Option<[f64; 2]>,
+}
+
+impl Seg2 {
+    pub fn line(end: [f64; 2]) -> Self {
+        Self { end, transit: None }
+    }
+    pub fn arc(transit: [f64; 2], end: [f64; 2]) -> Self {
+        Self { end, transit: Some(transit) }
+    }
+}
+
+/// Points along the circular arc through a, m, b (excluding a, including b).
+pub fn arc_points(a: [f64; 2], m: [f64; 2], b: [f64; 2], n: usize) -> Vec<[f64; 2]> {
+    let Some((c, r)) = circumcircle(a, m, b) else { return vec![m, b] };
+    let ang = |p: [f64; 2]| (p[1] - c[1]).atan2(p[0] - c[0]);
+    let (a0, am, a1) = (ang(a), ang(m), ang(b));
+    let tau = 2.0 * PI;
+    // Sweep from a0 to a1 in the direction that passes am.
+    let ccw = |x: f64| (x - a0).rem_euclid(tau);
+    let sweep = if ccw(am) < ccw(a1) { ccw(a1) } else { ccw(a1) - tau };
+    (1..=n).map(|i| {
+        let t = a0 + sweep * i as f64 / n as f64;
+        [c[0] + r * t.cos(), c[1] + r * t.sin()]
+    }).collect()
+}
+
+/// Center and radius of the circle through three points.
+pub fn circumcircle(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> Option<([f64; 2], f64)> {
+    let d = 2.0 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let sq = |p: [f64; 2]| p[0] * p[0] + p[1] * p[1];
+    let ux = (sq(a) * (b[1] - c[1]) + sq(b) * (c[1] - a[1]) + sq(c) * (a[1] - b[1])) / d;
+    let uy = (sq(a) * (c[0] - b[0]) + sq(b) * (a[0] - c[0]) + sq(c) * (b[0] - a[0])) / d;
+    Some(([ux, uy], (a[0] - ux).hypot(a[1] - uy)))
 }
 
 impl Loop2 {
@@ -20,6 +67,7 @@ impl Loop2 {
     pub fn signed_area(&self) -> f64 {
         match self {
             Loop2::Circle { r, .. } => PI * r * r,
+            Loop2::Path(_) => Loop2::Polygon(self.points(64)).signed_area(),
             Loop2::Polygon(p) => {
                 let n = p.len();
                 (0..n)
@@ -42,6 +90,18 @@ impl Loop2 {
     pub fn points(&self, segments: usize) -> Vec<[f64; 2]> {
         match self {
             Loop2::Polygon(p) => p.clone(),
+            Loop2::Path(segs) => {
+                let mut out = Vec::new();
+                let mut prev = segs.last().map(|s| s.end).unwrap_or_default();
+                for s in segs {
+                    match s.transit {
+                        None => out.push(s.end),
+                        Some(m) => out.extend(arc_points(prev, m, s.end, (segments / 4).max(4))),
+                    }
+                    prev = s.end;
+                }
+                out
+            }
             Loop2::Circle { c, r } => (0..segments)
                 .map(|i| {
                     let a = i as f64 / segments as f64 * 2.0 * PI;
@@ -54,6 +114,7 @@ impl Loop2 {
     pub fn contains(&self, q: [f64; 2]) -> bool {
         match self {
             Loop2::Circle { c, r } => (q[0] - c[0]).hypot(q[1] - c[1]) < *r,
+            Loop2::Path(_) => Loop2::Polygon(self.points(64)).contains(q),
             Loop2::Polygon(p) => {
                 let mut inside = false;
                 let n = p.len();
@@ -76,6 +137,7 @@ impl Loop2 {
     pub fn sample(&self) -> [f64; 2] {
         match self {
             Loop2::Polygon(p) => p[0],
+            Loop2::Path(s) => s[0].end,
             Loop2::Circle { c, r } => [c[0] + r, c[1]],
         }
     }
@@ -96,6 +158,28 @@ impl Loop2 {
                 }
                 let vs: Vec<_> = pts.iter().map(|q| builder::vertex(Point3::new(q[0], q[1], z))).collect();
                 (0..vs.len()).map(|i| builder::line(&vs[i], &vs[(i + 1) % vs.len()])).collect()
+            }
+            Loop2::Path(segs) => {
+                if segs.len() < 2 {
+                    return Err(KernelError::InvalidParameter("profile path needs at least 2 segments".into()));
+                }
+                // (start, end, transit) triples, reversed if clockwise.
+                let n = segs.len();
+                let mut tri: Vec<([f64; 2], [f64; 2], Option<[f64; 2]>)> =
+                    (0..n).map(|i| (segs[(i + n - 1) % n].end, segs[i].end, segs[i].transit)).collect();
+                if self.signed_area() < 0.0 {
+                    tri = tri.into_iter().rev().map(|(a, b, m)| (b, a, m)).collect();
+                }
+                let vs: Vec<_> = tri.iter().map(|t| builder::vertex(Point3::new(t.0[0], t.0[1], z))).collect();
+                (0..n)
+                    .map(|i| {
+                        let (v0, v1) = (&vs[i], &vs[(i + 1) % n]);
+                        match tri[i].2 {
+                            None => builder::line(v0, v1),
+                            Some(m) => builder::circle_arc(v0, v1, Point3::new(m[0], m[1], z)),
+                        }
+                    })
+                    .collect()
             }
         };
         if !ccw {

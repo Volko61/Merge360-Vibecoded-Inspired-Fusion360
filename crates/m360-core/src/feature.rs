@@ -155,6 +155,14 @@ pub enum FeatureKind {
         plane: PlaneRef,
         entities: Vec<SketchEntity>,
     },
+    /// Fillet (or chamfer) straight edges of a body. Edges are stored by
+    /// their end points and re-resolved on every regeneration.
+    Fillet {
+        body: BodyId,
+        edges: Vec<[[f64; 3]; 2]>,
+        size: f64,
+        chamfer: bool,
+    },
     Extrude {
         sketch: u64,
         profiles: Vec<usize>,
@@ -202,6 +210,8 @@ impl FeatureKind {
             FeatureKind::Remove { .. } => "Remove",
             FeatureKind::Sketch { .. } => "Sketch",
             FeatureKind::Extrude { .. } => "Extrude",
+            FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
+            FeatureKind::Fillet { .. } => "Fillet",
         }
     }
 

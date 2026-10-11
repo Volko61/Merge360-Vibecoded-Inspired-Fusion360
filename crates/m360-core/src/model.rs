@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use m360_kernel::{ops, ops::BooleanOp, primitives, profile, tessellate, BodyMesh, Solid};
+use m360_kernel::{fillet, ops, ops::BooleanOp, primitives, profile, tessellate, tessellate_smooth, BodyMesh, Solid, SMOOTH_COS};
 
 use crate::document::Document;
 use crate::feature::{ExtrudeOp, Feature, FeatureKind, SketchEntity};
@@ -20,6 +20,8 @@ pub struct Body {
     pub mesh: Arc<BodyMesh>,
     /// Feature that last modified this body.
     pub last_feature: u64,
+    /// Edge smoothing threshold (lower for bodies with faceted fillets).
+    pub smooth_cos: f32,
 }
 
 #[derive(Clone)]
@@ -74,8 +76,16 @@ impl Regenerator {
         self.cache.truncate(reuse);
         for f in &active[reuse..] {
             if !f.suppressed {
-                if let Err(e) = apply(&mut model, f) {
-                    model.errors.insert(f.uid, e);
+                // Kernel panics must never take the application down.
+                let mut next = model.clone();
+                match m360_kernel::quiet_catch(|| apply(&mut next, f)) {
+                    Some(Ok(())) => model = next,
+                    Some(Err(e)) => {
+                        model.errors.insert(f.uid, e);
+                    }
+                    None => {
+                        model.errors.insert(f.uid, "the geometry kernel failed on this feature".into());
+                    }
                 }
             }
             self.cache.push((fingerprint(f), model.clone()));
@@ -98,8 +108,18 @@ fn take(model: &mut Model, id: BodyId) -> Result<Body, String> {
 }
 
 fn new_body(id: BodyId, solid: Solid, feature: u64) -> Body {
-    let mesh = Arc::new(tessellate(&solid));
-    Body { id, solid, mesh, last_feature: feature }
+    new_body_smooth(id, solid, feature, SMOOTH_COS)
+}
+
+fn new_body_smooth(id: BodyId, solid: Solid, feature: u64, smooth_cos: f32) -> Body {
+    let mesh = Arc::new(if smooth_cos < SMOOTH_COS { tessellate_smooth(&solid, smooth_cos) } else { tessellate(&solid) });
+    Body { id, solid, mesh, last_feature: feature, smooth_cos }
+}
+
+/// A modified version of an existing body (keeps its display settings).
+fn rebuilt(model: &Model, id: BodyId, solid: Solid, feature: u64) -> Body {
+    let cos = model.body(id).map_or(SMOOTH_COS, |b| b.smooth_cos);
+    new_body_smooth(id, solid, feature, cos)
 }
 
 /// Build a primitive feature's solid (also used for live command previews).
@@ -196,6 +216,28 @@ fn normal_extent(body: &Body, plane: &PlaneRef) -> (f64, f64) {
     (lo, hi)
 }
 
+/// Match stored edge endpoints against the straight edges of a body.
+pub fn resolve_edges(mesh: &BodyMesh, edges: &[[[f64; 3]; 2]]) -> Result<Vec<fillet::EdgeSpec>, String> {
+    if edges.is_empty() {
+        return Err("no edges selected".into());
+    }
+    let specs: Vec<fillet::EdgeSpec> = fillet::edge_specs(mesh).into_iter().flatten().collect();
+    edges
+        .iter()
+        .map(|[a, b]| {
+            let (a, b) = (glam::DVec3::from(*a), glam::DVec3::from(*b));
+            let len = (b - a).length();
+            specs
+                .iter()
+                .map(|s| (((s.a - a).length() + (s.b - b).length()).min((s.a - b).length() + (s.b - a).length()), s))
+                .filter(|(d, _)| *d < (0.25 * len).max(0.5))
+                .min_by(|x, y| x.0.total_cmp(&y.0))
+                .map(|(_, s)| *s)
+                .ok_or_else(|| "a filleted edge no longer exists (or is not a straight edge between flat faces)".to_string())
+        })
+        .collect()
+}
+
 fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
     if let Some(solid) = build_primitive(&f.kind)? {
         model.bodies.push(new_body(f.uid, solid, f.uid));
@@ -229,7 +271,7 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                 Err(e) => return Err(e.to_string()),
             };
             let idx = model.bodies.iter().position(|b| b.id == *target).unwrap();
-            model.bodies[idx] = new_body(*target, result, f.uid);
+            model.bodies[idx] = rebuilt(model, *target, result, f.uid);
             if !keep_tools {
                 model.bodies.retain(|b| !tools.contains(&b.id));
             }
@@ -247,7 +289,7 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                     model.bodies.push(new_body((f.uid << 16) | i as u64, solid, f.uid));
                 } else {
                     let idx = model.bodies.iter().position(|x| x.id == *id).unwrap();
-                    model.bodies[idx] = new_body(*id, solid, f.uid);
+                    model.bodies[idx] = rebuilt(model, *id, solid, f.uid);
                 }
             }
             Ok(())
@@ -291,7 +333,7 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                             shells.extend(tool.into_boundaries());
                             Solid::new(shells)
                         });
-                    replace(model, new_body(target, joined, f.uid));
+                    replace(model, rebuilt(model, target, joined, f.uid));
                 }
                 ExtrudeOp::Cut | ExtrudeOp::Intersect => {
                     if live.is_empty() {
@@ -314,10 +356,23 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                             tool.clone()
                         };
                         let res = ops::boolean(&t.solid, &[tool], bop).map_err(|e| e.to_string())?;
-                        replace(model, new_body(id, res, f.uid));
+                        replace(model, rebuilt(model, id, res, f.uid));
                     }
                 }
             }
+            Ok(())
+        }
+        FeatureKind::Fillet { body, edges, size, chamfer } => {
+            let b = model.body(*body).ok_or("the filleted body no longer exists")?;
+            let specs = resolve_edges(&b.mesh, edges)?;
+            let t = if *chamfer {
+                fillet::Treatment::Chamfer { distance: *size }
+            } else {
+                fillet::Treatment::Fillet { radius: *size }
+            };
+            let (solid, faceted) = fillet::treat_edges_report(&b.solid, &specs, t).map_err(|e| e.to_string())?;
+            let cos = if faceted { b.smooth_cos.min(0.97) } else { b.smooth_cos };
+            replace(model, new_body_smooth(*body, solid, f.uid, cos));
             Ok(())
         }
         _ => unreachable!("primitives handled above"),

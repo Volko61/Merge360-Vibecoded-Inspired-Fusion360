@@ -23,12 +23,14 @@ pub enum SelItem {
     Feature(u64),
     /// A planar face usable as a sketch plane.
     FacePlane(BodyId, u32, PlaneRef),
+    /// A B-rep edge (index into the body mesh's edges).
+    Edge(BodyId, u32),
 }
 
 impl SelItem {
     pub fn body(&self) -> Option<BodyId> {
         match self {
-            SelItem::Body(b) | SelItem::Face(b, _) | SelItem::FacePlane(b, _, _) => Some(*b),
+            SelItem::Body(b) | SelItem::Face(b, _) | SelItem::FacePlane(b, _, _) | SelItem::Edge(b, _) => Some(*b),
             _ => None,
         }
     }
@@ -192,6 +194,13 @@ pub enum Command {
         copy: bool,
         editing: Option<EditCtx>,
     },
+    Fillet {
+        body: Option<BodyId>,
+        edges: Vec<u32>,
+        size: f64,
+        chamfer: bool,
+        editing: Option<EditCtx>,
+    },
     SketchPlane,
     Measure { picks: Vec<SelItem> },
     Appearance,
@@ -213,6 +222,8 @@ impl Command {
             Command::Extrude { .. } => "EXTRUDE",
             Command::Combine { .. } => "COMBINE",
             Command::Move { .. } => "MOVE/COPY",
+            Command::Fillet { chamfer: true, .. } => "CHAMFER",
+            Command::Fillet { .. } => "FILLET",
             Command::SketchPlane => "CREATE SKETCH",
             Command::Measure { .. } => "MEASURE",
             Command::Appearance => "APPEARANCE",
@@ -228,7 +239,8 @@ impl Command {
             Command::Primitive { editing, .. }
             | Command::Extrude { editing, .. }
             | Command::Combine { editing, .. }
-            | Command::Move { editing, .. } => editing.as_ref(),
+            | Command::Move { editing, .. }
+            | Command::Fillet { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
@@ -245,6 +257,39 @@ pub struct Preview {
     pub key: String,
     pub mesh: Option<Arc<BodyMesh>>,
     pub error: Option<String>,
+}
+
+/// End points of mesh edges (as stored by Fillet features).
+pub fn edge_endpoints(mesh: &BodyMesh, edges: &[u32]) -> Vec<[[f64; 3]; 2]> {
+    edges
+        .iter()
+        .filter_map(|&i| mesh.edges.get(i as usize))
+        .map(|pts| {
+            let a = pts[0].map(f64::from);
+            let b = pts[pts.len() - 1].map(f64::from);
+            [a, b]
+        })
+        .collect()
+}
+
+/// Indices of the mesh edges matching stored end points.
+pub fn edge_indices(mesh: &BodyMesh, ends: &[[[f64; 3]; 2]]) -> Vec<u32> {
+    ends.iter()
+        .filter_map(|[a, b]| {
+            let (a, b) = (glam::DVec3::from(*a), glam::DVec3::from(*b));
+            mesh.edges
+                .iter()
+                .enumerate()
+                .map(|(i, pts)| {
+                    let p = glam::Vec3::from(pts[0]).as_dvec3();
+                    let q = glam::Vec3::from(pts[pts.len() - 1]).as_dvec3();
+                    (i, ((p - a).length() + (q - b).length()).min((p - b).length() + (q - a).length()))
+                })
+                .filter(|(_, d)| *d < 0.5)
+                .min_by(|x, y| x.1.total_cmp(&y.1))
+                .map(|(i, _)| i as u32)
+        })
+        .collect()
 }
 
 pub struct DocTab {
@@ -404,6 +449,34 @@ impl DocTab {
                     return;
                 };
                 (key, m360_core::model::extrude_tool(&plane, &ents, profiles, *distance, *symmetric))
+            }
+            Command::Fillet { body: Some(b), edges, size, chamfer, .. } if !edges.is_empty() => {
+                let key = format!("fillet{b}{edges:?}{size}{chamfer}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let Some(body) = self.model.body(*b) else {
+                    self.preview = None;
+                    return;
+                };
+                let ends = edge_endpoints(&body.mesh, edges);
+                let specs = m360_core::model::resolve_edges(&body.mesh, &ends);
+                let t = if *chamfer {
+                    m360_kernel::fillet::Treatment::Chamfer { distance: *size }
+                } else {
+                    m360_kernel::fillet::Treatment::Fillet { radius: *size }
+                };
+                let r = specs.and_then(|sp| {
+                    m360_kernel::fillet::treat_edges_report(&body.solid, &sp, t).map_err(|e| e.to_string())
+                });
+                self.preview = Some(match r {
+                    Ok((s, faceted)) => {
+                        let mesh = if faceted { m360_kernel::tessellate_smooth(&s, 0.97) } else { m360_kernel::tessellate(&s) };
+                        Preview { key, mesh: Some(Arc::new(mesh)), error: None }
+                    }
+                    Err(e) => Preview { key, mesh: None, error: Some(e) },
+                });
+                return;
             }
             _ => {
                 self.preview = None;

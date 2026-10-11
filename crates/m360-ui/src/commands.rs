@@ -45,6 +45,12 @@ fn item_points(app: &Merge360App, item: &SelItem) -> Vec<Vec3> {
             .body(*b)
             .map(|b| b.mesh.triangles().filter(|(_, id)| id == f).flat_map(|(t, _)| t).collect())
             .unwrap_or_default(),
+        SelItem::Edge(b, e) => tab
+            .model
+            .body(*b)
+            .and_then(|bd| bd.mesh.edges.get(*e as usize))
+            .map(|pts| pts.iter().map(|p| Vec3::from(*p)).collect())
+            .unwrap_or_default(),
         _ => Vec::new(),
     }
 }
@@ -285,6 +291,37 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Fillet { body, edges, size, chamfer, .. } => {
+                let ok = body.is_some() && !edges.is_empty() && preview_err.is_none();
+                let text = if edges.is_empty() { "Select".to_string() } else { format!("{} Edges", edges.len()) };
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Type");
+                    ui.label(if *chamfer { "Equal distance" } else { "Constant Radius" });
+                    ui.end_row();
+                    row_label(ui, "Edges");
+                    if selection_field(ui, true, &text).clicked() {
+                        edges.clear();
+                        *body = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, if *chamfer { "Distance" } else { "Radius" });
+                    length_field(ui, "fillet_size", size, units);
+                    ui.end_row();
+                    row_label(ui, "Kind");
+                    egui::ComboBox::from_id_salt("fillet_kind").selected_text(if *chamfer { "Chamfer" } else { "Fillet" }).show_ui(ui, |ui| {
+                        ui.selectable_value(chamfer, false, "Fillet");
+                        ui.selectable_value(chamfer, true, "Chamfer");
+                    });
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::SketchPlane => {
                 let r = command_dialog(ctx, title, anchor, false, |ui| {
                     ui.label("Select a plane or a planar face.");
@@ -476,6 +513,12 @@ impl Merge360App {
             Command::Move { bodies, translate, axis, angle_deg, copy, editing } => {
                 self.commit_feature(FeatureKind::Move { bodies, translate, axis, angle_deg, copy }, editing)
             }
+            Command::Fillet { body: Some(body), edges, size, chamfer, editing } => {
+                let tab = &self.tabs[self.active];
+                let Some(b) = tab.model.body(body) else { return };
+                let ends = crate::state::edge_endpoints(&b.mesh, &edges);
+                self.commit_feature(FeatureKind::Fillet { body, edges: ends, size, chamfer }, editing)
+            }
             _ => {}
         }
         self.tab().preview = None;
@@ -490,6 +533,14 @@ impl Merge360App {
                     if let Some(body) = tab.model.body(*b) {
                         row_label(ui, "Face Area");
                         ui.label(format!("{:.3} {}²", units.from_mm(units.from_mm(face_area(&body.mesh, *f))), units.suffix()));
+                        ui.end_row();
+                    }
+                }
+                SelItem::Edge(b, e) => {
+                    if let Some(pts) = tab.model.body(*b).and_then(|bd| bd.mesh.edges.get(*e as usize)) {
+                        let len: f64 = pts.windows(2).map(|w| (Vec3::from(w[1]) - Vec3::from(w[0])).length() as f64).sum();
+                        row_label(ui, "Edge Length");
+                        ui.label(units.format(len));
                         ui.end_row();
                     }
                 }
@@ -607,6 +658,7 @@ impl Merge360App {
                             row(ui, "Torus Diameter", torus_diameter, "t");
                         }
                         FeatureKind::Extrude { distance, .. } => row(ui, "Distance", distance, "d"),
+                        FeatureKind::Fillet { size, chamfer, .. } => row(ui, if *chamfer { "Distance" } else { "Radius" }, size, "s"),
                         FeatureKind::Move { translate, .. } => {
                             let [x, y, z] = translate;
                             row(ui, "X Distance", x, "x");

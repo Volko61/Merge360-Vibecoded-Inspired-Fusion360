@@ -211,6 +211,8 @@ impl Merge360App {
                     (Some(Command::Move { translate, .. }), "y") => translate[1] = num.unwrap_or(0.0),
                     (Some(Command::Move { translate, .. }), "z") => translate[2] = num.unwrap_or(0.0),
                     (Some(Command::Move { copy, .. }), "copy") => *copy = v == "true",
+                    (Some(Command::Fillet { size, .. }), "size") => *size = num.unwrap_or(*size),
+                    (Some(Command::Fillet { chamfer, .. }), "chamfer") => *chamfer = v == "true",
                     _ => eprintln!("script: cannot set {k} on the current command"),
                 }
             }
@@ -361,6 +363,26 @@ impl Merge360App {
                     copy: false,
                     editing: None,
                 });
+            }
+            "fillet" | "chamfer" => {
+                let mut body = None;
+                let mut edges = Vec::new();
+                for sitem in &tab.selection {
+                    if let SelItem::Edge(b, e) = sitem {
+                        if body.is_none() || body == Some(*b) {
+                            body = Some(*b);
+                            edges.push(*e);
+                        }
+                    }
+                }
+                tab.selection.clear();
+                tab.command = Some(Command::Fillet { body, edges, size: if id == "fillet" { 2.0 } else { 1.0 }, chamfer: id == "chamfer", editing: None });
+            }
+            "press_pull" => {
+                // Fusion's Press Pull: fillet on edges, extrude on profiles.
+                let on_edges = tab.selection.iter().any(|s| matches!(s, SelItem::Edge(..)));
+                self.run_tool(if on_edges { "fillet" } else { "extrude" });
+                return;
             }
             "delete" => self.delete_selection(),
             "appearance" => tab.command = Some(Command::Appearance),
@@ -523,6 +545,10 @@ impl Merge360App {
             },
             FeatureKind::Move { bodies, translate, axis, angle_deg, copy } => {
                 Command::Move { bodies, translate, axis, angle_deg, copy, editing }
+            }
+            FeatureKind::Fillet { body, edges, size, chamfer } => {
+                let idx = tab.model.body(body).map(|b| crate::state::edge_indices(&b.mesh, &edges)).unwrap_or_default();
+                Command::Fillet { body: Some(body), edges: idx, size, chamfer, editing }
             }
             _ => {
                 // Remove features have nothing to edit.

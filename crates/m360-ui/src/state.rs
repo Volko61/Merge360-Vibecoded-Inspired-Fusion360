@@ -208,6 +208,15 @@ pub enum Command {
         picking_axis: bool,
         editing: Option<EditCtx>,
     },
+    Hole {
+        plane: Option<PlaneRef>,
+        points: Vec<[f64; 2]>,
+        diameter: f64,
+        depth: f64,
+        through_all: bool,
+        kind: m360_core::HoleType,
+        editing: Option<EditCtx>,
+    },
     Fillet {
         body: Option<BodyId>,
         edges: Vec<u32>,
@@ -237,6 +246,7 @@ impl Command {
             Command::Combine { .. } => "COMBINE",
             Command::Move { .. } => "MOVE/COPY",
             Command::Revolve { .. } => "REVOLVE",
+            Command::Hole { .. } => "HOLE",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
             Command::Fillet { .. } => "FILLET",
             Command::SketchPlane => "CREATE SKETCH",
@@ -256,7 +266,8 @@ impl Command {
             | Command::Combine { editing, .. }
             | Command::Move { editing, .. }
             | Command::Fillet { editing, .. }
-            | Command::Revolve { editing, .. } => editing.as_ref(),
+            | Command::Revolve { editing, .. }
+            | Command::Hole { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
@@ -476,6 +487,27 @@ impl DocTab {
                     return;
                 };
                 (key, m360_core::model::revolve_tool(&plane, &ents, profiles, axis, *angle_deg))
+            }
+            Command::Hole { plane: Some(plane), points, diameter, depth, through_all, kind, .. } if !points.is_empty() => {
+                let key = format!("hole{plane:?}{points:?}{diameter}{depth}{through_all}{kind:?}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                // Preview the tools; through-all holes are drawn 2x the model size deep.
+                let deep = {
+                    let (min, max) = crate::viewport::scene_bounds(self);
+                    (max - min).length() as f64 * 1.2
+                };
+                let d = if *through_all { deep } else { *depth };
+                let r = m360_core::model::hole_tools(plane, points, *diameter, d, false, kind);
+                self.preview = Some(match r {
+                    Ok(tools) => {
+                        let meshes: Vec<_> = tools.iter().map(m360_kernel::tessellate).collect();
+                        Preview { key, mesh: Some(Arc::new(BodyMesh::merge(&meshes))), error: None }
+                    }
+                    Err(e) => Preview { key, mesh: None, error: Some(e) },
+                });
+                return;
             }
             Command::Fillet { body: Some(b), edges, size, chamfer, .. } if !edges.is_empty() => {
                 let key = format!("fillet{b}{edges:?}{size}{chamfer}");

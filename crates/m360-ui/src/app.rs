@@ -213,6 +213,17 @@ impl Merge360App {
                     (Some(Command::Move { copy, .. }), "copy") => *copy = v == "true",
                     (Some(Command::Fillet { size, .. }), "size") => *size = num.unwrap_or(*size),
                     (Some(Command::Revolve { angle_deg, .. }), "angle") => *angle_deg = num.unwrap_or(*angle_deg),
+                    (Some(Command::Hole { diameter, .. }), "diameter") => *diameter = num.unwrap_or(*diameter),
+                    (Some(Command::Hole { depth, .. }), "depth") => *depth = num.unwrap_or(*depth),
+                    (Some(Command::Hole { through_all, .. }), "through") => *through_all = v == "true",
+                    (Some(Command::Hole { kind, diameter, .. }), "type") => {
+                        let d = *diameter;
+                        *kind = match v.as_str() {
+                            "counterbore" => m360_core::HoleType::Counterbore { diameter: d * 1.8, depth: d * 0.6 },
+                            "countersink" => m360_core::HoleType::Countersink { diameter: d * 2.0, angle_deg: 90.0 },
+                            _ => m360_core::HoleType::Simple,
+                        }
+                    }
                     (Some(Command::Revolve { axis, .. }), "axis") => {
                         *axis = match v.as_str() {
                             "x" => Some(m360_core::RevolveAxis::X),
@@ -377,6 +388,23 @@ impl Merge360App {
                     axis: m360_core::Axis::Y,
                     angle_deg: 0.0,
                     copy: false,
+                    editing: None,
+                });
+            }
+            "hole" => {
+                // Pre-selected planar faces seed the placement.
+                let seed = tab.selection.iter().find_map(|s| match s {
+                    SelItem::FacePlane(_, _, p) => Some(*p),
+                    _ => None,
+                });
+                tab.selection.clear();
+                tab.command = Some(Command::Hole {
+                    plane: seed,
+                    points: Vec::new(),
+                    diameter: 5.0,
+                    depth: 10.0,
+                    through_all: false,
+                    kind: m360_core::HoleType::Simple,
                     editing: None,
                 });
             }
@@ -584,6 +612,9 @@ impl Merge360App {
             },
             FeatureKind::Move { bodies, translate, axis, angle_deg, copy } => {
                 Command::Move { bodies, translate, axis, angle_deg, copy, editing }
+            }
+            FeatureKind::Hole { plane, points, diameter, depth, through_all, kind, .. } => {
+                Command::Hole { plane: Some(plane), points, diameter, depth, through_all, kind, editing }
             }
             FeatureKind::Revolve { sketch, profiles, axis, angle_deg, op, .. } => Command::Revolve {
                 sketch: Some(sketch),

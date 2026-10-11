@@ -356,6 +356,75 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Hole { plane, points, diameter, depth, through_all, kind, .. } => {
+                let ok = plane.is_some() && !points.is_empty() && preview_err.is_none();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Placement");
+                    ui.label("Single / multiple points");
+                    ui.end_row();
+                    row_label(ui, "Face / Points");
+                    let text = if points.is_empty() { "Select".to_string() } else { format!("{} Points", points.len()) };
+                    if selection_field(ui, true, &text).clicked() {
+                        points.clear();
+                        *plane = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Extents");
+                    egui::ComboBox::from_id_salt("hole_ext").selected_text(if *through_all { "All" } else { "Distance" }).show_ui(ui, |ui| {
+                        ui.selectable_value(through_all, false, "Distance");
+                        ui.selectable_value(through_all, true, "All");
+                    });
+                    ui.end_row();
+                    row_label(ui, "Hole Type");
+                    egui::ComboBox::from_id_salt("hole_type").selected_text(kind.label()).show_ui(ui, |ui| {
+                        let d = *diameter;
+                        for k in [
+                            m360_core::HoleType::Simple,
+                            m360_core::HoleType::Counterbore { diameter: d * 1.8, depth: d * 0.6 },
+                            m360_core::HoleType::Countersink { diameter: d * 2.0, angle_deg: 90.0 },
+                        ] {
+                            if ui.selectable_label(kind.label() == k.label(), k.label()).clicked() {
+                                *kind = k;
+                            }
+                        }
+                    });
+                    ui.end_row();
+                    row_label(ui, "Diameter");
+                    length_field(ui, "hole_d", diameter, units);
+                    ui.end_row();
+                    if !*through_all {
+                        row_label(ui, "Depth");
+                        length_field(ui, "hole_depth", depth, units);
+                        ui.end_row();
+                    }
+                    match kind {
+                        m360_core::HoleType::Simple => {}
+                        m360_core::HoleType::Counterbore { diameter, depth } => {
+                            row_label(ui, "Counterbore ⌀");
+                            length_field(ui, "cb_d", diameter, units);
+                            ui.end_row();
+                            row_label(ui, "Counterbore Depth");
+                            length_field(ui, "cb_depth", depth, units);
+                            ui.end_row();
+                        }
+                        m360_core::HoleType::Countersink { diameter, angle_deg } => {
+                            row_label(ui, "Countersink ⌀");
+                            length_field(ui, "cs_d", diameter, units);
+                            ui.end_row();
+                            row_label(ui, "Countersink Angle");
+                            angle_field(ui, "cs_a", angle_deg);
+                            ui.end_row();
+                        }
+                    }
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Fillet { body, edges, size, chamfer, .. } => {
                 let ok = body.is_some() && !edges.is_empty() && preview_err.is_none();
                 let text = if edges.is_empty() { "Select".to_string() } else { format!("{} Edges", edges.len()) };
@@ -568,6 +637,14 @@ impl Merge360App {
                     self.tab().doc.sketch_visible.insert(sketch, false);
                 }
             }
+            Command::Hole { plane: Some(plane), points, diameter, depth, through_all, kind, editing } => {
+                let participants = self.overlapping_bodies(ExtrudeOp::Cut);
+                if participants.is_empty() {
+                    self.toast(crate::app::ToastKind::Warning, "The hole does not intersect any body.");
+                    return;
+                }
+                self.commit_feature(FeatureKind::Hole { plane, points, diameter, depth, through_all, kind, participants }, editing);
+            }
             Command::Fillet { body: Some(body), edges, size, chamfer, editing } => {
                 let tab = &self.tabs[self.active];
                 let Some(b) = tab.model.body(body) else { return };
@@ -740,6 +817,10 @@ impl Merge360App {
                                 changed = true;
                             }
                             ui.end_row();
+                        }
+                        FeatureKind::Hole { diameter, depth, .. } => {
+                            row(ui, "Diameter", diameter, "hd");
+                            row(ui, "Depth", depth, "hp");
                         }
                         FeatureKind::Fillet { size, chamfer, .. } => row(ui, if *chamfer { "Distance" } else { "Radius" }, size, "s"),
                         FeatureKind::Move { translate, .. } => {

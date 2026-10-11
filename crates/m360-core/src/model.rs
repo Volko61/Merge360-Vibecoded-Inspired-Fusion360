@@ -6,7 +6,7 @@ use std::sync::Arc;
 use m360_kernel::{fillet, ops, ops::BooleanOp, primitives, profile, tessellate, tessellate_smooth, BodyMesh, Solid, SMOOTH_COS};
 
 use crate::document::Document;
-use crate::feature::{ExtrudeOp, Feature, FeatureKind, RevolveAxis, SketchEntity};
+use crate::feature::{ExtrudeOp, Feature, FeatureKind, HoleType, RevolveAxis, SketchEntity};
 use crate::PlaneRef;
 
 /// Stable body identifier. A body created by a feature takes that feature's
@@ -246,6 +246,29 @@ pub fn revolve_tool(plane: &PlaneRef, entities: &[SketchEntity], profiles: &[usi
     Ok(Solid::new(shells))
 }
 
+/// Tool solids of a Hole feature (all points), to be cut in order.
+pub fn hole_tools(plane: &PlaneRef, points: &[[f64; 2]], diameter: f64, depth: f64, through_all: bool, kind: &HoleType) -> Result<Vec<Solid>, String> {
+    use m360_kernel::hole::{HoleKind, HoleSpec};
+    if points.is_empty() {
+        return Err("no hole positions".into());
+    }
+    let spec = HoleSpec {
+        diameter,
+        depth: if through_all { 1.0e4 } else { depth },
+        kind: match *kind {
+            HoleType::Simple => HoleKind::Simple,
+            HoleType::Counterbore { diameter, depth } => HoleKind::Counterbore { diameter, depth },
+            HoleType::Countersink { diameter, angle_deg } => HoleKind::Countersink { diameter, angle_deg },
+        },
+    };
+    let mut out = Vec::new();
+    for p in points {
+        let f = plane.frame(*p);
+        out.extend(m360_kernel::hole::hole_tools(f.origin, f.n, &spec).map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
 /// Apply a tool body with a Fusion-style operation to the participants.
 fn apply_op(model: &mut Model, uid: u64, tool: Solid, op: ExtrudeOp, participants: &[BodyId]) -> Result<(), String> {
     let live: Vec<BodyId> = participants.iter().copied().filter(|id| model.body(*id).is_some()).collect();
@@ -432,6 +455,35 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             let (plane, entities) = (sk.plane, sk.entities.clone());
             let tool = revolve_tool(&plane, &entities, profiles, axis, *angle_deg)?;
             apply_op(model, f.uid, tool, *op, participants)
+        }
+        FeatureKind::Hole { plane, points, diameter, depth, through_all, kind, participants } => {
+            let live: Vec<BodyId> = participants.iter().copied().filter(|id| model.body(*id).is_some()).collect();
+            if live.is_empty() {
+                return Err("the hole does not intersect any body".into());
+            }
+            // Through All: just past the deepest point of the bodies.
+            let depth = if *through_all {
+                let n = plane.normal();
+                let o = plane.frame([0.0, 0.0]).origin;
+                let deepest = live
+                    .iter()
+                    .filter_map(|id| model.body(*id))
+                    .flat_map(|b| b.mesh.positions.iter())
+                    .map(|p| (o - glam::Vec3::from(*p).as_dvec3()).dot(n))
+                    .fold(0.0, f64::max);
+                deepest + 1.0 + diameter * 0.1
+            } else {
+                *depth
+            };
+            let tools = hole_tools(plane, points, *diameter, depth, false, kind)?;
+            for id in live {
+                let mut acc = model.body(id).unwrap().solid.clone();
+                for t in &tools {
+                    acc = ops::boolean(&acc, std::slice::from_ref(t), BooleanOp::Cut).map_err(|e| e.to_string())?;
+                }
+                replace(model, rebuilt(model, id, acc, f.uid));
+            }
+            Ok(())
         }
         FeatureKind::Fillet { body, edges, size, chamfer } => {
             let b = model.body(*body).ok_or("the filleted body no longer exists")?;

@@ -45,6 +45,25 @@ impl EdgeInfo {
 }
 
 impl BodyMesh {
+    /// Concatenate several meshes into one (face ids are offset).
+    pub fn merge(meshes: &[BodyMesh]) -> BodyMesh {
+        let mut out = BodyMesh { bbox_min: Vec3::splat(f32::MAX), bbox_max: Vec3::splat(f32::MIN), ..Default::default() };
+        for m in meshes {
+            let base = out.positions.len() as u32;
+            let fbase = out.face_count;
+            out.positions.extend_from_slice(&m.positions);
+            out.normals.extend_from_slice(&m.normals);
+            out.face_ids.extend(m.face_ids.iter().map(|f| f + fbase));
+            out.indices.extend(m.indices.iter().map(|i| i + base));
+            out.edges.extend(m.edges.iter().cloned());
+            out.edge_info.extend(m.edge_info.iter().cloned());
+            out.face_count += m.face_count;
+            out.bbox_min = out.bbox_min.min(m.bbox_min);
+            out.bbox_max = out.bbox_max.max(m.bbox_max);
+        }
+        out
+    }
+
     /// Unit normal of a face if it is planar.
     pub fn planar_normal(&self, face: u32) -> Option<Vec3> {
         let mut n0: Option<Vec3> = None;

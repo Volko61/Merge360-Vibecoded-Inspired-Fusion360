@@ -457,6 +457,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "torus",
     "combine",
     "revolve",
+    "hole",
     "sk_arc",
     "sk_polygon",
     "fillet",

@@ -314,6 +314,28 @@ mod tests {
     }
 
     #[test]
+    fn holes_in_box() {
+        use crate::{BasePlane, HoleType};
+        let mut d = Document::default();
+        let b = d.add_feature(FeatureKind::Box { plane: PlaneRef::XZ, center: [0.0, 0.0], length: 40.0, width: 40.0, height: 10.0 });
+        d.add_feature(FeatureKind::Hole {
+            plane: PlaneRef { base: BasePlane::XZ, offset: 10.0, flip: false },
+            points: vec![[-10.0, -10.0], [10.0, 10.0]],
+            diameter: 5.0,
+            depth: 0.0,
+            through_all: true,
+            kind: HoleType::Counterbore { diameter: 9.0, depth: 3.0 },
+            participants: vec![b],
+        });
+        let m = Regenerator::default().regenerate(&d);
+        assert!(m.errors.is_empty(), "{:?}", m.errors);
+        let pi = std::f64::consts::PI;
+        let removed = 2.0 * (pi * 6.25 * 7.0 + pi * 20.25 * 3.0);
+        let v = m.bodies[0].mesh.volume();
+        assert!((v - (16000.0 - removed)).abs() < 15.0, "{v}");
+    }
+
+    #[test]
     fn ron_roundtrip() {
         let mut d = Document::new("Part");
         d.add_feature(boxf(0.0));

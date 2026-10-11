@@ -41,7 +41,9 @@ impl PlaneRef {
             return None;
         };
         let flip = n.dot(axis) < 0.0;
-        Some(PlaneRef { base, offset: point.dot(axis), flip })
+        // Mesh hits are f32: snap the offset to 1e-4 mm to remove noise.
+        let offset = (point.dot(axis) * 1e4).round() / 1e4;
+        Some(PlaneRef { base, offset, flip })
     }
 
     pub const XY: PlaneRef = PlaneRef { base: BasePlane::XY, offset: 0.0, flip: false };
@@ -165,6 +167,17 @@ pub enum FeatureKind {
         op: ExtrudeOp,
         participants: Vec<BodyId>,
     },
+    /// Holes drilled into a face plane at one or more points.
+    Hole {
+        /// Plane of the placement face; its normal points out of the material.
+        plane: PlaneRef,
+        points: Vec<[f64; 2]>,
+        diameter: f64,
+        depth: f64,
+        through_all: bool,
+        kind: HoleType,
+        participants: Vec<BodyId>,
+    },
     /// Fillet (or chamfer) straight edges of a body. Edges are stored by
     /// their end points and re-resolved on every regeneration.
     Fillet {
@@ -182,6 +195,24 @@ pub enum FeatureKind {
         /// Bodies a Join/Cut/Intersect acts on.
         participants: Vec<BodyId>,
     },
+}
+
+/// Hole type (Fusion's Simple / Counterbore / Countersink).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum HoleType {
+    Simple,
+    Counterbore { diameter: f64, depth: f64 },
+    Countersink { diameter: f64, angle_deg: f64 },
+}
+
+impl HoleType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            HoleType::Simple => "Simple",
+            HoleType::Counterbore { .. } => "Counterbore",
+            HoleType::Countersink { .. } => "Countersink",
+        }
+    }
 }
 
 /// Axis of a Revolve feature.
@@ -242,6 +273,7 @@ impl FeatureKind {
             FeatureKind::Sketch { .. } => "Sketch",
             FeatureKind::Extrude { .. } => "Extrude",
             FeatureKind::Revolve { .. } => "Revolve",
+            FeatureKind::Hole { .. } => "Hole",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }

@@ -164,6 +164,7 @@ impl Merge360App {
             | Some(Command::Properties) => PickMode::Bodies,
             Some(Command::Measure { .. }) => PickMode::Measure,
             Some(Command::Fillet { .. }) => PickMode::Edges,
+            Some(Command::Hole { .. }) => PickMode::Planes,
             _ => PickMode::Default,
         }
     }
@@ -719,6 +720,19 @@ impl Merge360App {
                     *plane_chosen = true;
                 }
             }
+            Some(Command::Hole { plane, points, .. }) => {
+                if let (Some(SelItem::FacePlane(_, _, p)), Some(w)) = (hover, point) {
+                    let same = plane.is_some_and(|q| q.base == p.base && q.flip == p.flip && (q.offset - p.offset).abs() < 1e-3);
+                    if !same {
+                        *plane = Some(p);
+                        points.clear();
+                    }
+                    let mut c = to_local(&p, w);
+                    let step = grid_step(&tab.camera) as f64 / 10.0;
+                    c = [(c[0] / step).round() * step, (c[1] / step).round() * step];
+                    points.push(c);
+                }
+            }
             Some(Command::SketchPlane) => {
                 let plane = match hover {
                     Some(SelItem::Plane(b)) => Some(base_plane_ref(b)),
@@ -1053,7 +1067,7 @@ impl Merge360App {
         if let Some(p) = &tab.preview {
             if let Some(mesh) = &p.mesh {
                 let (color, edges) = match &tab.command {
-                    Some(Command::Extrude { op: ExtrudeOp::Cut, .. }) | Some(Command::Revolve { op: ExtrudeOp::Cut, .. }) => (srgb(0.9, 0.25, 0.2, 0.45), true),
+                    Some(Command::Extrude { op: ExtrudeOp::Cut, .. }) | Some(Command::Revolve { op: ExtrudeOp::Cut, .. }) | Some(Command::Hole { .. }) => (srgb(0.9, 0.25, 0.2, 0.45), true),
                     Some(Command::Revolve { op: ExtrudeOp::Join, .. }) => (srgb(0.55, 0.75, 0.95, 0.7), true),
                     Some(Command::Extrude { op: ExtrudeOp::Intersect, .. }) => (srgb(0.95, 0.6, 0.15, 0.45), true),
                     Some(Command::Extrude { op: ExtrudeOp::Join, .. }) => (srgb(0.55, 0.75, 0.95, 0.7), true),
@@ -1264,6 +1278,7 @@ impl Merge360App {
         let prompt = match &tab.command {
             Some(Command::Primitive { plane_chosen: false, .. }) => Some("Select a plane or planar face"),
             Some(Command::SketchPlane) => Some("Select a plane or planar face to sketch on"),
+            Some(Command::Hole { .. }) => Some("Click on a planar face to place holes"),
             Some(Command::Extrude { profiles, .. }) if profiles.is_empty() => Some("Select a sketch profile"),
             _ => None,
         };

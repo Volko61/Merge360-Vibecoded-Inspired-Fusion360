@@ -466,6 +466,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "hole",
     "rect_pattern",
     "circ_pattern",
+    "path_pattern",
     "mirror",
     "offset_plane",
     "plane_at_angle",

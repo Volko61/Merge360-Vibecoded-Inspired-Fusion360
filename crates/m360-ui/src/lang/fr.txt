@@ -618,3 +618,9 @@ Oak	Chêne
 Pine	Pin
 Glass	Verre
 Concrete	Béton
+PATTERN ON PATH	RÉSEAU LE LONG D'UNE TRAJECTOIRE
+Full path	Trajectoire complète
+Orientation	Orientation
+Path Direction	Direction de la trajectoire
+Identical	Identique
+1 selected	1 sélectionné

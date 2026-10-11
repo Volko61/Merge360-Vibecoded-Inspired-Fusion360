@@ -618,3 +618,9 @@ Oak	Eiche
 Pine	Kiefer
 Glass	Glas
 Concrete	Beton
+PATTERN ON PATH	ANORDNUNG AUF PFAD
+Full path	Ganzer Pfad
+Orientation	Ausrichtung
+Path Direction	Pfadrichtung
+Identical	Identisch
+1 selected	1 ausgewählt

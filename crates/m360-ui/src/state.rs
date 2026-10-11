@@ -516,6 +516,7 @@ impl Command {
             Command::Revolve { .. } => "REVOLVE",
             Command::Hole { .. } => "HOLE",
             Command::Pattern { pattern: m360_core::PatternKind::Circular { .. }, .. } => "CIRCULAR PATTERN",
+            Command::Pattern { pattern: m360_core::PatternKind::Path { .. }, .. } => "PATTERN ON PATH",
             Command::Pattern { .. } => "RECTANGULAR PATTERN",
             Command::Mirror { .. } => "MIRROR",
             Command::OffsetPlane { .. } => "OFFSET PLANE",
@@ -610,6 +611,31 @@ pub fn interferences(model: &Model, bodies: &[BodyId]) -> Vec<Interference> {
         }
     }
     out
+}
+
+/// World-space polyline of a sketch path (lines and sampled arcs).
+pub fn path_polyline(segs: &[m360_kernel::sweep::PathSeg]) -> Vec<[f64; 3]> {
+    use m360_kernel::sweep::{arc_geometry, PathSeg};
+    let mut out: Vec<DVec3> = Vec::new();
+    for s in segs {
+        if out.is_empty() {
+            out.push(s.start());
+        }
+        match *s {
+            PathSeg::Line { b, .. } => out.push(b),
+            PathSeg::Arc { a, m, b } => match arc_geometry(a, m, b) {
+                Some((c, axis, angle)) => {
+                    let n = ((angle.to_degrees() / 5.0).ceil() as usize).max(2);
+                    for k in 1..=n {
+                        let q = glam::DQuat::from_axis_angle(axis, angle * k as f64 / n as f64);
+                        out.push(c + q * (a - c));
+                    }
+                }
+                None => out.push(b),
+            },
+        }
+    }
+    out.into_iter().map(|p| p.to_array()).collect()
 }
 
 /// ISO metric coarse threads: (designation, nominal diameter, pitch).
@@ -1090,7 +1116,7 @@ impl DocTab {
                         // Moves preview as a "copy" of the moved bodies.
                         FeatureKind::Move { bodies: bodies.clone(), translate: *translate, axis: *axis, angle_deg: *angle_deg, copy: true }
                     }
-                    Command::Pattern { bodies, pattern, .. } => FeatureKind::Pattern { bodies: bodies.clone(), pattern: *pattern },
+                    Command::Pattern { bodies, pattern, .. } => FeatureKind::Pattern { bodies: bodies.clone(), pattern: pattern.clone() },
                     Command::Mirror { bodies, plane: Some(plane), .. } => FeatureKind::Mirror { bodies: bodies.clone(), plane: *plane },
                     _ => {
                         self.preview = None;

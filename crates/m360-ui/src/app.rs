@@ -317,6 +317,8 @@ impl Merge360App {
                     (Some(Command::Pattern { pattern: m360_core::PatternKind::Rectangular { count1, .. }, .. }), "count") => *count1 = num.unwrap_or(1.0) as u32,
                     (Some(Command::Pattern { pattern: m360_core::PatternKind::Rectangular { spacing1, .. }, .. }), "spacing") => *spacing1 = num.unwrap_or(*spacing1),
                     (Some(Command::Pattern { pattern: m360_core::PatternKind::Circular { count, .. }, .. }), "count") => *count = num.unwrap_or(1.0) as u32,
+                    (Some(Command::Pattern { pattern: m360_core::PatternKind::Path { count, .. }, .. }), "count") => *count = num.unwrap_or(1.0) as u32,
+                    (Some(Command::Pattern { pattern: m360_core::PatternKind::Path { orient, .. }, .. }), "orient") => *orient = v == "true",
                     (Some(Command::Hole { diameter, .. }), "diameter") => *diameter = num.unwrap_or(*diameter),
                     (Some(Command::Hole { depth, .. }), "depth") => *depth = num.unwrap_or(*depth),
                     (Some(Command::Hole { through_all, .. }), "through") => *through_all = v == "true",
@@ -667,11 +669,18 @@ impl Merge360App {
                     (None, None) => Command::Section { plane: None, offset: 0.0, flip: false },
                 });
             }
-            "rect_pattern" | "circ_pattern" => {
-                let pattern = if id == "rect_pattern" {
-                    m360_core::PatternKind::Rectangular { dir1: m360_core::Axis::X, count1: 3, spacing1: 30.0, dir2: m360_core::Axis::Z, count2: 1, spacing2: 30.0 }
-                } else {
-                    m360_core::PatternKind::Circular { axis: m360_core::Axis::Y, count: 6, total_deg: 360.0 }
+            "rect_pattern" | "circ_pattern" | "path_pattern" => {
+                let pattern = match id {
+                    "rect_pattern" => m360_core::PatternKind::Rectangular {
+                        dir1: m360_core::Axis::X,
+                        count1: 3,
+                        spacing1: 30.0,
+                        dir2: m360_core::Axis::Z,
+                        count2: 1,
+                        spacing2: 30.0,
+                    },
+                    "circ_pattern" => m360_core::PatternKind::Circular { axis: m360_core::Axis::Y, count: 6, total_deg: 360.0 },
+                    _ => m360_core::PatternKind::Path { points: Vec::new(), count: 4, distance: 0.0, orient: true },
                 };
                 tab.command = Some(Command::Pattern { bodies: sel_bodies, pattern, editing: None });
                 tab.selection.clear();

@@ -410,11 +410,15 @@ impl JointGeo {
 }
 
 /// Layout of a Pattern feature.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PatternKind {
     Rectangular { dir1: Axis, count1: u32, spacing1: f64, dir2: Axis, count2: u32, spacing2: f64 },
     /// Around an origin axis; `total_deg` = 360 spreads instances evenly.
     Circular { axis: Axis, count: u32, total_deg: f64 },
+    /// Along a path (world polyline captured from sketch curves), spread
+    /// over `distance` from its start (0 = the whole path). With `orient`
+    /// the copies turn with the path tangent.
+    Path { points: Vec<[f64; 3]>, count: u32, distance: f64, orient: bool },
 }
 
 impl PatternKind {
@@ -439,6 +443,37 @@ impl PatternKind {
                 let full = (total_deg.abs() - 360.0).abs() < 1e-6;
                 let step = if full || n == 1 { total_deg / n as f64 } else { total_deg / (n - 1) as f64 };
                 (1..n).map(|k| DMat4::from_axis_angle(axis.vec(), (step * k as f64).to_radians())).collect()
+            }
+            PatternKind::Path { ref points, count, distance, orient } => {
+                let pts: Vec<DVec3> = points.iter().map(|p| DVec3::from(*p)).collect();
+                if pts.len() < 2 || count < 2 {
+                    return Vec::new();
+                }
+                let mut acc = vec![0.0];
+                for w in pts.windows(2) {
+                    acc.push(acc.last().unwrap() + (w[1] - w[0]).length());
+                }
+                let total = *acc.last().unwrap();
+                let span = if distance > 1e-9 { distance.min(total) } else { total };
+                // Position and unit tangent at arc length s.
+                let at = |s: f64| -> (DVec3, DVec3) {
+                    let i = acc.partition_point(|a| *a <= s).clamp(1, pts.len() - 1);
+                    let seg = pts[i] - pts[i - 1];
+                    let t = ((s - acc[i - 1]) / seg.length().max(1e-12)).clamp(0.0, 1.0);
+                    (pts[i - 1] + seg * t, seg.normalize_or_zero())
+                };
+                let (p0, t0) = at(0.0);
+                (1..count)
+                    .map(|k| {
+                        let (p, t) = at(span * k as f64 / (count - 1) as f64);
+                        if orient && t != DVec3::ZERO && t0 != DVec3::ZERO {
+                            let r = glam::DQuat::from_rotation_arc(t0, t);
+                            DMat4::from_translation(p) * DMat4::from_quat(r) * DMat4::from_translation(-p0)
+                        } else {
+                            DMat4::from_translation(p - p0)
+                        }
+                    })
+                    .collect()
             }
         }
     }
@@ -563,6 +598,7 @@ impl FeatureKind {
             FeatureKind::Revolve { .. } => "Revolve",
             FeatureKind::Hole { .. } => "Hole",
             FeatureKind::Pattern { pattern: PatternKind::Circular { .. }, .. } => "CircularPattern",
+            FeatureKind::Pattern { pattern: PatternKind::Path { .. }, .. } => "PathPattern",
             FeatureKind::Pattern { .. } => "RectangularPattern",
             FeatureKind::Mirror { .. } => "Mirror",
             FeatureKind::ConstructionPlane { .. } => "Plane",
@@ -693,5 +729,24 @@ impl Feature {
             }
         }
         Ok(f)
+    }
+}
+
+#[cfg(test)]
+mod pattern_tests {
+    use super::*;
+
+    #[test]
+    fn path_pattern_transforms() {
+        let straight = PatternKind::Path { points: vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]], count: 3, distance: 0.0, orient: true };
+        let t = straight.transforms();
+        assert_eq!(t.len(), 2);
+        assert!((t[0].transform_point3(DVec3::ZERO) - DVec3::new(5.0, 0.0, 0.0)).length() < 1e-9);
+        // Around a corner, oriented copies turn with the path.
+        let corner = PatternKind::Path { points: vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 10.0, 0.0]], count: 3, distance: 0.0, orient: true };
+        let t = corner.transforms();
+        let end = t[1];
+        assert!((end.transform_point3(DVec3::ZERO) - DVec3::new(10.0, 10.0, 0.0)).length() < 1e-9);
+        assert!((end.transform_vector3(DVec3::X) - DVec3::Y).length() < 1e-9);
     }
 }

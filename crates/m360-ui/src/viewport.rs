@@ -198,6 +198,9 @@ impl Merge360App {
             Some(Command::Sweep { .. }) | Some(Command::Loft { .. }) => PickMode::Profiles,
             Some(Command::SplitBody { picking_plane: true, .. }) => PickMode::Planes,
             Some(Command::SplitBody { .. }) | Some(Command::Scale { .. }) => PickMode::Bodies,
+            Some(Command::Pattern { bodies, pattern: m360_core::PatternKind::Path { points, .. }, .. }) if !bodies.is_empty() && points.is_empty() => {
+                PickMode::Curves
+            }
             Some(Command::Mirror { .. }) | Some(Command::Pattern { .. }) => PickMode::Bodies,
             _ => PickMode::Default,
         }
@@ -1033,6 +1036,15 @@ impl Merge360App {
                     }
                     if plane.is_none() {
                         *picking_plane = true;
+                    }
+                }
+            }
+            Some(Command::Pattern { pattern: m360_core::PatternKind::Path { points, .. }, .. }) if matches!(hover, Some(SelItem::SketchEntity(..))) => {
+                if let Some(SelItem::SketchEntity(uid, i)) = hover {
+                    let chain = chain_of(&tab.model, uid, i);
+                    match m360_core::model::path_segments(&tab.model, uid, &chain) {
+                        Ok(segs) => *points = crate::state::path_polyline(&segs),
+                        Err(e) => self.toast(crate::app::ToastKind::Warning, e),
                     }
                 }
             }

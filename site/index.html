@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merge360 — Offline parametric CAD</title>
+<meta name="description" content="Merge360 is a free, open-source parametric 3D CAD application written in Rust. Fusion 360–style workflow, fully offline, no subscription.">
+<meta name="theme-color" content="#07080b">
+<meta property="og:title" content="Merge360 — Offline parametric CAD">
+<meta property="og:description" content="Parametric 3D CAD written in Rust. Fusion-style workflow. No cloud. No subscription.">
+<meta property="og:image" content="assets/screenshot.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307080b'/%3E%3Cpath d='M6 24 L11 8 H15 L16 15 L21 8 H25 L20 24 H16 L18.5 16 L14 22 L12.5 16 L10 24Z' fill='%23e8212e'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07080b;
+  --bg-2: #0d0f14;
+  --panel: rgba(18, 20, 27, .72);
+  --line: rgba(255, 170, 90, .14);
+  --line-strong: rgba(255, 170, 90, .32);
+  --text: #ece6da;
+  --muted: #8d8f96;
+  --dim: #5b5e66;
+  --amber: #ff9d3d;
+  --amber-hot: #ff6b1a;
+  --cyan: #46e3ff;
+  --red: #e8212e;
+  --display: "Chakra Petch", system-ui, sans-serif;
+  --body: "Inter Tight", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --wrap: 1200px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 17px/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; display: block; }
+::selection { background: var(--amber); color: #120800; }
+
+/* film grain + scanlines over everything */
+body::after {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 100;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.055'/%3E%3C/svg%3E");
+  mix-blend-mode: screen;
+}
+
+.wrap { width: min(var(--wrap), 100% - 32px); margin-inline: auto; }
+.mono { font-family: var(--mono); }
+.label {
+  font: 500 12px/1 var(--mono);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.label .slash { color: var(--dim); }
+
+/* ---------- nav ---------- */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+  border-bottom: 1px solid transparent;
+  transition: background .3s, border-color .3s, backdrop-filter .3s;
+}
+.nav.scrolled {
+  background: rgba(7, 8, 11, .78);
+  backdrop-filter: blur(14px) saturate(140%);
+  border-color: var(--line);
+}
+.nav .wrap { display: flex; align-items: center; gap: 32px; height: 68px; }
+.logo {
+  font: italic 700 26px/1 var(--display);
+  letter-spacing: .02em;
+  color: var(--red);
+  transform: skewX(-8deg);
+  text-shadow: 0 0 18px rgba(232, 33, 46, .45);
+  white-space: nowrap;
+}
+.logo span { color: var(--text); text-shadow: none; }
+.nav-links { display: flex; gap: 26px; margin-right: auto; }
+.nav-links a {
+  font: 500 13px/1 var(--mono);
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted);
+  transition: color .2s;
+}
+.nav-links a:hover { color: var(--text); }
+.nav-cta { display: flex; gap: 10px; align-items: center; }
+
+/* ---------- buttons ---------- */
+.btn {
+  --c: var(--amber);
+  position: relative;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 22px;
+  font: 600 14px/1 var(--display);
+  letter-spacing: .14em; text-transform: uppercase;
+  color: #140900;
+  background: var(--c);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  transition: filter .2s, transform .2s;
+  white-space: nowrap;
+}
+.btn:hover { filter: brightness(1.12) drop-shadow(0 0 18px rgba(255, 157, 61, .55)); transform: translateY(-1px); }
+.btn.ghost {
+  color: var(--text);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  clip-path: none;
+}
+.btn.ghost:hover { box-shadow: inset 0 0 0 1px var(--amber); filter: none; }
+.btn.sm { padding: 10px 16px; font-size: 12px; }
+.btn svg { width: 16px; height: 16px; flex: none; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  min-height: 100svh;
+  display: flex; align-items: center;
+  padding: 120px 0 90px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.hero-bg {
+  position: absolute; inset: 0; z-index: -2;
+  background:
+    radial-gradient(70% 60% at 78% 55%, rgba(255, 107, 26, .28), transparent 70%),
+    radial-gradient(50% 45% at 85% 20%, rgba(255, 157, 61, .16), transparent 70%),
+    radial-gradient(60% 50% at 10% 100%, rgba(70, 227, 255, .07), transparent 70%),
+    linear-gradient(180deg, #0a0807 0%, var(--bg) 100%);
+}
+#rain, #holo { position: absolute; inset: 0; width: 100%; height: 100%; }
+#rain { z-index: -1; opacity: .55; }
+#holo { z-index: -1; }
+.hero::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 180px; z-index: -1;
+  background: linear-gradient(transparent, var(--bg));
+}
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; align-items: center; }
+.hero h1 {
+  margin: 22px 0 22px;
+  font: 700 clamp(46px, 7.2vw, 96px)/.95 var(--display);
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+}
+.hero h1 .hot {
+  display: block;
+  color: transparent;
+  background: linear-gradient(95deg, var(--amber) 0%, var(--amber-hot) 55%, var(--red) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 28px rgba(255, 107, 26, .35));
+}
+.hero p.lede { max-width: 520px; font-size: 19px; color: #c8c2b6; margin: 0 0 34px; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
+.platforms { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 400 12px/1.4 var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.platforms b { color: var(--text); font-weight: 500; }
+.platforms i { font-style: normal; color: var(--dim); }
+
+.hud {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  max-height: 600px;
+  justify-self: end; width: 100%;
+  pointer-events: none;
+}
+.hud .corner { position: absolute; width: 22px; height: 22px; border: 1px solid var(--amber); opacity: .7; }
+.hud .tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.hud .tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.hud .bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.hud .br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+.hud .readout {
+  position: absolute;
+  font: 400 11px/1.7 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted);
+}
+.hud .readout b { color: var(--cyan); font-weight: 500; }
+.hud .r1 { top: 16px; left: 18px; }
+.hud .r2 { bottom: 16px; right: 18px; text-align: right; }
+.hud .kana {
+  position: absolute; top: 18px; right: 16px;
+  writing-mode: vertical-rl;
+  font: 500 15px/1 var(--body); letter-spacing: .4em;
+  color: var(--red); opacity: .8;
+  text-shadow: 0 0 12px rgba(232, 33, 46, .6);
+}
+
+/* ---------- marquee ---------- */
+.marquee {
+  border-block: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(255,107,26,.06), transparent 30%, transparent 70%, rgba(70,227,255,.05));
+  overflow: hidden;
+  padding: 18px 0;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.marquee-track { display: flex; width: max-content; animation: slide 60s linear infinite; }
+.marquee span {
+  font: 500 15px/1 var(--display); letter-spacing: .2em; text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 26px;
+  display: inline-flex; align-items: center; gap: 52px;
+  white-space: nowrap;
+}
+.marquee span::after { content: "◆"; font-size: 8px; color: var(--amber); }
+@keyframes slide { to { transform: translateX(-50%); } }
+
+/* ---------- sections ---------- */
+section { position: relative; }
+.section { padding: 130px 0; }
+.sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: end; margin-bottom: 60px; }
+.sec-head h2 {
+  margin: 18px 0 0;
+  font: 700 clamp(36px, 5vw, 64px)/1 var(--display);
+  text-transform: uppercase;
+  letter-spacing: -.005em;
+}
+.sec-head h2 em { font-style: normal; color: var(--amber); }
+.sec-head p { margin: 0; color: var(--muted); max-width: 480px; justify-self: end; }
+
+/* ---------- footage ---------- */
+.footage { padding: 110px 0 40px; }
+.screen {
+  position: relative;
+  padding: 10px;
+  background: linear-gradient(160deg, rgba(255,157,61,.35), rgba(255,157,61,.04) 40%, rgba(70,227,255,.18));
+  clip-path: polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px);
+  box-shadow: 0 40px 120px -30px rgba(255, 107, 26, .45);
+}
+.screen-inner { position: relative; overflow: hidden; clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px); }
+.screen-inner img { width: 100%; filter: saturate(.9) contrast(1.03); }
+.screen-inner::before {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255,140,40,.12), transparent 30%, transparent 70%, rgba(7,8,11,.35)),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.06) 0 1px, transparent 1px 3px);
+}
+.screen-inner::after {
+  content: ""; position: absolute; left: 0; right: 0; height: 120px; z-index: 2; pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(70,227,255,.10), transparent);
+  animation: sweep 6s ease-in-out infinite;
+}
+@keyframes sweep { 0% { top: -120px; } 60%, 100% { top: 100%; } }
+.screen-caption {
+  display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin-top: 18px;
+  font: 400 12px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+}
+.screen-caption .rec::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%;
+  background: var(--red); box-shadow: 0 0 10px var(--red);
+  animation: blink 1.6s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: .2; } }
+
+/* ---------- feature cards ---------- */
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.card {
+  position: relative;
+  background: var(--bg);
+  padding: 30px 26px 34px;
+  min-height: 300px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: background .35s;
+}
+.card::before {
+  content: ""; position: absolute; inset: 0; opacity: 0; transition: opacity .35s;
+  background: radial-gradient(120% 80% at 0% 0%, rgba(255,107,26,.16), transparent 60%);
+}
+.card:hover::before { opacity: 1; }
+.card:hover .num { color: var(--amber); }
+.card > * { position: relative; }
+.card .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+.card .num { font: 500 13px/1 var(--mono); color: var(--dim); letter-spacing: .1em; transition: color .3s; }
+.card .tag { font: 400 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--cyan); border: 1px solid rgba(70,227,255,.3); padding: 5px 7px; }
+.card svg.ico { width: 34px; height: 34px; stroke: var(--amber); fill: none; stroke-width: 1.4; margin-bottom: 22px; }
+.card h3 { margin: 0 0 12px; font: 700 21px/1.15 var(--display); text-transform: uppercase; letter-spacing: .02em; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+.card.cta {
+  background: linear-gradient(150deg, rgba(255,107,26,.22), rgba(232,33,46,.12) 60%, var(--bg));
+  justify-content: flex-end;
+}
+.card.cta h3 { font-size: 28px; }
+.card.cta .arrow { font: 400 44px/1 var(--display); color: var(--amber); margin-bottom: auto; transition: transform .3s; }
+.card.cta:hover .arrow { transform: translate(6px, -6px); }
+
+/* ---------- workflow / timeline ---------- */
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; position: relative; }
+.flow::before {
+  content: ""; position: absolute; top: 27px; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, var(--amber), var(--cyan));
+  opacity: .45;
+}
+.step { padding-right: 24px; }
+.step .node {
+  width: 55px; height: 55px; display: grid; place-items: center;
+  background: var(--bg); border: 1px solid var(--line-strong);
+  font: 700 15px/1 var(--display); color: var(--amber);
+  margin-bottom: 26px; position: relative;
+  transform: rotate(45deg);
+}
+.step .node b { transform: rotate(-45deg); font-weight: 700; }
+.step h4 { margin: 0 0 8px; font: 700 18px/1.2 var(--display); text-transform: uppercase; letter-spacing: .04em; }
+.step p { margin: 0; color: var(--muted); font-size: 15px; }
+.step kbd {
+  font: 500 11px/1 var(--mono); color: var(--text);
+  border: 1px solid var(--line-strong); padding: 3px 6px; margin-right: 4px;
+  background: rgba(255,157,61,.06);
+}
+
+/* ---------- ownership ---------- */
+.own { background: linear-gradient(180deg, var(--bg), #0b0806 50%, var(--bg)); }
+.own-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.own-item { border-top: 1px solid var(--line-strong); padding-top: 26px; }
+.own-item .letter {
+  font: 700 64px/1 var(--display);
+  color: transparent; -webkit-text-stroke: 1px var(--amber);
+  margin-bottom: 18px; opacity: .85;
+}
+.own-item h3 { margin: 0 0 10px; font: 700 24px/1.15 var(--display); text-transform: uppercase; }
+.own-item p { margin: 0; color: var(--muted); }
+.own-item code { font: 400 14px var(--mono); color: var(--cyan); }
+
+/* ---------- specs ---------- */
+.specs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 60px; align-items: start; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.stat { background: var(--bg); padding: 28px 24px; }
+.stat .v { font: 700 clamp(38px, 4.4vw, 56px)/1 var(--display); color: var(--text); }
+.stat .v small { font-size: .45em; color: var(--amber); margin-left: 4px; }
+.stat .k { margin-top: 10px; font: 400 12px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.term {
+  background: #050607;
+  border: 1px solid var(--line);
+  font: 400 13.5px/1.75 var(--mono);
+  overflow: hidden;
+}
+.term .bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--dim); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.term .bar i { width: 9px; height: 9px; border-radius: 50%; background: #2a2c31; }
+.term .bar i:first-child { background: var(--red); }
+.term pre { margin: 0; padding: 20px 20px 24px; overflow-x: auto; color: #b9b4aa; }
+.term .c { color: var(--dim); }
+.term .p { color: var(--amber); }
+.term .k { color: var(--cyan); }
+
+/* ---------- final cta ---------- */
+.final {
+  position: relative; text-align: center;
+  padding: 160px 0 150px;
+  overflow: hidden; isolation: isolate;
+}
+.final::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background:
+    radial-gradient(45% 55% at 50% 100%, rgba(255,107,26,.38), transparent 70%),
+    radial-gradient(30% 30% at 50% 100%, rgba(232,33,46,.35), transparent 70%);
+}
+.final .horizon {
+  position: absolute; left: -10%; right: -10%; bottom: 0; height: 46%; z-index: -1;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,157,61,.22) 0 1px, transparent 1px 70px),
+    repeating-linear-gradient(0deg, rgba(255,157,61,.22) 0 1px, transparent 1px 34px);
+  transform: perspective(500px) rotateX(62deg);
+  transform-origin: bottom;
+  mask-image: linear-gradient(transparent, #000 70%);
+}
+.final h2 {
+  margin: 20px 0 18px;
+  font: 700 clamp(52px, 9vw, 128px)/.9 var(--display);
+  text-transform: uppercase;
+}
+.final h2 span { color: var(--amber); text-shadow: 0 0 40px rgba(255,107,26,.5); }
+.final p { color: #c8c2b6; margin: 0 auto 36px; max-width: 520px; }
+.dl-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; max-width: 880px; margin: 0 auto 26px; }
+.dl {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 18px 18px 16px;
+  background: rgba(7,8,11,.7); backdrop-filter: blur(8px);
+  border: 1px solid var(--line-strong);
+  text-align: left;
+  transition: border-color .2s, background .2s, transform .2s;
+}
+.dl:hover { border-color: var(--amber); background: rgba(255,107,26,.1); transform: translateY(-2px); }
+.dl .os { font: 700 17px/1 var(--display); text-transform: uppercase; letter-spacing: .06em; }
+.dl .arch { font: 400 11px/1 var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.dl.match { border-color: var(--amber); box-shadow: 0 0 30px -6px rgba(255,107,26,.6); }
+.dl.match .arch::after { content: " · detected"; color: var(--amber); }
+.small-note { font: 400 12px/1.5 var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.small-note a { color: var(--text); border-bottom: 1px solid var(--line-strong); }
+
+/* ---------- footer ---------- */
+footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
+.foot { display: grid; grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr)); gap: 40px; }
+.foot p { color: var(--muted); font-size: 15px; max-width: 320px; margin: 16px 0 0; }
+.foot h5 { margin: 0 0 16px; font: 500 12px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+.foot ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.foot ul a { color: var(--muted); font-size: 15px; transition: color .2s; }
+.foot ul a:hover { color: var(--amber); }
+.foot-bottom {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line);
+  font: 400 12px/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
+}
+
+/* ---------- reveal ---------- */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s ease, transform .8s ease; }
+.reveal.in { opacity: 1; transform: none; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1040px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 40px; }
+  .flow::before { display: none; }
+  .specs { grid-template-columns: minmax(0, 1fr); }
+  .dl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .nav-links { display: none; }
+  .hero { padding-top: 100px; }
+  .hero-grid { grid-template-columns: minmax(0, 1fr); }
+  .hud { order: -1; max-height: 340px; aspect-ratio: auto; height: 340px; justify-self: stretch; }
+  .sec-head { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .sec-head p { justify-self: start; }
+  .own-grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .foot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .foot > div:first-child { grid-column: 1 / -1; }
+  .section { padding: 96px 0; }
+}
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  .nav .wrap { gap: 12px; }
+  .nav-cta .ghost { display: none; }
+  .logo { font-size: 22px; }
+  .cards, .flow, .dl-grid { grid-template-columns: minmax(0, 1fr); }
+  .card { min-height: 0; }
+  .hud { height: 280px; }
+  .hud .readout { display: none; }
+  .hero-actions .btn { flex: 1 1 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track, .screen-inner::after, .screen-caption .rec::before { animation: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <div class="wrap">
+    <a href="#" class="logo" aria-label="Merge360 home">MERGE<span>360</span></a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#workflow">Workflow</a>
+      <a href="#ownership">Open source</a>
+      <a href="#download">Download</a>
+    </div>
+    <div class="nav-cta">
+      <a class="btn ghost sm" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+      <a class="btn sm" href="#download">Download</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-bg"></div>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="wrap hero-grid">
+    <div>
+      <div class="label"><span class="slash">//</span> Offline parametric CAD <span class="slash">·</span> Built in Rust</div>
+      <h1>Design without<span class="hot">the cloud.</span></h1>
+      <p class="lede">Merge360 is a free, open-source 3D CAD studio with the Fusion&nbsp;360 workflow you already know: sketches, constraints, a feature timeline and real B-rep solids. All of it runs on your own machine.</p>
+      <div class="hero-actions">
+        <a class="btn" href="#download">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
+          Download free
+        </a>
+        <a class="btn ghost" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360" target="_blank" rel="noopener">View source</a>
+      </div>
+      <div class="platforms">
+        <span><b>Windows</b> <i>x64 · ARM64</i></span>
+        <span><b>Linux</b> <i>x64 · ARM64</i></span>
+        <span>No account. No subscription.</span>
+      </div>
+    </div>
+    <div class="hud" aria-hidden="true">
+      <canvas id="holo"></canvas>
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <div class="readout r1">Body <b>bracket_v1</b><br>Features <b>07</b><br>Kernel <b>truck · B-rep</b></div>
+      <div class="readout r2">Scan <b id="scanv">000.0</b> mm<br>Yaw <b id="yawv">000</b>°</div>
+      <div class="kana">マージ三六〇</div>
+    </div>
+  </div>
+</header>
+
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track">
+    <span>Extrude</span><span>Revolve</span><span>Sweep</span><span>Loft</span><span>Fillet</span><span>Chamfer</span><span>Shell</span><span>Hole</span><span>Coil</span><span>Constraint solver</span><span>Timeline</span><span>Joints</span><span>Section analysis</span><span>STEP export</span><span>DXF import</span><span>Drawings</span><span>4K render</span>
+    <span>Extrude</span><span>Revolve</span><span>Sweep</span><span>Loft</span><span>Fillet</span><span>Chamfer</span><span>Shell</span><span>Hole</span><span>Coil</span><span>Constraint solver</span><span>Timeline</span><span>Joints</span><span>Section analysis</span><span>STEP export</span><span>DXF import</span><span>Drawings</span><span>4K render</span>
+  </div>
+</div>
+
+<section class="footage">
+  <div class="wrap">
+    <div class="screen reveal">
+      <div class="screen-inner">
+        <img src="assets/screenshot.png" alt="The Merge360 interface: toolbar, browser tree, ViewCube and a sample bracket part in the 3D canvas, with the feature timeline at the bottom." width="1440" height="900" loading="lazy">
+      </div>
+    </div>
+    <div class="screen-caption">
+      <span class="rec">Real footage. Captured in Merge360.</span>
+      <span>Sample bracket · Design workspace</span>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="label">01 <span class="slash">/</span> Toolset</div>
+        <h2>Real tools for <em>real parts.</em></h2>
+      </div>
+      <p>Every feature is parametric and stays editable. Double-click it in the timeline, change a number and the model rebuilds.</p>
+    </div>
+
+    <div class="cards">
+      <article class="card reveal">
+        <div class="top"><span class="num">01</span><span class="tag">Sketch</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><rect x="4" y="9" width="18" height="14"/><circle cx="24" cy="21" r="7"/><path d="M4 30h26M4 28v4M30 28v4"/></svg>
+        <h3>Parametric sketches</h3>
+        <p>Lines, arcs, splines, slots and text, held in place by a built-in constraint solver with dimensions, tangency, symmetry and more.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">02</span><span class="tag">Create</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><path d="M5 24l12 6 12-6V12L17 6 5 12z"/><path d="M5 12l12 6 12-6M17 18v12"/></svg>
+        <h3>Solid modeling</h3>
+        <p>Extrude with taper, revolve, sweep, pipe, loft, hole, coil, patterns and mirror. Every one has live preview and drag handles.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">03</span><span class="tag">Modify</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><path d="M5 29V13a8 8 0 018-8h16"/><path d="M11 29V15a4 4 0 014-4h14"/></svg>
+        <h3>Fillet, shell, combine</h3>
+        <p>Fillet, chamfer, shell, split, combine and press-pull. Apply materials and the app computes mass and center of mass.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">04</span><span class="tag">History</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><path d="M3 17h28"/><rect x="5" y="12" width="6" height="10"/><rect x="14" y="12" width="6" height="10"/><path d="M25 7v20"/><path d="M22 7h6"/></svg>
+        <h3>Feature timeline</h3>
+        <p>Drag the marker to roll back, suppress features or reorder your thinking. You get undo and redo for everything.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">05</span><span class="tag">Assemble</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><circle cx="11" cy="17" r="6"/><circle cx="23" cy="17" r="6"/><path d="M17 4v26"/></svg>
+        <h3>Components &amp; joints</h3>
+        <p>Rigid, revolute and slider joints with live motion. Check interference and cut section views with caps.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">06</span><span class="tag">Document</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><rect x="4" y="5" width="26" height="24"/><path d="M4 23h26M20 23v6"/><rect x="8" y="9" width="7" height="7"/><rect x="18" y="9" width="7" height="7"/></svg>
+        <h3>Drawings</h3>
+        <p>A3 sheets with front, top, right and isometric views. Hidden lines are dashed, and you get automatic scale and dimensions with SVG export.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">07</span><span class="tag">Render</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><circle cx="17" cy="15" r="8"/><path d="M5 29c4-3 20-3 24 0"/><path d="M13 11a5 5 0 015-2"/></svg>
+        <h3>Presentation renders</h3>
+        <p>Environments, soft ground shadows and optional edges. Export PNG images at up to 4K.</p>
+      </article>
+      <a class="card cta reveal" href="#download">
+        <span class="arrow">↗</span>
+        <div class="top" style="margin-bottom:16px"><span class="num">08</span></div>
+        <h3>Launch the studio</h3>
+        <p>One binary, one download. No installer wizard, no login.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="workflow" style="padding-top:40px">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="label">02 <span class="slash">/</span> Muscle memory</div>
+        <h2>Feels like home <em>on day one.</em></h2>
+      </div>
+      <p>The same layout, marking menu and shortcuts you know. Coming from Blender or SolidWorks? Switch the keymap and the mouse navigation to match.</p>
+    </div>
+    <div class="flow">
+      <div class="step reveal"><div class="node"><b>01</b></div><h4>Sketch</h4><p><kbd>L</kbd><kbd>R</kbd><kbd>C</kbd> Draw, then dimension it. The solver keeps the geometry in place.</p></div>
+      <div class="step reveal"><div class="node"><b>02</b></div><h4>Extrude</h4><p><kbd>E</kbd> Pick a profile or a face and push or pull. Join and cut are chosen for you.</p></div>
+      <div class="step reveal"><div class="node"><b>03</b></div><h4>Refine</h4><p>Right-click for the marking menu. Fillet, shell and pattern.</p></div>
+      <div class="step reveal"><div class="node"><b>04</b></div><h4>Find anything</h4><p><kbd>S</kbd> Open the toolbox and type the name of any tool.</p></div>
+      <div class="step reveal"><div class="node"><b>05</b></div><h4>Ship it</h4><p>Export STEP or STL, or make a drawing. The native <code class="mono" style="color:var(--cyan)">.m360</code> file keeps the full history.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section own" id="ownership">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="label">03 <span class="slash">/</span> Ownership</div>
+        <h2>Stop renting <em>your tools.</em></h2>
+      </div>
+      <p>No license server or forced update. Your files never pass through someone else's computer.</p>
+    </div>
+    <div class="own-grid">
+      <div class="own-item reveal">
+        <div class="letter">A</div>
+        <h3>Offline by design</h3>
+        <p>No account, cloud sync or telemetry. Merge360 starts up and works on a plane, in a basement or ten years from now.</p>
+      </div>
+      <div class="own-item reveal">
+        <div class="letter">B</div>
+        <h3>Open source, MIT</h3>
+        <p>Read the code, fork it, fix it or ship it inside your own product. The whole stack is open, from the geometry kernel to the UI.</p>
+      </div>
+      <div class="own-item reveal">
+        <div class="letter">C</div>
+        <h3>Files you can read</h3>
+        <p>Designs are saved as plain-text <code>.m360</code> (RON) with the full parametric history. Exchange with everything else through <code>STEP</code>, <code>STL</code> and <code>DXF</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="engine">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="label">04 <span class="slash">/</span> Under the hood</div>
+        <h2>Rust, top <em>to bottom.</em></h2>
+      </div>
+      <p>A B-rep kernel built on <span class="mono">truck</span>, a GPU renderer on <span class="mono">wgpu</span> and an immediate-mode UI on <span class="mono">egui</span>. It ships as a single native binary.</p>
+    </div>
+    <div class="specs">
+      <div class="stats reveal">
+        <div class="stat"><div class="v">100<small>%</small></div><div class="k">Rust codebase</div></div>
+        <div class="stat"><div class="v">0</div><div class="k">Cloud dependencies</div></div>
+        <div class="stat"><div class="v">4</div><div class="k">Native builds · x64 &amp; ARM64</div></div>
+        <div class="stat"><div class="v">4</div><div class="k">Languages · EN FR DE ES</div></div>
+      </div>
+      <div class="term reveal">
+        <div class="bar"><i></i><i></i><i></i><span style="margin-left:8px">build from source</span></div>
+<pre><span class="c"># clone and run</span>
+<span class="p">$</span> git clone https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360
+<span class="p">$</span> cd Merge360-Vibecoded-Inspired-Fusion360
+<span class="p">$</span> cargo run --release -p merge360
+
+<span class="c"># crates</span>
+<span class="k">m360-kernel</span>  B-rep geometry · booleans · STEP
+<span class="k">m360-core</span>    features · timeline · regeneration
+<span class="k">m360-render</span>  wgpu renderer · edges · overlays
+<span class="k">m360-ui</span>      the whole Fusion-style shell</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final" id="download">
+  <div class="horizon"></div>
+  <div class="wrap">
+    <div class="label reveal"><span class="slash">//</span> Free forever <span class="slash">·</span> MIT licensed</div>
+    <h2 class="reveal">Start <span>building.</span></h2>
+    <p class="reveal">Grab the build for your machine, unzip it and run it. Releases are built automatically from every tagged version.</p>
+    <div class="dl-grid reveal">
+      <a class="dl" data-os="win" data-arch="x64" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><span class="os">Windows</span><span class="arch">x64 · .zip</span></a>
+      <a class="dl" data-os="win" data-arch="arm" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><span class="os">Windows</span><span class="arch">ARM64 · .zip</span></a>
+      <a class="dl" data-os="linux" data-arch="x64" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><span class="os">Linux</span><span class="arch">x64 · .tar.gz</span></a>
+      <a class="dl" data-os="linux" data-arch="arm" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><span class="os">Linux</span><span class="arch">ARM64 · .tar.gz</span></a>
+    </div>
+    <div class="small-note reveal">On macOS? <a href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360#running">Build from source</a> with one cargo command.</div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a href="#" class="logo">MERGE<span>360</span></a>
+        <p>Parametric 3D CAD written in Rust. Fusion-style workflow, fully offline.</p>
+      </div>
+      <div>
+        <h5>Product</h5>
+        <ul><li><a href="#features">Features</a></li><li><a href="#workflow">Workflow</a></li><li><a href="#download">Download</a></li></ul>
+      </div>
+      <div>
+        <h5>Project</h5>
+        <ul>
+          <li><a href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360" target="_blank" rel="noopener">Source code</a></li>
+          <li><a href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases" target="_blank" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/issues" target="_blank" rel="noopener">Report an issue</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Legal</h5>
+        <ul>
+          <li><a href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a></li>
+          <li><a href="#ownership">No telemetry</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 Merge360 contributors</span>
+      <span>Not affiliated with Autodesk. Fusion 360 is a trademark of Autodesk, Inc.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // nav background on scroll
+  const nav = document.getElementById("nav");
+  const onScroll = () => nav.classList.toggle("scrolled", scrollY > 20);
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
+
+  // reveal on scroll
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  }), { threshold: .12 });
+  document.querySelectorAll(".reveal").forEach((el, i) => {
+    el.style.transitionDelay = (i % 4) * 70 + "ms";
+    io.observe(el);
+  });
+
+  // highlight the download matching this machine
+  const ua = navigator.userAgent;
+  const os = /Windows/i.test(ua) ? "win" : /Linux|X11/i.test(ua) && !/Android/i.test(ua) ? "linux" : null;
+  const arm = /arm|aarch64/i.test(ua) || /arm/i.test(navigator.platform || "");
+  if (os) document.querySelector(`.dl[data-os="${os}"][data-arch="${arm ? "arm" : "x64"}"]`)?.classList.add("match");
+
+  // ---------- rain ----------
+  const rain = document.getElementById("rain");
+  const rc = rain.getContext("2d");
+  let drops = [];
+  function sizeRain() {
+    const r = rain.getBoundingClientRect(), d = Math.min(devicePixelRatio, 2);
+    rain.width = r.width * d; rain.height = r.height * d;
+    rc.setTransform(d, 0, 0, d, 0, 0);
+    const n = Math.round(r.width * r.height / 9000);
+    drops = Array.from({ length: n }, () => newDrop(r, true));
+  }
+  function newDrop(r, anywhere) {
+    const z = Math.random();
+    return { x: Math.random() * (r.width + 200), y: anywhere ? Math.random() * r.height : -40, z, len: 10 + z * 26, v: 6 + z * 12 };
+  }
+
+  // ---------- hologram wireframe of the sample bracket ----------
+  const holo = document.getElementById("holo");
+  const hc = holo.getContext("2d");
+  const segs = []; // [x1,y1,z1,x2,y2,z2]
+  const L = (a, b) => segs.push([...a, ...b]);
+  function box(x0, x1, y0, y1, z0, z1) {
+    const p = (i) => [i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0];
+    [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]].forEach(([a, b]) => L(p(a), p(b)));
+  }
+  function ring(cx, cy, cz, r, n = 32, axis = "y") {
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2, b = (i + 1) / n * Math.PI * 2;
+      const pt = t => axis === "y" ? [cx + r * Math.cos(t), cy, cz + r * Math.sin(t)]
+                                   : [cx + r * Math.cos(t), cy + r * Math.sin(t), cz];
+      L(pt(a), pt(b));
+    }
+  }
+  box(-3, 3, 0, .8, -2, 2);                          // base plate
+  box(-.9, .9, .8, 2.2, -.9, .9);                    // boss
+  ring(0, 2.2, 0, .7); ring(0, 3.6, 0, .7);          // cylinder
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; L([.7 * Math.cos(a), 2.2, .7 * Math.sin(a)], [.7 * Math.cos(a), 3.6, .7 * Math.sin(a)]); }
+  ring(0, 3.6, 0, .35, 20);
+  for (const [hx, hz] of [[-2.2, -1.3], [2.2, -1.3], [-2.2, 1.3], [2.2, 1.3]]) { ring(hx, .8, hz, .32, 20); ring(hx, 0, hz, .32, 20); }
+  for (let i = 0; i < 4; i++) ring(-3.9, .4 + .28 * Math.sin(i / 4 * Math.PI * 2), 0, 1 + .28 * Math.cos(i / 4 * Math.PI * 2), 32); // torus
+  for (let i = 0; i < 12; i++) {                      // torus tube sections
+    const a = i / 12 * Math.PI * 2, cx = -3.9 + Math.cos(a), cz = Math.sin(a);
+    for (let j = 0; j < 10; j++) {
+      const t0 = j / 10 * Math.PI * 2, t1 = (j + 1) / 10 * Math.PI * 2;
+      const p = t => [cx + .28 * Math.cos(t) * Math.cos(a), .4 + .28 * Math.sin(t), cz + .28 * Math.cos(t) * Math.sin(a)];
+      L(p(t0), p(t1));
+    }
+  }
+  const grid = [];
+  for (let i = -6; i <= 6; i++) { grid.push([i, -.02, -6, i, -.02, 6]); grid.push([-6, -.02, i, 6, -.02, i]); }
+
+  function sizeHolo() {
+    const r = holo.getBoundingClientRect(), d = Math.min(devicePixelRatio, 2);
+    holo.width = r.width * d; holo.height = r.height * d;
+    hc.setTransform(d, 0, 0, d, 0, 0);
+  }
+
+  const scanv = document.getElementById("scanv"), yawv = document.getElementById("yawv");
+  let t0 = performance.now();
+  function frame(now) {
+    const t = reduce ? 4 : (now - t0) / 1000;
+
+    // rain
+    const rr = rain.getBoundingClientRect();
+    rc.clearRect(0, 0, rr.width, rr.height);
+    rc.lineCap = "round";
+    for (const d of drops) {
+      rc.strokeStyle = `rgba(${d.z > .7 ? "255,190,140" : "170,200,220"},${.08 + d.z * .22})`;
+      rc.lineWidth = .6 + d.z * .8;
+      rc.beginPath(); rc.moveTo(d.x, d.y); rc.lineTo(d.x - d.len * .18, d.y + d.len); rc.stroke();
+      if (!reduce) { d.y += d.v; d.x -= d.v * .18; if (d.y > rr.height) Object.assign(d, newDrop(rr, false)); }
+    }
+
+    // hologram
+    const hr = holo.getBoundingClientRect(), W = hr.width, H = hr.height;
+    hc.clearRect(0, 0, W, H);
+    const yaw = t * .28 + .6, pitch = .42 + Math.sin(t * .3) * .05;
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const scale = Math.min(W, H) * .95, dist = 13;
+    const proj = (x, y, z) => {
+      y -= 1.4;
+      const X = x * cy - z * sy, Z0 = x * sy + z * cy;
+      const Y = y * cp - Z0 * sp, Z = y * sp + Z0 * cp + dist;
+      return [W / 2 + X / Z * scale, H * .56 - Y / Z * scale, Z];
+    };
+    const scanY = (Math.sin(t * .7) * .5 + .5) * 4.0 - .1;
+
+    hc.lineWidth = 1;
+    for (const s of grid) {
+      const a = proj(s[0], s[1], s[2]), b = proj(s[3], s[4], s[5]);
+      hc.strokeStyle = "rgba(255,157,61,.10)";
+      hc.beginPath(); hc.moveTo(a[0], a[1]); hc.lineTo(b[0], b[1]); hc.stroke();
+    }
+    for (const pass of [0, 1]) {
+      for (const s of segs) {
+        const a = proj(s[0], s[1], s[2]), b = proj(s[3], s[4], s[5]);
+        const depth = Math.max(0, Math.min(1, (dist + 4.5 - (a[2] + b[2]) / 2) / 9));
+        const near = Math.abs((s[1] + s[4]) / 2 - scanY) < .18;
+        if (pass === 0) {
+          hc.lineWidth = near ? 5 : 3.5;
+          hc.strokeStyle = near ? "rgba(255,120,30,.22)" : `rgba(70,227,255,${.04 + depth * .07})`;
+        } else {
+          hc.lineWidth = near ? 1.6 : 1;
+          hc.strokeStyle = near ? "rgba(255,190,120,.95)" : `rgba(150,236,255,${.25 + depth * .6})`;
+        }
+        hc.beginPath(); hc.moveTo(a[0], a[1]); hc.lineTo(b[0], b[1]); hc.stroke();
+      }
+    }
+    // scan plane outline
+    const sq = [[-4.6, -2.6], [3.4, -2.6], [3.4, 2.6], [-4.6, 2.6]].map(([x, z]) => proj(x, scanY, z));
+    hc.fillStyle = "rgba(255,107,26,.06)"; hc.strokeStyle = "rgba(255,157,61,.35)"; hc.lineWidth = 1;
+    hc.beginPath(); sq.forEach((p, i) => i ? hc.lineTo(p[0], p[1]) : hc.moveTo(p[0], p[1])); hc.closePath(); hc.fill(); hc.stroke();
+
+    scanv.textContent = (scanY * 10).toFixed(1).padStart(5, "0");
+    yawv.textContent = String(Math.round((yaw * 180 / Math.PI) % 360)).padStart(3, "0");
+
+    if (!reduce) requestAnimationFrame(frame);
+  }
+
+  function resize() { sizeRain(); sizeHolo(); if (reduce) frame(0); }
+  addEventListener("resize", resize);
+  resize();
+  if (!reduce) requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

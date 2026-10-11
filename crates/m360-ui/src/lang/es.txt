@@ -618,3 +618,9 @@ Oak	Roble
 Pine	Pino
 Glass	Vidrio
 Concrete	Hormigón
+PATTERN ON PATH	PATRÓN EN TRAYECTORIA
+Full path	Trayectoria completa
+Orientation	Orientación
+Path Direction	Dirección de la trayectoria
+Identical	Idéntica
+1 selected	1 seleccionado

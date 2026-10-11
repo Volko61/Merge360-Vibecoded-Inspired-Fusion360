@@ -805,7 +805,7 @@ impl Merge360App {
                 finish = resolve(r);
             }
             Command::Pattern { bodies, pattern, .. } => {
-                let ok = !bodies.is_empty();
+                let ok = !bodies.is_empty() && !matches!(pattern, m360_core::PatternKind::Path { points, .. } if points.is_empty());
                 let text = if bodies.is_empty() { "Select".to_string() } else { format!("{} Bodies", bodies.len()) };
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Pattern Type");
@@ -842,6 +842,34 @@ impl Merge360App {
                             ui.end_row();
                             row_label(ui, "Spacing");
                             length_field(ui, "ps2", spacing2, units);
+                            ui.end_row();
+                        }
+                        m360_core::PatternKind::Path { points, count, distance, orient } => {
+                            row_label(ui, "Path");
+                            let ptext = if points.is_empty() { "Select".to_string() } else { "1 selected".to_string() };
+                            if selection_field(ui, !bodies.is_empty() && points.is_empty(), &ptext).clicked() {
+                                points.clear();
+                            }
+                            ui.end_row();
+                            row_label(ui, "Quantity");
+                            ui.add(egui::DragValue::new(count).range(2..=200));
+                            ui.end_row();
+                            row_label(ui, "Distance");
+                            ui.horizontal(|ui| {
+                                let mut full = *distance <= 1e-9;
+                                if ui.checkbox(&mut full, tr("Full path")).changed() {
+                                    *distance = if full { 0.0 } else { 50.0 };
+                                }
+                                if !full {
+                                    length_field(ui, "ppd", distance, units);
+                                }
+                            });
+                            ui.end_row();
+                            row_label(ui, "Orientation");
+                            egui::ComboBox::from_id_salt("ppo").selected_text(tr(if *orient { "Path Direction" } else { "Identical" })).show_ui(ui, |ui| {
+                                ui.selectable_value(orient, true, tr("Path Direction"));
+                                ui.selectable_value(orient, false, tr("Identical"));
+                            });
                             ui.end_row();
                         }
                         m360_core::PatternKind::Circular { axis, count, total_deg } => {

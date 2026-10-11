@@ -51,7 +51,7 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   profiles with holes), Revolve (around X/Y/Z or a sketch line), Sweep and Pipe (along connected lines/arcs,
   hollow pipes), Loft, Hole (simple / counterbore / countersink, distance or through all,
   multiple points), Box, Cylinder, Sphere, Torus, Coil (circular / square / triangular
-  sections, tapered), Rectangular & Circular Pattern, Mirror —
+  sections, tapered), Rectangular, Circular & Path Pattern, Mirror —
   all with live preview and drag manipulators.
 * **Modify:** Fillet and Chamfer (straight edges between planar faces, incl. face loops),
   Shell (prismatic bodies, open faces), Thread (cosmetic, ISO metric sizes

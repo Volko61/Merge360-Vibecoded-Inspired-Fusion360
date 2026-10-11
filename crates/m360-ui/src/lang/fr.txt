@@ -629,3 +629,12 @@ Pull Direction	Direction de démoulage
 Prism axis (automatic)	Axe du prisme (automatique)
 Fixed Plane	Plan fixe
 Bottom	Bas
+EXTRUDE SURFACE	EXTRUSION DE SURFACE
+REVOLVE SURFACE	RÉVOLUTION DE SURFACE
+PATCH	RACCORD
+STITCH	COUDRE
+DELETE FACE	SUPPRIMER LA FACE
+Boundary Edges	Arêtes de contour
+Stitch Surfaces	Surfaces à coudre
+Tolerance	Tolérance
+Select bodies first.	Sélectionnez d'abord des corps.

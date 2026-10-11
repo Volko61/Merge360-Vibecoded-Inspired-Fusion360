@@ -287,14 +287,15 @@ pub fn tessellate_with(solid: &Solid, tol: f64) -> BodyMesh {
 }
 
 fn tessellate_impl(solid: &Solid, tol: f64, smooth_cos: f32) -> BodyMesh {
-    let meshed = solid.robust_triangulation(tol);
+    // Shell by shell: open shells (surface bodies) cannot be meshed as a solid.
+    let meshed: Vec<_> = solid.boundaries().iter().map(|sh| sh.robust_triangulation(tol)).collect();
     let mut out = BodyMesh {
         bbox_min: Vec3::splat(f32::MAX),
         bbox_max: Vec3::splat(f32::MIN),
         ..Default::default()
     };
 
-    for (face_id, face) in meshed.face_iter().enumerate() {
+    for (face_id, face) in meshed.iter().flat_map(|sh| sh.face_iter()).enumerate() {
         let Some(poly) = face.surface() else { continue };
         let flip = !face.orientation();
         let positions = poly.positions();
@@ -345,7 +346,7 @@ fn tessellate_impl(solid: &Solid, tol: f64, smooth_cos: f32) -> BodyMesh {
         normals_at.entry(q(*p)).or_default().push((out.face_ids[i], Vec3::from(out.normals[i])));
     }
     let mut edge_faces: HashMap<_, Vec<u32>> = HashMap::new();
-    for (fi, face) in meshed.face_iter().enumerate() {
+    for (fi, face) in meshed.iter().flat_map(|sh| sh.face_iter()).enumerate() {
         for wire in face.boundaries() {
             for e in wire.edge_iter() {
                 edge_faces.entry(e.id()).or_default().push(fi as u32);
@@ -359,7 +360,7 @@ fn tessellate_impl(solid: &Solid, tol: f64, smooth_cos: f32) -> BodyMesh {
     };
 
     let mut seen = std::collections::HashSet::new();
-    for edge in meshed.edge_iter() {
+    for edge in meshed.iter().flat_map(|sh| sh.edge_iter()) {
         if !seen.insert(edge.id()) {
             continue;
         }

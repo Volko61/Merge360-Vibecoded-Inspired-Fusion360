@@ -436,6 +436,35 @@ pub enum Command {
         distance: f64,
         editing: Option<EditCtx>,
     },
+    SurfaceExtrude {
+        sketch: Option<u64>,
+        curves: Vec<usize>,
+        distance: f64,
+        symmetric: bool,
+        editing: Option<EditCtx>,
+    },
+    SurfaceRevolve {
+        sketch: Option<u64>,
+        curves: Vec<usize>,
+        axis: m360_core::Axis,
+        angle: f64,
+        editing: Option<EditCtx>,
+    },
+    Patch {
+        sketch: Option<u64>,
+        profiles: Vec<usize>,
+        editing: Option<EditCtx>,
+    },
+    Stitch {
+        bodies: Vec<BodyId>,
+        tolerance: f64,
+        editing: Option<EditCtx>,
+    },
+    DeleteFaces {
+        body: Option<BodyId>,
+        faces: Vec<u32>,
+        editing: Option<EditCtx>,
+    },
     Draft {
         body: Option<BodyId>,
         faces: Vec<u32>,
@@ -538,6 +567,11 @@ impl Command {
             Command::Shell { .. } => "SHELL",
             Command::Thread { .. } => "THREAD",
             Command::Draft { .. } => "DRAFT",
+            Command::SurfaceExtrude { .. } => "EXTRUDE SURFACE",
+            Command::SurfaceRevolve { .. } => "REVOLVE SURFACE",
+            Command::Patch { .. } => "PATCH",
+            Command::Stitch { .. } => "STITCH",
+            Command::DeleteFaces { .. } => "DELETE FACE",
             Command::Scale { .. } => "SCALE",
             Command::Section { .. } => "SECTION ANALYSIS",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
@@ -574,6 +608,11 @@ impl Command {
             | Command::Shell { editing, .. }
             | Command::Thread { editing, .. }
             | Command::Draft { editing, .. }
+            | Command::SurfaceExtrude { editing, .. }
+            | Command::SurfaceRevolve { editing, .. }
+            | Command::Patch { editing, .. }
+            | Command::Stitch { editing, .. }
+            | Command::DeleteFaces { editing, .. }
             | Command::Joint { editing, .. } => editing.as_ref(),
             _ => None,
         }
@@ -1073,6 +1112,47 @@ impl DocTab {
                 let r = m360_core::model::path_segments(&self.model, *ps, path)
                     .and_then(|segs| m360_core::model::pipe_tool(&segs, *diameter, if *hollow { *wall } else { 0.0 }));
                 (key, r)
+            }
+            Command::SurfaceExtrude { sketch: Some(sk), curves, distance, symmetric, .. } if !curves.is_empty() => {
+                let key = format!("sx{sk}{curves:?}{distance}{symmetric}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let Some((plane, ents)) = self.sketch_entities(*sk) else { return };
+                let r = m360_core::sketch::chain_curves(&ents, curves).ok_or_else(|| "the curves do not form a chain".to_string()).and_then(|cs| {
+                    let (z0, z1) = profile::extent(*distance, *symmetric);
+                    m360_kernel::surface::extrude_curves(&plane.frame([0.0, 0.0]), &cs, z0, z1).map_err(|e| e.to_string())
+                });
+                (key, r)
+            }
+            Command::SurfaceRevolve { sketch: Some(sk), curves, axis, angle, .. } if !curves.is_empty() => {
+                let key = format!("sr{sk}{curves:?}{axis:?}{angle}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let Some((plane, ents)) = self.sketch_entities(*sk) else { return };
+                let r = m360_core::sketch::chain_curves(&ents, curves).ok_or_else(|| "the curves do not form a chain".to_string()).and_then(|cs| {
+                    m360_kernel::surface::revolve_curves(&plane.frame([0.0, 0.0]), &cs, DVec3::ZERO, axis.vec(), *angle).map_err(|e| e.to_string())
+                });
+                (key, r)
+            }
+            Command::Patch { sketch: Some(sk), profiles, .. } if !profiles.is_empty() => {
+                let key = format!("patch{sk}{profiles:?}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let Some((plane, ents)) = self.sketch_entities(*sk) else { return };
+                let regions = m360_core::sketch::profiles(&ents);
+                let frame = plane.frame([0.0, 0.0]);
+                let mut shells = Vec::new();
+                for i in profiles {
+                    if let Some(r) = regions.get(*i) {
+                        if let Ok(s) = m360_kernel::surface::patch(&frame, r) {
+                            shells.extend(s.into_boundaries());
+                        }
+                    }
+                }
+                (key, Ok(m360_kernel::Solid::new_unchecked(shells)))
             }
             Command::Draft { body: Some(b), faces, angle, fixed_top, .. } if !faces.is_empty() => {
                 let key = format!("draft{b}{faces:?}{angle}{fixed_top}");

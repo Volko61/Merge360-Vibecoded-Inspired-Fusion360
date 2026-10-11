@@ -59,6 +59,8 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   Move/Copy, Press Pull (edges → fillet, profiles → extrude), Delete, Appearance, Physical
   Material (19 materials; mass and center of mass use their densities),
   Change Parameters, Compute All.
+* **Surface:** Extrude and Revolve of open or closed sketch curves (lines, arcs, splines), Patch,
+  Stitch (closed results become solids), Delete Face, Reverse Normal, Move.
 * **Construct:** Offset Plane, Plane at Angle, Midplane, Plane Through Three Points. Sketches,
   holes and planes work on faces of any orientation.
 * **Assemble:** Components (new / activate / visibility), Joints (rigid, revolute, slider with

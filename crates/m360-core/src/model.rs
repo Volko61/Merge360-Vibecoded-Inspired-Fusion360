@@ -805,6 +805,64 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             });
             Ok(())
         }
+        FeatureKind::SurfaceExtrude { sketch, curves, distance, symmetric } => {
+            let (plane, ents) = sketch_of(model, *sketch)?;
+            let cs = crate::sketch::chain_curves(&ents, curves).ok_or("the selected curves do not form a connected chain")?;
+            let (z0, z1) = profile::extent(*distance, *symmetric);
+            let s = m360_kernel::surface::extrude_curves(&plane.frame([0.0, 0.0]), &cs, z0, z1).map_err(|e| e.to_string())?;
+            model.bodies.push(new_body_smooth(f.uid, s, f.uid, 0.97));
+            Ok(())
+        }
+        FeatureKind::SurfaceRevolve { sketch, curves, axis, angle_deg } => {
+            let (plane, ents) = sketch_of(model, *sketch)?;
+            let cs = crate::sketch::chain_curves(&ents, curves).ok_or("the selected curves do not form a connected chain")?;
+            let s = m360_kernel::surface::revolve_curves(&plane.frame([0.0, 0.0]), &cs, glam::DVec3::ZERO, axis.vec(), *angle_deg)
+                .map_err(|e| e.to_string())?;
+            model.bodies.push(new_body_smooth(f.uid, s, f.uid, 0.97));
+            Ok(())
+        }
+        FeatureKind::Patch { sketch, profiles } => {
+            let (plane, ents) = sketch_of(model, *sketch)?;
+            let frame = plane.frame([0.0, 0.0]);
+            let mut shells = Vec::new();
+            for r in &selected_regions(&ents, profiles)? {
+                shells.extend(m360_kernel::surface::patch(&frame, r).map_err(|e| e.to_string())?.into_boundaries());
+            }
+            model.bodies.push(new_body_smooth(f.uid, Solid::new_unchecked(shells), f.uid, 0.97));
+            Ok(())
+        }
+        FeatureKind::Stitch { bodies, tolerance } => {
+            let live: Vec<&Body> = bodies.iter().filter_map(|id| model.body(*id)).collect();
+            if live.len() < 2 {
+                return Err("select at least two surface bodies".into());
+            }
+            let solids: Vec<&Solid> = live.iter().map(|b| &b.solid).collect();
+            let s = m360_kernel::surface::stitch(&solids, tolerance.max(1e-6)).map_err(|e| e.to_string())?;
+            let target = live[0].id;
+            let cos = live.iter().map(|b| b.smooth_cos).fold(SMOOTH_COS, f32::min);
+            let rest: Vec<BodyId> = live[1..].iter().map(|b| b.id).collect();
+            replace(model, new_body_smooth(target, s, f.uid, cos));
+            model.bodies.retain(|b| !rest.contains(&b.id));
+            Ok(())
+        }
+        FeatureKind::DeleteFaces { body, faces } => {
+            let b = model.body(*body).ok_or("the body no longer exists")?;
+            let ids: Vec<usize> = faces
+                .iter()
+                .map(|p| face_at_point(&b.mesh, glam::DVec3::from(*p)).map(|f| f as usize).ok_or("a deleted face no longer exists"))
+                .collect::<Result<_, _>>()?;
+            let s = m360_kernel::surface::delete_faces(&b.solid, &ids).map_err(|e| e.to_string())?;
+            replace(model, rebuilt(model, *body, s, f.uid));
+            Ok(())
+        }
+        FeatureKind::ReverseNormal { bodies } => {
+            for id in bodies {
+                let b = model.body(*id).ok_or("a body no longer exists")?;
+                let s = m360_kernel::surface::reverse(&b.solid);
+                replace(model, rebuilt(model, *id, s, f.uid));
+            }
+            Ok(())
+        }
         FeatureKind::Draft { body, faces, angle, fixed_top } => {
             let b = model.body(*body).ok_or("the drafted body no longer exists")?;
             let ids: Vec<u32> = faces

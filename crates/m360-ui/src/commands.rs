@@ -559,6 +559,104 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::SurfaceExtrude { sketch, curves, distance, symmetric, .. } => {
+                let ok = sketch.is_some() && !curves.is_empty() && preview_err.is_none();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Profiles");
+                    let t = if curves.is_empty() { "Select".to_string() } else { format!("{} selected", curves.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        curves.clear();
+                    }
+                    ui.end_row();
+                    row_label(ui, "Direction");
+                    egui::ComboBox::from_id_salt("sx_dir").selected_text(tr(if *symmetric { "Symmetric" } else { "One Side" })).show_ui(ui, |ui| {
+                        ui.selectable_value(symmetric, false, tr("One Side"));
+                        ui.selectable_value(symmetric, true, tr("Symmetric"));
+                    });
+                    ui.end_row();
+                    row_label(ui, "Distance");
+                    length_field(ui, "sx_dist", distance, units);
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::SurfaceRevolve { sketch, curves, axis, angle, .. } => {
+                let ok = sketch.is_some() && !curves.is_empty() && preview_err.is_none();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Profiles");
+                    let t = if curves.is_empty() { "Select".to_string() } else { format!("{} selected", curves.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        curves.clear();
+                    }
+                    ui.end_row();
+                    row_label(ui, "Axis");
+                    egui::ComboBox::from_id_salt("sr_axis").selected_text(tr(&format!("{axis:?} Axis"))).show_ui(ui, |ui| {
+                        for a in [Axis::X, Axis::Y, Axis::Z] {
+                            ui.selectable_value(axis, a, tr(&format!("{a:?} Axis")));
+                        }
+                    });
+                    ui.end_row();
+                    row_label(ui, "Angle");
+                    angle_field(ui, "sr_angle", angle);
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::Patch { sketch, profiles, .. } => {
+                let ok = sketch.is_some() && !profiles.is_empty();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Boundary Edges");
+                    let t = if profiles.is_empty() { "Select".to_string() } else { format!("{} selected", profiles.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        profiles.clear();
+                    }
+                    ui.end_row();
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::Stitch { bodies, tolerance, .. } => {
+                let ok = bodies.len() >= 2;
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Stitch Surfaces");
+                    let t = if bodies.is_empty() { "Select".to_string() } else { format!("{} selected", bodies.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        bodies.clear();
+                    }
+                    ui.end_row();
+                    row_label(ui, "Tolerance");
+                    length_field(ui, "stitch_tol", tolerance, units);
+                    ui.end_row();
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::DeleteFaces { body, faces, .. } => {
+                let ok = body.is_some() && !faces.is_empty();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Faces");
+                    let t = if faces.is_empty() { "Select".to_string() } else { format!("{} selected", faces.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        faces.clear();
+                        *body = None;
+                    }
+                    ui.end_row();
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Draft { body, faces, angle, fixed_top, .. } => {
                 let ok = body.is_some() && !faces.is_empty() && preview_err.is_none();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
@@ -1313,6 +1411,34 @@ impl Merge360App {
             Command::Loft { sections, op, editing } => {
                 let participants = self.overlapping_bodies(op);
                 self.commit_feature(FeatureKind::Loft { sections, op, participants }, editing);
+            }
+            Command::SurfaceExtrude { sketch: Some(sketch), curves, distance, symmetric, editing } => {
+                let new = editing.is_none();
+                self.commit_feature(FeatureKind::SurfaceExtrude { sketch, curves, distance, symmetric }, editing);
+                if new {
+                    self.tab().doc.sketch_visible.insert(sketch, false);
+                }
+            }
+            Command::SurfaceRevolve { sketch: Some(sketch), curves, axis, angle, editing } => {
+                let new = editing.is_none();
+                self.commit_feature(FeatureKind::SurfaceRevolve { sketch, curves, axis, angle_deg: angle }, editing);
+                if new {
+                    self.tab().doc.sketch_visible.insert(sketch, false);
+                }
+            }
+            Command::Patch { sketch: Some(sketch), profiles, editing } => {
+                let new = editing.is_none();
+                self.commit_feature(FeatureKind::Patch { sketch, profiles }, editing);
+                if new {
+                    self.tab().doc.sketch_visible.insert(sketch, false);
+                }
+            }
+            Command::Stitch { bodies, tolerance, editing } => {
+                self.commit_feature(FeatureKind::Stitch { bodies, tolerance }, editing);
+            }
+            Command::DeleteFaces { body: Some(body), faces, editing } => {
+                let pts = self.tabs[self.active].model.body(body).map(|b| m360_core::model::face_sample_points(&b.mesh, &faces)).unwrap_or_default();
+                self.commit_feature(FeatureKind::DeleteFaces { body, faces: pts }, editing);
             }
             Command::Draft { body: Some(body), faces, angle, fixed_top, editing } => {
                 let pts = self.tabs[self.active].model.body(body).map(|b| m360_core::model::face_sample_points(&b.mesh, &faces)).unwrap_or_default();

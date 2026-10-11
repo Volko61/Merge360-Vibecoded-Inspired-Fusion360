@@ -269,6 +269,8 @@ impl Merge360App {
                     }
                     (Some(Command::Interference { bodies, results }), "compute") => *results = Some(crate::state::interferences(&tab.model, bodies)),
                     (Some(Command::Draft { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
+                    (Some(Command::SurfaceExtrude { distance, .. }), "distance") => *distance = num.unwrap_or(*distance),
+                    (Some(Command::SurfaceRevolve { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
                     (Some(Command::Draft { fixed_top, .. }), "fixed_top") => *fixed_top = v == "true",
                     (Some(Command::Thread { pitch, .. }), "pitch") => *pitch = num.unwrap_or(*pitch),
                     (Some(Command::Thread { full_length, length, .. }), "length") => {
@@ -610,6 +612,37 @@ impl Merge360App {
                     length: 10.0,
                     editing: None,
                 });
+            }
+            "srf_extrude" | "srf_revolve" => {
+                tab.selection.clear();
+                tab.command = Some(if id == "srf_extrude" {
+                    Command::SurfaceExtrude { sketch: None, curves: Vec::new(), distance: 20.0, symmetric: false, editing: None }
+                } else {
+                    Command::SurfaceRevolve { sketch: None, curves: Vec::new(), axis: m360_core::Axis::Y, angle: 360.0, editing: None }
+                });
+            }
+            "patch" => {
+                let (sketch, profiles) = selected_profiles(tab);
+                tab.selection.clear();
+                tab.command = Some(Command::Patch { sketch, profiles, editing: None });
+            }
+            "stitch" => {
+                tab.selection.clear();
+                tab.command = Some(Command::Stitch { bodies: sel_bodies, tolerance: 0.01, editing: None });
+            }
+            "srf_delete" => {
+                tab.selection.clear();
+                tab.command = Some(Command::DeleteFaces { body: None, faces: Vec::new(), editing: None });
+            }
+            "srf_move" => self.run_tool("move"),
+            "reverse_normal" => {
+                if sel_bodies.is_empty() {
+                    self.toast(ToastKind::Info, crate::i18n::tr("Select bodies first."));
+                } else {
+                    tab.edit("Reverse Normal", |d| {
+                        d.add_feature(FeatureKind::ReverseNormal { bodies: sel_bodies });
+                    });
+                }
             }
             "draft" => {
                 let mut body = None;
@@ -978,6 +1011,22 @@ impl Merge360App {
                 Command::Pipe { path_sketch: Some(path_sketch), path, diameter, wall: if wall > 0.0 { wall } else { 1.0 }, hollow: wall > 0.0, op, editing }
             }
             FeatureKind::Loft { sections, op, .. } => Command::Loft { sections, op, editing },
+            FeatureKind::SurfaceExtrude { sketch, curves, distance, symmetric } => {
+                Command::SurfaceExtrude { sketch: Some(sketch), curves, distance, symmetric, editing }
+            }
+            FeatureKind::SurfaceRevolve { sketch, curves, axis, angle_deg } => {
+                Command::SurfaceRevolve { sketch: Some(sketch), curves, axis, angle: angle_deg, editing }
+            }
+            FeatureKind::Patch { sketch, profiles } => Command::Patch { sketch: Some(sketch), profiles, editing },
+            FeatureKind::Stitch { bodies, tolerance } => Command::Stitch { bodies, tolerance, editing },
+            FeatureKind::DeleteFaces { body, faces } => {
+                let ids = tab
+                    .model
+                    .body(body)
+                    .map(|b| faces.iter().filter_map(|p| m360_core::model::face_at_point(&b.mesh, glam::DVec3::from(*p))).collect())
+                    .unwrap_or_default();
+                Command::DeleteFaces { body: Some(body), faces: ids, editing }
+            }
             FeatureKind::Draft { body, faces, angle, fixed_top } => {
                 let ids = tab
                     .model

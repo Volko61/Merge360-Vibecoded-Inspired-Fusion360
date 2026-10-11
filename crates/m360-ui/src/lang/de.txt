@@ -629,3 +629,12 @@ Pull Direction	Zugrichtung
 Prism axis (automatic)	Prismenachse (automatisch)
 Fixed Plane	Feste Ebene
 Bottom	Unten
+EXTRUDE SURFACE	FLÄCHE EXTRUDIEREN
+REVOLVE SURFACE	FLÄCHE DREHEN
+PATCH	PFLASTER
+STITCH	VERNÄHEN
+DELETE FACE	FLÄCHE LÖSCHEN
+Boundary Edges	Begrenzungskanten
+Stitch Surfaces	Zu vernähende Flächen
+Tolerance	Toleranz
+Select bodies first.	Wählen Sie zuerst Körper.

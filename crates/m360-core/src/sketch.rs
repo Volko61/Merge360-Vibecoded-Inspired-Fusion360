@@ -716,6 +716,54 @@ pub fn entity_from_polyline(pts: &[[f64; 2]], tol: f64) -> Option<SketchEntity> 
     Some(SketchEntity::Spline { pts: fit })
 }
 
+/// Ordered curves of a connected chain of lines, arcs and splines (for
+/// surfaces), or `None` if the entities do not form one chain.
+pub fn chain_curves(entities: &[SketchEntity], chain: &[usize]) -> Option<Vec<m360_kernel::surface::Curve2>> {
+    use m360_kernel::surface::Curve2;
+    // (start, end, curve from start to end)
+    let mut items: Vec<([f64; 2], [f64; 2], Curve2)> = Vec::new();
+    for &i in chain {
+        match entities.get(i)? {
+            SketchEntity::Line { a, b } => items.push((*a, *b, Curve2::Line(*a, *b))),
+            SketchEntity::Arc { a, m, b } => items.push((*a, *b, Curve2::Arc(*a, *m, *b))),
+            e @ SketchEntity::Spline { .. } => {
+                let (p, _) = curve_polyline(e)?;
+                items.push((p[0], p[p.len() - 1], Curve2::Poly(p)))
+            }
+            _ => return None,
+        }
+    }
+    let rev = |c: Curve2| match c {
+        Curve2::Line(a, b) => Curve2::Line(b, a),
+        Curve2::Arc(a, m, b) => Curve2::Arc(b, m, a),
+        Curve2::Poly(mut p) => {
+            p.reverse();
+            Curve2::Poly(p)
+        }
+    };
+    let same = |p: [f64; 2], q: [f64; 2]| norm(sub(p, q)) < 1e-6;
+    let degree = |p: [f64; 2], s: &[([f64; 2], [f64; 2], Curve2)]| s.iter().filter(|x| same(x.0, p) || same(x.1, p)).count();
+    let start = items.iter().position(|x| degree(x.0, &items) == 1 || degree(x.1, &items) == 1).unwrap_or(0);
+    let mut first = items.remove(start);
+    if degree(first.0, &items) > 0 && degree(first.1, &items) == 0 {
+        first = (first.1, first.0, rev(first.2));
+    }
+    let mut tail = first.1;
+    let mut out = vec![first.2];
+    while !items.is_empty() {
+        let k = items.iter().position(|x| same(x.0, tail) || same(x.1, tail))?;
+        let x = items.remove(k);
+        if same(x.0, tail) {
+            tail = x.1;
+            out.push(x.2);
+        } else {
+            tail = x.0;
+            out.push(rev(x.2));
+        }
+    }
+    Some(out)
+}
+
 /// A chain segment: (start, end, arc midpoint).
 pub type ChainSeg = ([f64; 2], [f64; 2], Option<[f64; 2]>);
 

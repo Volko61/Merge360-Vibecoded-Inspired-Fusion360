@@ -10,6 +10,7 @@ pub mod ops;
 pub mod primitives;
 pub mod profile;
 pub mod shell;
+pub mod surface;
 pub mod sweep;
 pub mod fillet;
 pub mod hole;

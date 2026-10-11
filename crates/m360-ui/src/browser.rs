@@ -506,6 +506,10 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Scale { .. } => Icon::Generic,
         FeatureKind::Shell { .. } => Icon::Shell,
         FeatureKind::Draft { .. } => Icon::Shell,
+        FeatureKind::SurfaceExtrude { .. } => Icon::Extrude,
+        FeatureKind::SurfaceRevolve { .. } => Icon::Revolve,
+        FeatureKind::Patch { .. } | FeatureKind::Stitch { .. } | FeatureKind::ReverseNormal { .. } => Icon::Generic,
+        FeatureKind::DeleteFaces { .. } => Icon::Delete,
         FeatureKind::Fillet { chamfer: true, .. } => Icon::Chamfer,
         FeatureKind::Fillet { .. } => Icon::Fillet,
     }

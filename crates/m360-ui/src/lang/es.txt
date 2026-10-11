@@ -629,3 +629,12 @@ Pull Direction	Dirección de desmoldeo
 Prism axis (automatic)	Eje del prisma (automático)
 Fixed Plane	Plano fijo
 Bottom	Inferior
+EXTRUDE SURFACE	EXTRUIR SUPERFICIE
+REVOLVE SURFACE	REVOLUCIÓN DE SUPERFICIE
+PATCH	PARCHE
+STITCH	COSER
+DELETE FACE	ELIMINAR CARA
+Boundary Edges	Aristas de contorno
+Stitch Surfaces	Superficies que coser
+Tolerance	Tolerancia
+Select bodies first.	Seleccione primero los cuerpos.

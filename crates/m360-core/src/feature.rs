@@ -195,6 +195,40 @@ pub enum FeatureKind {
         inner_diameter: f64,
         torus_diameter: f64,
     },
+    /// Surface swept by open (or closed) sketch curves along the plane normal.
+    SurfaceExtrude {
+        sketch: u64,
+        curves: Vec<usize>,
+        distance: f64,
+        symmetric: bool,
+    },
+    /// Surface of revolution of sketch curves around an origin axis.
+    SurfaceRevolve {
+        sketch: u64,
+        curves: Vec<usize>,
+        axis: Axis,
+        angle_deg: f64,
+    },
+    /// Planar surface filling sketch profiles.
+    Patch {
+        sketch: u64,
+        profiles: Vec<usize>,
+    },
+    /// Join surface bodies along shared edges (a solid when closed). The
+    /// first body is replaced; the others are consumed.
+    Stitch {
+        bodies: Vec<BodyId>,
+        tolerance: f64,
+    },
+    /// Remove faces from a body (found by a point on each), leaving a surface.
+    DeleteFaces {
+        body: BodyId,
+        faces: Vec<[f64; 3]>,
+    },
+    /// Flip the face orientation of bodies.
+    ReverseNormal {
+        bodies: Vec<BodyId>,
+    },
     /// Draft (tilt) side faces of a prismatic body. Faces are found again by
     /// a point inside each of them.
     Draft {
@@ -620,6 +654,12 @@ impl FeatureKind {
             FeatureKind::Shell { .. } => "Shell",
             FeatureKind::Thread { .. } => "Thread",
             FeatureKind::Draft { .. } => "Draft",
+            FeatureKind::SurfaceExtrude { .. } => "SurfaceExtrude",
+            FeatureKind::SurfaceRevolve { .. } => "SurfaceRevolve",
+            FeatureKind::Patch { .. } => "Patch",
+            FeatureKind::Stitch { .. } => "Stitch",
+            FeatureKind::DeleteFaces { .. } => "DeleteFace",
+            FeatureKind::ReverseNormal { .. } => "ReverseNormal",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }
@@ -633,6 +673,9 @@ impl FeatureKind {
                 | FeatureKind::Sphere { .. }
                 | FeatureKind::Torus { .. }
                 | FeatureKind::Coil { .. }
+                | FeatureKind::SurfaceExtrude { .. }
+                | FeatureKind::SurfaceRevolve { .. }
+                | FeatureKind::Patch { .. }
                 | FeatureKind::Extrude { op: ExtrudeOp::NewBody, .. }
                 | FeatureKind::Revolve { op: ExtrudeOp::NewBody, .. }
                 | FeatureKind::Sweep { op: ExtrudeOp::NewBody, .. }
@@ -671,6 +714,8 @@ impl FeatureKind {
             Fillet { size, chamfer, .. } => vec![(if *chamfer { "Distance" } else { "Radius" }, false, size)],
             Shell { thickness, .. } => vec![("Thickness", false, thickness)],
             Draft { angle, .. } => vec![("Angle", true, angle)],
+            SurfaceExtrude { distance, .. } => vec![("Distance", false, distance)],
+            SurfaceRevolve { angle_deg, .. } => vec![("Angle", true, angle_deg)],
             Thread { pitch, length, .. } => vec![("Pitch", false, pitch), ("Length", false, length)],
             Move { translate, angle_deg, .. } => {
                 let [x, y, z] = translate;

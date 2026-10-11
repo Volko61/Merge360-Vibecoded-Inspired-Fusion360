@@ -189,6 +189,9 @@ impl Merge360App {
             | Some(Command::Properties) => PickMode::Bodies,
             Some(Command::Measure { .. }) => PickMode::Measure,
             Some(Command::Fillet { .. }) => PickMode::Edges,
+            Some(Command::SurfaceExtrude { .. }) | Some(Command::SurfaceRevolve { .. }) => PickMode::Curves,
+            Some(Command::Patch { .. }) => PickMode::Profiles,
+            Some(Command::Stitch { .. }) => PickMode::Bodies,
             Some(Command::RefPlane { method: crate::state::RefPlaneMethod::Mid, .. }) => PickMode::Planes,
             Some(Command::RefPlane { .. }) => PickMode::Edges,
             Some(Command::Hole { .. }) => PickMode::Planes,
@@ -990,7 +993,35 @@ impl Merge360App {
                     }
                 }
             }
-            Some(Command::Shell { body, faces, .. }) | Some(Command::Draft { body, faces, .. }) => {
+            Some(Command::SurfaceExtrude { sketch, curves, .. }) | Some(Command::SurfaceRevolve { sketch, curves, .. }) => {
+                if let Some(SelItem::SketchEntity(uid, i)) = hover {
+                    *sketch = Some(uid);
+                    *curves = chain_of(&tab.model, uid, i);
+                }
+            }
+            Some(Command::Patch { sketch, profiles, .. }) => {
+                if let Some(SelItem::Profile(uid, i)) = hover {
+                    if *sketch != Some(uid) {
+                        *sketch = Some(uid);
+                        profiles.clear();
+                    }
+                    if let Some(k) = profiles.iter().position(|x| *x == i) {
+                        profiles.remove(k);
+                    } else {
+                        profiles.push(i);
+                    }
+                }
+            }
+            Some(Command::Stitch { bodies, .. }) => {
+                if let Some(b) = hover.and_then(|h| h.body()) {
+                    if let Some(k) = bodies.iter().position(|x| *x == b) {
+                        bodies.remove(k);
+                    } else {
+                        bodies.push(b);
+                    }
+                }
+            }
+            Some(Command::Shell { body, faces, .. }) | Some(Command::Draft { body, faces, .. }) | Some(Command::DeleteFaces { body, faces, .. }) => {
                 if let Some(SelItem::Face(b, f)) = hover {
                     if *body != Some(b) {
                         *body = Some(b);
@@ -1424,7 +1455,10 @@ impl Merge360App {
                     d.hover_face = Some(f);
                 }
             }
-            if let Some(Command::Shell { body: Some(sb), faces, .. } | Command::Draft { body: Some(sb), faces, .. }) = &tab.command {
+            if let Some(
+                Command::Shell { body: Some(sb), faces, .. } | Command::Draft { body: Some(sb), faces, .. } | Command::DeleteFaces { body: Some(sb), faces, .. },
+            ) = &tab.command
+            {
                 if *sb == b.id {
                     d.selected_faces.extend(faces.iter().copied());
                 }

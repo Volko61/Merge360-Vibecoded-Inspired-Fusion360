@@ -190,6 +190,13 @@ impl Merge360App {
                 let tab = &mut self.tabs[self.active];
                 match (&mut tab.command, k.as_str()) {
                     (Some(Command::Extrude { distance, .. }), "distance") => *distance = num.unwrap_or(*distance),
+                    (Some(Command::Extrude { sketch, profiles, .. }), "all") => {
+                        let sk = sketch.or_else(|| tab.model.sketches.last().map(|k| k.uid));
+                        *sketch = sk;
+                        if let Some(ents) = sk.and_then(|u| tab.model.sketches.iter().find(|k| k.uid == u)).map(|k| k.entities.clone()) {
+                            *profiles = m360_core::sketch::solid_profiles(&ents);
+                        }
+                    }
                     (Some(Command::Extrude { symmetric, .. }), "symmetric") => *symmetric = v == "true",
                     (Some(Command::Extrude { op, .. }), "op") => {
                         *op = match v.as_str() {
@@ -1207,6 +1214,7 @@ pub(crate) fn sketch_tool(id: &str) -> Option<SketchTool> {
         "sk_trim" => SketchTool::Trim,
         "sk_offset" => SketchTool::Offset,
         "sk_fillet" => SketchTool::Fillet,
+        "sk_text" => SketchTool::Text,
         "con_horizontal" => SketchTool::Constrain(crate::state::ConKind::HorizontalVertical),
         "con_coincident" => SketchTool::Constrain(crate::state::ConKind::Coincident),
         "con_tangent" => SketchTool::Constrain(crate::state::ConKind::Tangent),

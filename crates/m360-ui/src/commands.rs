@@ -183,10 +183,19 @@ impl Merge360App {
                 let ok = sketch.is_some() && !profiles.is_empty() && preview_err.is_none();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Profiles");
-                    let text = if profiles.is_empty() { "Select".to_string() } else { format!("{} selected", profiles.len()) };
-                    if selection_field(ui, true, &text).clicked() {
-                        profiles.clear();
-                    }
+                    ui.horizontal(|ui| {
+                        let text = if profiles.is_empty() { "Select".to_string() } else { format!("{} selected", profiles.len()) };
+                        if selection_field(ui, true, &text).clicked() {
+                            profiles.clear();
+                        }
+                        if let Some(sk) = *sketch {
+                            if ui.button("All").on_hover_text("Select all solid profiles of this sketch (e.g. text)").clicked() {
+                                if let Some((_, ents)) = self.tabs[self.active].sketch_entities(sk) {
+                                    *profiles = m360_core::sketch::solid_profiles(&ents);
+                                }
+                            }
+                        }
+                    });
                     ui.end_row();
                     row_label(ui, "Start");
                     ui.label("Profile Plane");

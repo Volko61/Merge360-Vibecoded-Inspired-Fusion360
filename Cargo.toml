@@ -23,6 +23,8 @@ truck-meshalgo = "0.4"
 truck-shapeops = "0.4"
 truck-stepio = "0.3"
 log = "0.4"
+ttf-parser = "0.25"
+epaint_default_fonts = "0.36"
 image = { version = "0.25", default-features = false, features = ["png"] }
 env_logger = "0.11"
 

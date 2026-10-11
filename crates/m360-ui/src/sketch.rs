@@ -121,7 +121,7 @@ impl Merge360App {
             self.constraint_pick(hover);
             return;
         }
-        if self.tabs[self.active].sketch.as_ref().is_some_and(|s| matches!(s.tool, SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet)) {
+        if self.tabs[self.active].sketch.as_ref().is_some_and(|s| matches!(s.tool, SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text)) {
             self.edit_tool_pick(hover);
             return;
         }
@@ -182,7 +182,7 @@ impl Merge360App {
                     s.pending.clear();
                 }
             }
-            SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet => {}
+            SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text => {}
         }
         if new.is_empty() {
             return;
@@ -274,6 +274,20 @@ impl Merge360App {
                     _ => vec![i],
                 };
                 open(self, EditPurpose::Offset(chain), 2.0);
+            }
+            (SketchTool::Text, _) => {
+                let Some(at) = self.canvas.sketch_cursor else { return };
+                let height = (crate::viewport::grid_step(&self.tabs[self.active].camera) as f64).max(1.0);
+                if let Some(s) = &mut self.tab().sketch {
+                    s.dim_edit = Some(DimEdit {
+                        purpose: EditPurpose::Text(at, height),
+                        index: None,
+                        draft: SketchConstraint::Fix(PointRef::new(0, 0)),
+                        text: "Text".into(),
+                        pos: pointer,
+                        focus: 3,
+                    });
+                }
             }
             (SketchTool::Fillet, Some(SelItem::SketchPoint(_, p))) => {
                 let Some(q) = point_of(&ents, p) else { return };
@@ -461,6 +475,7 @@ impl Merge360App {
         let Some(s) = &mut self.tab().sketch else { return };
         let Some(ed) = &mut s.dim_edit else { return };
         let mut commit = None;
+        let mut text_commit: Option<String> = None;
         let mut cancel = false;
         egui::Area::new(egui::Id::new("dim_edit")).fixed_pos(ed.pos + egui::vec2(8.0, -12.0)).order(egui::Order::Foreground).show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
@@ -470,9 +485,13 @@ impl Merge360App {
                     r.request_focus();
                 }
                 if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    commit = units.parse(&ed.text);
-                    if commit.is_none() {
-                        cancel = true;
+                    if let EditPurpose::Text(..) = ed.purpose {
+                        text_commit = Some(ed.text.clone());
+                    } else {
+                        commit = units.parse(&ed.text);
+                        if commit.is_none() {
+                            cancel = true;
+                        }
                     }
                 } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) || (r.lost_focus() && ed.focus == 0) {
                     cancel = true;
@@ -481,6 +500,15 @@ impl Merge360App {
         });
         if cancel {
             s.dim_edit = None;
+            return;
+        }
+        if let Some(t) = text_commit {
+            let ed = s.dim_edit.take().unwrap();
+            if let EditPurpose::Text(at, height) = ed.purpose {
+                if !t.trim().is_empty() {
+                    self.sketch_edit("Text", |e, _| e.extend(m360_core::text::text_entities(&t, at, height)));
+                }
+            }
             return;
         }
         let Some(v) = commit else { return };
@@ -511,7 +539,7 @@ impl Merge360App {
                 }
                 return;
             }
-            EditPurpose::Dimension => {}
+            EditPurpose::Text(..) | EditPurpose::Dimension => {}
         }
         if v <= 0.0 {
             self.toast(ToastKind::Warning, "Dimensions must be positive.");

@@ -243,6 +243,30 @@ fn normal_extent(body: &Body, plane: &PlaneRef) -> (f64, f64) {
     (lo, hi)
 }
 
+/// True when the selected profiles contain curves approximated by many
+/// short, almost collinear line segments (text, imported outlines).
+fn faceted_profiles(entities: &[SketchEntity], profiles: &[usize]) -> bool {
+    let regions = crate::sketch::profiles(entities);
+    let mut smooth_vertices = 0;
+    for i in profiles {
+        let Some(r) = regions.get(*i) else { continue };
+        for l in std::iter::once(&r.outer).chain(r.holes.iter()) {
+            if let profile::Loop2::Polygon(p) = l {
+                let n = p.len();
+                for k in 0..n {
+                    let (a, b, c) = (p[(k + n - 1) % n], p[k], p[(k + 1) % n]);
+                    let (u, v) = ([b[0] - a[0], b[1] - a[1]], [c[0] - b[0], c[1] - b[1]]);
+                    let cosang = (u[0] * v[0] + u[1] * v[1]) / (u[0].hypot(u[1]) * v[0].hypot(v[1])).max(1e-18);
+                    if cosang > 0.94 && cosang < 0.99995 {
+                        smooth_vertices += 1;
+                    }
+                }
+            }
+        }
+    }
+    smooth_vertices >= 6
+}
+
 /// World-space axis (point, direction) of a revolve.
 pub fn revolve_axis(plane: &PlaneRef, entities: &[SketchEntity], axis: &RevolveAxis) -> Result<(glam::DVec3, glam::DVec3), String> {
     Ok(match axis {
@@ -536,9 +560,11 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             let tool = extrude_tool(&plane, &entities, profiles, *distance, *symmetric)?;
             let live: Vec<BodyId> =
                 participants.iter().copied().filter(|id| model.body(*id).is_some()).collect();
+            // Curves approximated by many short lines (e.g. text): hide facet edges.
+            let cos = if faceted_profiles(&entities, profiles) { 0.97 } else { SMOOTH_COS };
             match op {
-                ExtrudeOp::NewBody => model.bodies.push(new_body(f.uid, tool, f.uid)),
-                ExtrudeOp::Join if live.is_empty() => model.bodies.push(new_body(f.uid, tool, f.uid)),
+                ExtrudeOp::NewBody => model.bodies.push(new_body_smooth(f.uid, tool, f.uid, cos)),
+                ExtrudeOp::Join if live.is_empty() => model.bodies.push(new_body_smooth(f.uid, tool, f.uid, cos)),
                 ExtrudeOp::Join => {
                     let target = live[0];
                     let t = model.body(target).unwrap();

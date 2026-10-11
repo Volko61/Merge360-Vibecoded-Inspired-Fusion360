@@ -481,6 +481,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "sk_trim",
     "sk_offset",
     "sk_fillet",
+    "sk_text",
     "con_horizontal",
     "con_coincident",
     "con_tangent",

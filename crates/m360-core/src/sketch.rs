@@ -140,6 +140,23 @@ fn on_boundary(l: &Loop2, p: [f64; 2]) -> bool {
     }
 }
 
+/// Indices of the "solid" profiles: regions at an even nesting depth (outer
+/// shapes and islands inside holes), e.g. the letters of a text.
+pub fn solid_profiles(entities: &[SketchEntity]) -> Vec<usize> {
+    let regions = profiles(entities);
+    (0..regions.len())
+        .filter(|&i| {
+            let probe = regions[i].outer.sample();
+            let depth = regions
+                .iter()
+                .enumerate()
+                .filter(|(j, r)| *j != i && r.outer.area() > regions[i].outer.area() && r.outer.contains(probe))
+                .count();
+            depth % 2 == 0
+        })
+        .collect()
+}
+
 /// The 4 lines of an axis-aligned rectangle.
 pub fn rectangle(a: [f64; 2], b: [f64; 2]) -> Vec<SketchEntity> {
     let c = [b[0], a[1]];

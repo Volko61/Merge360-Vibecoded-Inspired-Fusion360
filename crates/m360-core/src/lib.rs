@@ -7,6 +7,7 @@ pub mod history;
 pub mod model;
 pub mod sketch;
 pub mod solver;
+pub mod text;
 pub mod units;
 
 pub use document::{BodyMeta, ComponentDef, Document, NamedView};

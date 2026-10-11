@@ -141,6 +141,7 @@ pub enum SketchTool {
     Trim,
     Offset,
     Fillet,
+    Text,
 }
 
 /// Geometric constraint tools of the SKETCH tab.
@@ -190,6 +191,8 @@ pub enum EditPurpose {
     Offset(Vec<usize>),
     /// Round the corner between two lines.
     Fillet(usize, usize),
+    /// Place text at a point (the editor holds the text; height in mm).
+    Text([f64; 2], f64),
 }
 
 /// An open inline dimension editor in sketch mode.
@@ -219,6 +222,7 @@ impl SketchTool {
             SketchTool::Trim => "Trim",
             SketchTool::Offset => "Offset",
             SketchTool::Fillet => "Fillet",
+            SketchTool::Text => "Text",
             SketchTool::Constrain(k) => k.label(),
         }
     }

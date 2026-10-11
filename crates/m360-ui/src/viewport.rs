@@ -1689,7 +1689,7 @@ impl Merge360App {
 
         // Sketch dimension label next to the cursor.
         let tab = &self.tabs[self.active];
-        if let (Some(s), Some(cur)) = (tab.sketch.as_ref().filter(|s| !matches!(s.tool, SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet)), self.canvas.sketch_cursor) {
+        if let (Some(s), Some(cur)) = (tab.sketch.as_ref().filter(|s| !matches!(s.tool, SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text)), self.canvas.sketch_cursor) {
             if let Some((plane, _)) = tab.sketch_entities(s.uid) {
                 if let Some(text) = crate::sketch::rubber_band_label(s, cur, tab.doc.units) {
                     if let Some(p) = self.to_screen(&tab.camera, to_world(&plane, cur)) {

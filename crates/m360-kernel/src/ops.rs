@@ -106,8 +106,91 @@ pub fn transform(solid: &Solid, m: DMat4) -> Solid {
     builder::transformed(solid, to_truck(m))
 }
 
+/// Sweep face number `face` (in `solid.face_iter()` order) of a solid
+/// along the unit `normal` between offsets `z0` and `z1`.
+pub fn extrude_face(solid: &Solid, face: usize, normal: glam::DVec3, z0: f64, z1: f64) -> Result<Solid> {
+    if z1 - z0 <= 1e-6 || z0.is_nan() || z1.is_nan() {
+        return Err(KernelError::InvalidParameter("distance must not be zero".into()));
+    }
+    let f = solid.face_iter().nth(face).cloned().ok_or_else(|| KernelError::InvalidParameter("the face no longer exists".into()))?;
+    // `transformed` copies the topology, so the tool shares nothing with the body.
+    let start = builder::transformed(&f, to_truck(DMat4::from_translation(normal * z0)));
+    let d = normal * (z1 - z0);
+    let mut out: Solid = builder::tsweep(&start, truck_modeling::Vector3::new(d.x, d.y, d.z));
+    if crate::tessellate(&out).volume() < 0.0 {
+        out.not();
+    }
+    Ok(out)
+}
+
+/// Move a planar face of a solid by `d` along its unit outward `normal`,
+/// adding (d > 0) or removing (d < 0) the swept prism. Built directly from
+/// the topology (no boolean), so faces coplanar with the body are fine; the
+/// prism must not run into other parts of the body.
+pub fn push_pull_face(solid: &Solid, face: usize, normal: glam::DVec3, d: f64) -> Result<Solid> {
+    use truck_modeling::{Shell, Vector3};
+    if d.abs() < 1e-6 || d.is_nan() {
+        return Err(KernelError::InvalidParameter("distance must not be zero".into()));
+    }
+    let f = solid.face_iter().nth(face).cloned().ok_or_else(|| KernelError::InvalidParameter("the face no longer exists".into()))?;
+    let v = normal * d;
+    let mut prism: Solid = builder::tsweep(&f, Vector3::new(v.x, v.y, v.z));
+    if crate::tessellate(&prism).volume() < 0.0 {
+        prism.not();
+    }
+    let prism_vol = crate::tessellate(&prism).volume();
+    if d < 0.0 {
+        prism.not();
+    }
+    let mut out_shells = Vec::new();
+    let mut found = false;
+    for sh in solid.boundaries() {
+        if !sh.face_iter().any(|g| g.id() == f.id()) {
+            out_shells.push(sh.clone());
+            continue;
+        }
+        found = true;
+        let mut shell: Shell = sh.face_iter().filter(|g| g.id() != f.id()).cloned().collect();
+        for g in prism.boundaries().iter().flat_map(|s| s.face_iter()) {
+            if g.id() != f.id() {
+                shell.push(g.clone());
+            }
+        }
+        out_shells.push(shell);
+    }
+    if !found {
+        return Err(KernelError::OperationFailed("the face is not on the body".into()));
+    }
+    let out = Solid::try_new(out_shells).map_err(|e| KernelError::OperationFailed(format!("push/pull: {e:?}")))?;
+    let expect = crate::tessellate(solid).volume() + prism_vol * d.signum();
+    let got = crate::tessellate(&out).volume();
+    if expect <= 0.0 || (got - expect).abs() > 1e-3 * expect.abs().max(1.0) {
+        return Err(KernelError::OperationFailed("push/pull produced an invalid body".into()));
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn extrude_box_face() {
+        use crate::primitives::make_box;
+        let f = crate::Frame::new(glam::DVec3::ZERO, glam::DVec3::X, glam::DVec3::Y);
+        let b = make_box(&f, 10.0, 10.0, 10.0).unwrap();
+        let m = crate::tessellate(&b);
+        let top = (0..m.face_count).find(|i| m.planar_normal(*i).is_some_and(|n| n.z > 0.99)).unwrap();
+        let t = super::extrude_face(&b, top as usize, glam::DVec3::Z, -0.1, 5.0).unwrap();
+        assert!((crate::tessellate(&t).volume() - 510.0).abs() < 1.0);
+        let up = super::push_pull_face(&b, top as usize, glam::DVec3::Z, 5.0).unwrap();
+        assert!((crate::tessellate(&up).volume() - 1500.0).abs() < 1.0);
+        let down = super::push_pull_face(&b, top as usize, glam::DVec3::Z, -4.0).unwrap();
+        assert!((crate::tessellate(&down).volume() - 600.0).abs() < 1.0);
+        // The result is a valid solid for later booleans.
+        let c = crate::primitives::make_cylinder(&crate::Frame::new(glam::DVec3::new(0.0, 0.0, -5.0), glam::DVec3::X, glam::DVec3::Y), 4.0, 30.0).unwrap();
+        let cut = super::boolean(&up, &[c], super::BooleanOp::Cut).unwrap();
+        assert!(crate::tessellate(&cut).volume() < 1500.0 - 100.0);
+    }
+
     use super::*;
     use crate::{primitives::*, tessellate};
     use glam::DVec3;

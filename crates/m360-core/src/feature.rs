@@ -345,7 +345,19 @@ pub enum FeatureKind {
         /// Side wall angle in degrees (positive = outwards).
         #[serde(default)]
         taper: f64,
+        /// Planar body faces extruded instead of sketch profiles.
+        #[serde(default)]
+        faces: Vec<FaceRef>,
     },
+}
+
+/// A planar body face, found again on regeneration by a point on it and
+/// its outward normal.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct FaceRef {
+    pub body: BodyId,
+    pub point: [f64; 3],
+    pub normal: [f64; 3],
 }
 
 /// Joint origin: a point on a face and the face's outward normal.

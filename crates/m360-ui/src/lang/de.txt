@@ -624,3 +624,8 @@ Orientation	Ausrichtung
 Path Direction	Pfadrichtung
 Identical	Identisch
 1 selected	1 ausgewählt
+DRAFT	FORMSCHRÄGE
+Pull Direction	Zugrichtung
+Prism axis (automatic)	Prismenachse (automatisch)
+Fixed Plane	Feste Ebene
+Bottom	Unten

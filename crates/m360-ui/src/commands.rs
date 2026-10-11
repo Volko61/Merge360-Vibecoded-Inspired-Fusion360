@@ -559,6 +559,37 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Draft { body, faces, angle, fixed_top, .. } => {
+                let ok = body.is_some() && !faces.is_empty() && preview_err.is_none();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Pull Direction");
+                    ui.label(tr("Prism axis (automatic)"));
+                    ui.end_row();
+                    row_label(ui, "Faces");
+                    let t = if faces.is_empty() { "Select".to_string() } else { format!("{} selected", faces.len()) };
+                    if selection_field(ui, true, &t).clicked() {
+                        faces.clear();
+                        *body = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Angle");
+                    angle_field(ui, "draft_angle", angle);
+                    ui.end_row();
+                    row_label(ui, "Fixed Plane");
+                    egui::ComboBox::from_id_salt("draft_fixed").selected_text(tr(if *fixed_top { "Top" } else { "Bottom" })).show_ui(ui, |ui| {
+                        ui.selectable_value(fixed_top, false, tr("Bottom"));
+                        ui.selectable_value(fixed_top, true, tr("Top"));
+                    });
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Thread { body, cyl, size, pitch, full_length, length, .. } => {
                 use crate::state::ISO_THREADS;
                 let ok = body.is_some() && cyl.is_some() && *pitch > 1e-3;
@@ -1282,6 +1313,10 @@ impl Merge360App {
             Command::Loft { sections, op, editing } => {
                 let participants = self.overlapping_bodies(op);
                 self.commit_feature(FeatureKind::Loft { sections, op, participants }, editing);
+            }
+            Command::Draft { body: Some(body), faces, angle, fixed_top, editing } => {
+                let pts = self.tabs[self.active].model.body(body).map(|b| m360_core::model::face_sample_points(&b.mesh, &faces)).unwrap_or_default();
+                self.commit_feature(FeatureKind::Draft { body, faces: pts, angle, fixed_top }, editing);
             }
             Command::Thread { body: Some(body), cyl: Some(c), size, pitch, full_length, length, editing } => {
                 self.commit_feature(

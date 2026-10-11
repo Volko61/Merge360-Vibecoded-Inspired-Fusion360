@@ -195,6 +195,14 @@ pub enum FeatureKind {
         inner_diameter: f64,
         torus_diameter: f64,
     },
+    /// Draft (tilt) side faces of a prismatic body. Faces are found again by
+    /// a point inside each of them.
+    Draft {
+        body: BodyId,
+        faces: Vec<[f64; 3]>,
+        angle: f64,
+        fixed_top: bool,
+    },
     /// Cosmetic thread on a cylindrical face (axis from `origin` along
     /// `axis`; `length` 0 = full face length).
     Thread {
@@ -611,6 +619,7 @@ impl FeatureKind {
             FeatureKind::Scale { .. } => "Scale",
             FeatureKind::Shell { .. } => "Shell",
             FeatureKind::Thread { .. } => "Thread",
+            FeatureKind::Draft { .. } => "Draft",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }
@@ -661,6 +670,7 @@ impl FeatureKind {
             Pipe { diameter, wall, .. } => vec![("Section Size", false, diameter), ("Thickness", false, wall)],
             Fillet { size, chamfer, .. } => vec![(if *chamfer { "Distance" } else { "Radius" }, false, size)],
             Shell { thickness, .. } => vec![("Thickness", false, thickness)],
+            Draft { angle, .. } => vec![("Angle", true, angle)],
             Thread { pitch, length, .. } => vec![("Pitch", false, pitch), ("Length", false, length)],
             Move { translate, angle_deg, .. } => {
                 let [x, y, z] = translate;

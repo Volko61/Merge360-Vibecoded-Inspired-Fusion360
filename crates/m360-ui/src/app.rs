@@ -268,6 +268,8 @@ impl Merge360App {
                         });
                     }
                     (Some(Command::Interference { bodies, results }), "compute") => *results = Some(crate::state::interferences(&tab.model, bodies)),
+                    (Some(Command::Draft { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
+                    (Some(Command::Draft { fixed_top, .. }), "fixed_top") => *fixed_top = v == "true",
                     (Some(Command::Thread { pitch, .. }), "pitch") => *pitch = num.unwrap_or(*pitch),
                     (Some(Command::Thread { full_length, length, .. }), "length") => {
                         *full_length = false;
@@ -608,6 +610,20 @@ impl Merge360App {
                     length: 10.0,
                     editing: None,
                 });
+            }
+            "draft" => {
+                let mut body = None;
+                let mut faces = Vec::new();
+                for s in &tab.selection {
+                    if let SelItem::Face(b, f) | SelItem::FacePlane(b, f, _) = s {
+                        if body.is_none() || body == Some(*b) {
+                            body = Some(*b);
+                            faces.push(*f);
+                        }
+                    }
+                }
+                tab.selection.clear();
+                tab.command = Some(Command::Draft { body, faces, angle: 3.0, fixed_top: false, editing: None });
             }
             "split_body" => {
                 let body = sel_bodies.first().copied();
@@ -962,6 +978,14 @@ impl Merge360App {
                 Command::Pipe { path_sketch: Some(path_sketch), path, diameter, wall: if wall > 0.0 { wall } else { 1.0 }, hollow: wall > 0.0, op, editing }
             }
             FeatureKind::Loft { sections, op, .. } => Command::Loft { sections, op, editing },
+            FeatureKind::Draft { body, faces, angle, fixed_top } => {
+                let ids = tab
+                    .model
+                    .body(body)
+                    .map(|b| faces.iter().filter_map(|p| m360_core::model::face_at_point(&b.mesh, glam::DVec3::from(*p))).collect())
+                    .unwrap_or_default();
+                Command::Draft { body: Some(body), faces: ids, angle, fixed_top, editing }
+            }
             FeatureKind::Thread { body, origin, axis, radius, face_length, length, pitch, internal, designation } => {
                 let size = crate::state::ISO_THREADS
                     .iter()

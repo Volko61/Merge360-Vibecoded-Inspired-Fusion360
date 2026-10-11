@@ -624,3 +624,8 @@ Orientation	Orientation
 Path Direction	Direction de la trajectoire
 Identical	Identique
 1 selected	1 sélectionné
+DRAFT	DÉPOUILLE
+Pull Direction	Direction de démoulage
+Prism axis (automatic)	Axe du prisme (automatique)
+Fixed Plane	Plan fixe
+Bottom	Bas

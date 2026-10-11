@@ -624,3 +624,8 @@ Orientation	Orientación
 Path Direction	Dirección de la trayectoria
 Identical	Idéntica
 1 selected	1 seleccionado
+DRAFT	DESMOLDEO
+Pull Direction	Dirección de desmoldeo
+Prism axis (automatic)	Eje del prisma (automático)
+Fixed Plane	Plano fijo
+Bottom	Inferior

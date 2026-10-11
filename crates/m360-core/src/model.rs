@@ -310,6 +310,20 @@ fn resolve_face(model: &Model, fr: &crate::feature::FaceRef) -> Result<FaceSrc, 
     Ok(FaceSrc { body: fr.body, face: face as usize, normal: n, plane })
 }
 
+/// The mesh face containing point `p`.
+pub fn face_at_point(m: &BodyMesh, p: glam::DVec3) -> Option<u32> {
+    let p = p.as_vec3();
+    m.triangles().find(|(t, _)| m360_kernel::shell::on_triangle(t, p)).map(|(_, f)| f)
+}
+
+/// A point inside each face (on one of its triangles), to find it again.
+pub fn face_sample_points(m: &BodyMesh, faces: &[u32]) -> Vec<[f64; 3]> {
+    faces
+        .iter()
+        .filter_map(|f| m.triangles().find(|(_, ff)| ff == f).map(|(t, _)| ((t[0] + t[1] + t[2]) / 3.0).as_dvec3().to_array()))
+        .collect()
+}
+
 /// The planar face of a mesh with outward normal `n` that contains `p`.
 pub fn find_face(m: &BodyMesh, p: glam::DVec3, n: glam::DVec3) -> Option<u32> {
     let on = |t: &[glam::Vec3; 3]| {
@@ -789,6 +803,18 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                 pitch: *pitch,
                 internal: *internal,
             });
+            Ok(())
+        }
+        FeatureKind::Draft { body, faces, angle, fixed_top } => {
+            let b = model.body(*body).ok_or("the drafted body no longer exists")?;
+            let ids: Vec<u32> = faces
+                .iter()
+                .map(|p| face_at_point(&b.mesh, glam::DVec3::from(*p)).ok_or("a drafted face no longer exists"))
+                .collect::<Result<_, _>>()?;
+            let s = m360_kernel::shell::draft(&b.mesh, &ids, *angle, *fixed_top).map_err(|e| e.to_string())?;
+            // Curved walls are lofted as fine polygons: hide their facet edges.
+            let cos = b.smooth_cos.min(0.97);
+            replace(model, new_body_smooth(*body, s, f.uid, cos));
             Ok(())
         }
         FeatureKind::Shell { body, open_points, thickness } => {

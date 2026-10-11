@@ -990,7 +990,7 @@ impl Merge360App {
                     }
                 }
             }
-            Some(Command::Shell { body, faces, .. }) => {
+            Some(Command::Shell { body, faces, .. }) | Some(Command::Draft { body, faces, .. }) => {
                 if let Some(SelItem::Face(b, f)) = hover {
                     if *body != Some(b) {
                         *body = Some(b);
@@ -1370,7 +1370,7 @@ impl Merge360App {
             }
             // Bodies being modified in place show their preview instead.
             let replaced = match &tab.command {
-                Some(Command::Shell { body: Some(sb), .. }) | Some(Command::Fillet { body: Some(sb), .. }) => *sb == b.id,
+                Some(Command::Shell { body: Some(sb), .. }) | Some(Command::Fillet { body: Some(sb), .. }) | Some(Command::Draft { body: Some(sb), .. }) => *sb == b.id,
                 _ => false,
             };
             if replaced && tab.preview.as_ref().is_some_and(|p| p.mesh.is_some()) {
@@ -1424,7 +1424,7 @@ impl Merge360App {
                     d.hover_face = Some(f);
                 }
             }
-            if let Some(Command::Shell { body: Some(sb), faces, .. }) = &tab.command {
+            if let Some(Command::Shell { body: Some(sb), faces, .. } | Command::Draft { body: Some(sb), faces, .. }) = &tab.command {
                 if *sb == b.id {
                     d.selected_faces.extend(faces.iter().copied());
                 }

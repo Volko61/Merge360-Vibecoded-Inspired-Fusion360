@@ -315,25 +315,45 @@ pub fn extrude_range(frame: &Frame, region: &Region, z0: f64, z1: f64) -> Result
 /// `offset(z)` (holes the opposite way), in frame-local coordinates.
 fn loft_region(region: &Region, heights: &[f64], offset: impl Fn(f64) -> f64) -> Result<Solid> {
     let too_large = || KernelError::InvalidParameter("the taper angle is too large for this profile".into());
-    let loops = std::iter::once((&region.outer, true)).chain(region.holes.iter().map(|h| (h, false)));
+    let sections = heights
+        .iter()
+        .map(|&z| {
+            let o = offset(z);
+            let outer = region.outer.offset(o).ok_or_else(too_large)?;
+            let holes = region.holes.iter().map(|h| h.offset(-o).ok_or_else(too_large)).collect::<Result<_>>()?;
+            Ok((z, Region { outer, holes }))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    loft_sections(&sections)
+}
+
+/// Solid through planar sections at heights `z` (frame-local), whose loops
+/// correspond one to one (same loop count and edges per loop).
+pub fn loft_sections(sections: &[(f64, Region)]) -> Result<Solid> {
+    if sections.len() < 2 {
+        return Err(KernelError::InvalidParameter("a loft needs two sections".into()));
+    }
+    let n_loops = 1 + sections[0].1.holes.len();
     let mut shell = truck_modeling::Shell::new();
     let (mut bottom, mut top) = (Vec::new(), Vec::new());
-    for (l, outer) in loops {
-        let sign = if outer { 1.0 } else { -1.0 };
-        let wires: Vec<Wire> = heights
+    for k in 0..n_loops {
+        let wires: Vec<Wire> = sections
             .iter()
-            .map(|&z| l.offset(sign * offset(z)).ok_or_else(too_large)?.wire(z, outer))
+            .map(|(z, r)| {
+                let l = if k == 0 { &r.outer } else { r.holes.get(k - 1).ok_or_else(|| KernelError::InvalidParameter("sections differ".into()))? };
+                l.wire(*z, k == 0)
+            })
             .collect::<Result<_>>()?;
         for w in wires.windows(2) {
-            shell.extend(builder::try_wire_homotopy(&w[0], &w[1]).map_err(|e| KernelError::OperationFailed(format!("taper: {e:?}")))?);
+            shell.extend(builder::try_wire_homotopy(&w[0], &w[1]).map_err(|e| KernelError::OperationFailed(format!("loft: {e:?}")))?);
         }
         bottom.push(wires[0].clone());
         top.push(wires[wires.len() - 1].clone());
     }
-    let cap = |ws: &[Wire]| builder::try_attach_plane(ws).map_err(|e| KernelError::OperationFailed(format!("taper cap: {e:?}")));
+    let cap = |ws: &[Wire]| builder::try_attach_plane(ws).map_err(|e| KernelError::OperationFailed(format!("loft cap: {e:?}")));
     shell.push(cap(&bottom)?.inverse());
     shell.push(cap(&top)?);
-    let mut solid = Solid::try_new(vec![shell]).map_err(|e| KernelError::OperationFailed(format!("taper: {e:?}")))?;
+    let mut solid = Solid::try_new(vec![shell]).map_err(|e| KernelError::OperationFailed(format!("loft: {e:?}")))?;
     if crate::tessellate(&solid).volume() < 0.0 {
         solid.not();
     }

@@ -436,6 +436,13 @@ pub enum Command {
         distance: f64,
         editing: Option<EditCtx>,
     },
+    Draft {
+        body: Option<BodyId>,
+        faces: Vec<u32>,
+        angle: f64,
+        fixed_top: bool,
+        editing: Option<EditCtx>,
+    },
     Thread {
         body: Option<BodyId>,
         cyl: Option<m360_kernel::Cylinder>,
@@ -530,6 +537,7 @@ impl Command {
             Command::SplitBody { .. } => "SPLIT BODY",
             Command::Shell { .. } => "SHELL",
             Command::Thread { .. } => "THREAD",
+            Command::Draft { .. } => "DRAFT",
             Command::Scale { .. } => "SCALE",
             Command::Section { .. } => "SECTION ANALYSIS",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
@@ -565,6 +573,7 @@ impl Command {
             | Command::Scale { editing, .. }
             | Command::Shell { editing, .. }
             | Command::Thread { editing, .. }
+            | Command::Draft { editing, .. }
             | Command::Joint { editing, .. } => editing.as_ref(),
             _ => None,
         }
@@ -1064,6 +1073,22 @@ impl DocTab {
                 let r = m360_core::model::path_segments(&self.model, *ps, path)
                     .and_then(|segs| m360_core::model::pipe_tool(&segs, *diameter, if *hollow { *wall } else { 0.0 }));
                 (key, r)
+            }
+            Command::Draft { body: Some(b), faces, angle, fixed_top, .. } if !faces.is_empty() => {
+                let key = format!("draft{b}{faces:?}{angle}{fixed_top}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let Some(body) = self.model.body(*b) else {
+                    self.preview = None;
+                    return;
+                };
+                let r = m360_kernel::shell::draft(&body.mesh, faces, *angle, *fixed_top).map_err(|e| e.to_string());
+                self.preview = Some(match r {
+                    Ok(s) => Preview { key, mesh: Some(Arc::new(m360_kernel::tessellate_smooth(&s, 0.97))), error: None },
+                    Err(e) => Preview { key, mesh: None, error: Some(e) },
+                });
+                return;
             }
             Command::Shell { body: Some(b), faces, thickness, .. } => {
                 let key = format!("shell{b}{faces:?}{thickness}");

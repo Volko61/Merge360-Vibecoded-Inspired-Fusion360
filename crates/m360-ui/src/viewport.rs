@@ -10,6 +10,7 @@ use m360_render::{srgb, BodyDraw, Camera, FlatVertex, LineInst, Ray, Scene};
 use crate::app::Merge360App;
 use crate::state::{CombineField, Command, DocTab, NavMode, SelItem, SketchTool, VisualStyle};
 use crate::theme;
+use crate::i18n::tr;
 
 pub const SKETCH_BLUE: [f32; 3] = [0.12, 0.42, 0.85];
 
@@ -688,10 +689,13 @@ impl Merge360App {
             if scroll.abs() > 0.0 {
                 if let Some(p) = pointer {
                     let ndc = Vec2::new((p.x - rect.left()) / rect.width() * 2.0 - 1.0, 1.0 - (p.y - rect.top()) / rect.height() * 2.0);
-                    let factor = (-scroll * 0.0025).exp();
+                    let p = &self.prefs;
+                    let sign = if p.invert_zoom { -1.0 } else { 1.0 };
+                    let factor = (-scroll * 0.0025 * p.zoom_speed * sign).exp();
+                    let at = if p.zoom_to_cursor { ndc } else { Vec2::ZERO };
                     let tab = self.tab();
                     tab.anim = None;
-                    tab.camera.zoom_at(factor, ndc, aspect);
+                    tab.camera.zoom_at(factor, at, aspect);
                 }
             }
             // Pinch zoom on touchpads.
@@ -702,17 +706,27 @@ impl Merge360App {
             }
         }
 
-        // Middle mouse: pan, Shift+middle: orbit (Fusion defaults).
-        if middle_down && inside {
-            let tab = self.tab();
-            tab.anim = None;
-            if shift {
-                tab.camera.orbit(Vec2::new(delta.x, delta.y));
-            } else {
-                tab.camera.pan(Vec2::new(delta.x, delta.y), rect.height());
+        // Mouse navigation (Preferences ▸ Navigation: Fusion, Blender, ...).
+        let mods = ctx.input(|i| i.modifiers);
+        let held = [egui::PointerButton::Middle, egui::PointerButton::Secondary]
+            .into_iter()
+            .find(|b| ctx.input(|i| i.pointer.button_down(*b)));
+        let dragging_secondary = held == Some(egui::PointerButton::Secondary) && resp.dragged_by(egui::PointerButton::Secondary);
+        if let Some(button) = held.filter(|b| inside && (*b == egui::PointerButton::Middle || dragging_secondary)) {
+            if let Some(g) = self.prefs.navigation.gesture(button, mods) {
+                let (orbit, pan, zoom) = (self.prefs.orbit_speed, self.prefs.pan_speed, self.prefs.zoom_speed);
+                let invert = if self.prefs.invert_zoom { -1.0 } else { 1.0 };
+                let tab = self.tab();
+                tab.anim = None;
+                match g {
+                    crate::prefs::Gesture::Orbit => tab.camera.orbit(Vec2::new(delta.x, delta.y) * orbit),
+                    crate::prefs::Gesture::Pan => tab.camera.pan(Vec2::new(delta.x, delta.y) * pan, rect.height()),
+                    crate::prefs::Gesture::Zoom => tab.camera.zoom_at(1.0 + delta.y * 0.005 * zoom * invert, Vec2::ZERO, aspect),
+                }
+                return;
             }
-            return;
         }
+        let _ = (middle_down, shift);
 
         // Manipulator drag.
         if let Some(i) = self.canvas.manip_drag {
@@ -959,7 +973,7 @@ impl Merge360App {
                         *size = crate::state::iso_for(c.radius, c.internal);
                         *pitch = crate::state::ISO_THREADS[*size].2;
                     } else {
-                        self.toast(crate::app::ToastKind::Info, "Select a cylindrical face.");
+                        self.toast(crate::app::ToastKind::Info, tr("Select a cylindrical face."));
                     }
                 }
             }
@@ -1120,7 +1134,7 @@ impl Merge360App {
                             }
                             self.auto_extrude_op();
                         }
-                        None => self.toast(crate::app::ToastKind::Info, "Only planar faces can be extruded."),
+                        None => self.toast(crate::app::ToastKind::Info, tr("Only planar faces can be extruded.")),
                     }
                     return;
                 }
@@ -1244,7 +1258,7 @@ impl Merge360App {
                     *edges = ne;
                 }
                 if rejected {
-                    self.toast(crate::app::ToastKind::Info, "Only straight edges between flat faces can be filleted for now.");
+                    self.toast(crate::app::ToastKind::Info, tr("Only straight edges between flat faces can be filleted for now."));
                 }
                 }
 
@@ -1868,7 +1882,7 @@ impl Merge360App {
         };
         if let (Some(text), Some(p)) = (prompt, ui.input(|i| i.pointer.hover_pos()).filter(|p| self.canvas_rect.contains(*p))) {
             let pos = p + egui::vec2(16.0, 14.0);
-            let galley = painter.layout_no_wrap(text.to_string(), egui::FontId::proportional(11.5), Color32::WHITE);
+            let galley = painter.layout_no_wrap(tr(text).to_string(), egui::FontId::proportional(11.5), Color32::WHITE);
             let r = egui::Rect::from_min_size(pos, galley.size()).expand(4.0);
             painter.rect_filled(r, 3.0, Color32::from_rgba_unmultiplied(40, 42, 46, 220));
             painter.galley(pos, galley, Color32::WHITE);

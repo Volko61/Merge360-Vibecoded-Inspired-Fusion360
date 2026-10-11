@@ -4,6 +4,7 @@ use eframe::egui::{self, Color32, RichText, Stroke};
 use m360_core::Units;
 
 use crate::theme;
+use crate::i18n::tr;
 
 /// Text field for a length with unit expressions ("25", "1 in", "10mm+2").
 /// Returns true when the value changed.
@@ -93,7 +94,7 @@ pub fn command_dialog(
                     ui.painter().text(
                         rect.left_center() + egui::vec2(10.0, 0.0),
                         egui::Align2::LEFT_CENTER,
-                        title,
+                        tr(title),
                         egui::FontId::proportional(12.5),
                         Color32::WHITE,
                     );
@@ -111,11 +112,11 @@ pub fn command_dialog(
                             ui.painter().circle_stroke(r.center(), 6.5, Stroke::new(1.2, theme::TEXT_DIM));
                             ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "i", egui::FontId::proportional(10.0), theme::TEXT_DIM);
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if theme::secondary_button(ui, "Cancel").clicked() {
+                                if theme::secondary_button(ui, tr("Cancel")).clicked() {
                                     res.cancel = true;
                                 }
                                 ui.add_enabled_ui(ok_enabled, |ui| {
-                                    if theme::primary_button(ui, "OK").clicked() {
+                                    if theme::primary_button(ui, tr("OK")).clicked() {
                                         res.ok = true;
                                     }
                                 });
@@ -131,6 +132,7 @@ pub fn command_dialog(
 pub fn selection_field(ui: &mut egui::Ui, active: bool, text: &str) -> egui::Response {
     let fill = if active { theme::ACCENT } else { Color32::from_rgb(0xee, 0xef, 0xf1) };
     let color = if active { Color32::WHITE } else { theme::TEXT };
+    let text = tr_counted(text);
     let resp = ui.add(egui::Button::new(RichText::new(format!("     {text}")).color(color)).fill(fill).min_size(egui::vec2(120.0, 20.0)));
     // Small cursor arrow glyph, like Fusion's selection fields.
     let p = resp.rect.left_center() + egui::vec2(9.0, -5.0);
@@ -142,7 +144,15 @@ pub fn selection_field(ui: &mut egui::Ui, active: bool, text: &str) -> egui::Res
     resp
 }
 
+/// Translate "Select", "3 selected", "1 Faces removed"-style texts.
+pub fn tr_counted(text: &str) -> String {
+    match text.split_once(' ') {
+        Some((n, rest)) if n.chars().all(|c| c.is_ascii_digit()) => format!("{n} {}", tr(rest)),
+        _ => tr(text).to_string(),
+    }
+}
+
 /// Label column of a dialog row.
 pub fn row_label(ui: &mut egui::Ui, text: &str) {
-    ui.label(RichText::new(text).color(theme::TEXT_DIM));
+    ui.label(RichText::new(tr(text)).color(theme::TEXT_DIM));
 }

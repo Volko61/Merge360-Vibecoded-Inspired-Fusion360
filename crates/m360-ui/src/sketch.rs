@@ -8,6 +8,7 @@ use crate::app::Merge360App;
 use crate::app::ToastKind;
 use crate::state::{ConKind, DimEdit, EditPurpose, SelItem, SketchSession, SketchTool};
 use crate::viewport::{grid_step, ray_plane, to_world};
+use crate::i18n::tr;
 
 fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
     (a[0] - b[0]).hypot(a[1] - b[1])
@@ -307,7 +308,7 @@ impl Merge360App {
             (SketchTool::Mirror, Some(SelItem::SketchEntity(_, l))) => {
                 let targets = tab.sketch.as_ref().map(|s| s.targets.clone()).unwrap_or_default();
                 let Some(SketchEntity::Line { a, b }) = ents.get(l).cloned() else {
-                    return self.toast(ToastKind::Info, "Select a line as the mirror line.");
+                    return self.toast(ToastKind::Info, tr("Select a line as the mirror line."));
                 };
                 let targets: Vec<usize> = targets.into_iter().filter(|&i| i != l && i < ents.len()).collect();
                 if self.sketch_edit("Sketch Mirror", |e, c| {
@@ -392,7 +393,7 @@ impl Merge360App {
                 if lines.len() == 2 {
                     open(self, EditPurpose::Fillet(lines[0], lines[1]), 2.0);
                 } else {
-                    self.toast(ToastKind::Info, "Click a corner where exactly two lines meet.");
+                    self.toast(ToastKind::Info, tr("Click a corner where exactly two lines meet."));
                 }
             }
             _ => {}
@@ -612,7 +613,7 @@ impl Merge360App {
                     e.extend(new);
                 }),
                 _ => {
-                    self.toast(ToastKind::Warning, "Enter a quantity between 2 and 360.");
+                    self.toast(ToastKind::Warning, tr("Enter a quantity between 2 and 360."));
                     false
                 }
             },
@@ -630,7 +631,7 @@ impl Merge360App {
                         })
                     }
                     _ => {
-                        self.toast(ToastKind::Warning, "Enter a quantity (e.g. 4) or a grid (e.g. 4 x 3).");
+                        self.toast(ToastKind::Warning, tr("Enter a quantity (e.g. 4) or a grid (e.g. 4 x 3)."));
                         false
                     }
                 }
@@ -653,7 +654,7 @@ impl Merge360App {
                     }
                 }),
                 _ => {
-                    self.toast(ToastKind::Warning, "Enter a positive scale factor.");
+                    self.toast(ToastKind::Warning, tr("Enter a positive scale factor."));
                     false
                 }
             },
@@ -744,7 +745,7 @@ impl Merge360App {
                             e.push(arc);
                         });
                     }
-                    None => self.toast(ToastKind::Warning, "The fillet radius is too large for these lines."),
+                    None => self.toast(ToastKind::Warning, tr("The fillet radius is too large for these lines.")),
                 }
                 return;
             }
@@ -752,7 +753,7 @@ impl Merge360App {
             _ => return,
         }
         if v <= 0.0 {
-            self.toast(ToastKind::Warning, "Dimensions must be positive.");
+            self.toast(ToastKind::Warning, tr("Dimensions must be positive."));
             return;
         }
         let mut c = ed.draft.clone();

@@ -9,6 +9,7 @@ use m360_render::Viewport3D;
 use crate::files::{FileDialog, FileMode};
 use crate::state::{CombineField, Command, DocTab, EditCtx, SelItem, SketchSession, SketchTool};
 use crate::{theme, tools};
+use crate::i18n::tr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToastKind {
@@ -80,6 +81,18 @@ pub struct Merge360App {
     pub drawing_view: (f32, glam::Vec2),
     pub render_settings: crate::render_ws::RenderSettings,
     pub untitled_counter: usize,
+    pub prefs: crate::prefs::Preferences,
+    pub prefs_ui: PrefsUi,
+    pub last_autosave: f64,
+}
+
+/// State of the Preferences window.
+#[derive(Default)]
+pub struct PrefsUi {
+    pub open: bool,
+    pub page: usize,
+    /// Action (and context) waiting for a key press to rebind it.
+    pub capture: Option<(String, crate::prefs::KeyContext)>,
 }
 
 impl Merge360App {
@@ -121,7 +134,12 @@ impl Merge360App {
             render_settings: Default::default(),
             script: std::env::var("M360_SCRIPT").ok().and_then(|p| crate::script::Script::load(&p)),
             untitled_counter: 1,
+            prefs: crate::prefs::Preferences::load(),
+            prefs_ui: PrefsUi::default(),
+            last_autosave: 0.0,
         };
+        cc.egui_ctx.set_zoom_factor(app.prefs.ui_scale);
+        app.apply_prefs_to_tab(0);
         if let Some(p) = open {
             app.open_path(&p);
         } else if std::env::var_os("M360_SAMPLE").is_some() {
@@ -143,6 +161,40 @@ impl Merge360App {
             }
         }
         app
+    }
+
+    /// Recovery copies of modified designs (Preferences ▸ General).
+    fn autosave(&mut self) {
+        let every = self.prefs.autosave_minutes as f64 * 60.0;
+        if every <= 0.0 || self.canvas_time - self.last_autosave < every {
+            return;
+        }
+        if self.last_autosave == 0.0 {
+            self.last_autosave = self.canvas_time;
+            return;
+        }
+        self.last_autosave = self.canvas_time;
+        let Some(dir) = crate::files::config_dir().map(|d| d.join("autosave")) else { return };
+        let _ = std::fs::create_dir_all(&dir);
+        for tab in self.tabs.iter().filter(|t| t.dirty) {
+            let name: String = tab.doc.name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+            let _ = tab.doc.save(&dir.join(format!("{name}.m360")));
+        }
+    }
+
+    /// Preference defaults for a newly created design tab.
+    pub fn apply_prefs_to_tab(&mut self, i: usize) {
+        let p = self.prefs.clone();
+        if let Some(tab) = self.tabs.get_mut(i) {
+            if tab.doc.features.is_empty() && tab.path.is_none() {
+                tab.doc.units = p.default_units;
+                if tab.doc.name == "Untitled" {
+                    tab.doc.name = crate::i18n::tr("Untitled").to_string();
+                }
+            }
+            tab.display.grid = p.show_grid;
+            tab.display.snap = p.snap_to_grid;
+        }
     }
 
     /// Load the built-in sample design (Help ▸ Open Sample Design).
@@ -371,7 +423,7 @@ impl Merge360App {
                 s.pending.clear();
                 s.picked.clear();
             } else {
-                self.toast(ToastKind::Info, "Sketch tools are available while editing a sketch.");
+                self.toast(ToastKind::Info, tr("Sketch tools are available while editing a sketch."));
             }
             return;
         }
@@ -693,11 +745,12 @@ impl Merge360App {
             }
             "change_parameters" => tab.command = Some(Command::Parameters),
             "doc_settings" => tab.command = Some(Command::DocSettings),
+            "preferences" => self.prefs_ui.open = true,
             "properties" => tab.command = Some(Command::Properties),
             "compute_all" => {
                 tab.regen.clear();
                 tab.regenerate();
-                self.toast(ToastKind::Info, "All features recomputed.");
+                self.toast(ToastKind::Info, tr("All features recomputed."));
             }
             "export_3dprint" => self.actions.push(Action::Export(FileMode::ExportStl)),
             "export_step" => self.actions.push(Action::Export(FileMode::ExportStep)),
@@ -1042,7 +1095,7 @@ impl Merge360App {
             .collect();
         let bodies = tab.selected_bodies();
         if features.is_empty() && bodies.is_empty() {
-            self.toast(ToastKind::Info, "Select bodies or features to delete.");
+            self.toast(ToastKind::Info, tr("Select bodies or features to delete."));
             return;
         }
         tab.edit("Delete", |d| {
@@ -1066,6 +1119,7 @@ impl Merge360App {
         self.untitled_counter += 1;
         let name = format!("Untitled({})", self.untitled_counter);
         self.tabs.push(DocTab::new(Document::new(name), None));
+        self.apply_prefs_to_tab(self.tabs.len() - 1);
         self.active = self.tabs.len() - 1;
     }
 
@@ -1126,7 +1180,7 @@ impl Merge360App {
             .filter(|b| if selected.is_empty() { tab.body_visible(b.id) } else { selected.contains(&b.id) })
             .collect();
         if bodies.is_empty() {
-            self.toast(ToastKind::Warning, "Nothing to export: no visible bodies.");
+            self.toast(ToastKind::Warning, tr("Nothing to export: no visible bodies."));
             return;
         }
         let res = match mode {
@@ -1216,6 +1270,7 @@ impl Merge360App {
         self.tabs.remove(i);
         if self.tabs.is_empty() {
             self.tabs.push(DocTab::new(Document::new("Untitled"), None));
+            self.apply_prefs_to_tab(self.tabs.len() - 1);
         }
         self.active = self.active.min(self.tabs.len() - 1);
     }
@@ -1231,31 +1286,35 @@ impl Merge360App {
     // ------------------------------------------------------------------ keyboard
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
-        let cmd = |k: Key| ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, k));
-        let cmd_shift = |k: Key| ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, k));
-        if cmd_shift(Key::S) {
-            self.actions.push(Action::SaveAs);
-        }
-        if cmd(Key::S) {
-            self.actions.push(Action::Save);
-        }
-        if cmd(Key::N) {
-            self.actions.push(Action::NewDesign);
-        }
-        if cmd(Key::O) {
-            self.actions.push(Action::Open);
-        }
-        if cmd(Key::Z) {
-            self.actions.push(Action::Undo);
-        }
-        if cmd(Key::Y) || cmd_shift(Key::Z) {
-            self.actions.push(Action::Redo);
-        }
-        if ctx.egui_wants_keyboard_input() {
+        use crate::prefs::KeyContext;
+        // Preferences ▸ Keyboard: the next key press rebinds an action.
+        if let Some((action, kctx)) = self.prefs_ui.capture.clone() {
+            let pressed = ctx.input(|i| {
+                i.events.iter().find_map(|e| match e {
+                    egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
+                    _ => None,
+                })
+            });
+            if let Some((key, m)) = pressed {
+                ctx.input_mut(|i| i.events.clear());
+                self.prefs_ui.capture = None;
+                match key {
+                    Key::Escape => {}
+                    Key::Backspace if m.is_none() => self.prefs.set_override(&action, kctx, None),
+                    _ => {
+                        let chord = crate::prefs::Chord { key, ctrl: m.command || m.ctrl, shift: m.shift, alt: m.alt };
+                        self.prefs.set_override(&action, kctx, Some(chord));
+                    }
+                }
+                self.prefs.save();
+                self.prefs.apply_globals();
+            }
             return;
         }
-        let key = |k: Key| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
-        if key(Key::Escape) {
+        let typing = ctx.egui_wants_keyboard_input();
+        let in_sketch = self.tab().sketch.is_some();
+        // Escape always cancels, whatever the keymap.
+        if !typing && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
             if self.flags.marking.is_some() || self.flags.toolbox.is_some() {
                 self.flags.marking = None;
                 self.flags.toolbox = None;
@@ -1275,61 +1334,98 @@ impl Merge360App {
                 tab.nav = crate::state::NavMode::Select;
             }
         }
-        if key(Key::Delete) || key(Key::Backspace) {
-            self.actions.push(Action::DeleteSelection);
-        }
-        if key(Key::F6) {
-            self.actions.push(Action::Fit);
-        }
-        if key(Key::Enter) {
-            self.flags.toolbox = None;
-            if self.tab().command.is_none() {
-                if let Some(t) = self.last_tool {
-                    self.actions.push(Action::Tool(t));
-                }
+        let mut bindings = self.prefs.bindings();
+        // Most specific chords first (Ctrl+Shift+Z before Ctrl+Z).
+        bindings.sort_by_key(|b| std::cmp::Reverse(b.chord.ctrl as u8 + b.chord.shift as u8 + b.chord.alt as u8));
+        // Sketch-specific bindings win over model/global ones.
+        bindings.sort_by_key(|b| b.ctx != KeyContext::Sketch);
+        for b in bindings {
+            let applies = match b.ctx {
+                KeyContext::Global => true,
+                KeyContext::Model => !in_sketch,
+                KeyContext::Sketch => in_sketch,
+            };
+            // Plain keys type text in fields; only Ctrl/Alt chords pass through.
+            if !applies || (typing && !b.chord.ctrl && !b.chord.alt) {
+                continue;
+            }
+            if ctx.input_mut(|i| i.consume_key(b.chord.modifiers(), b.chord.key)) {
+                self.run_action(b.action, in_sketch, ctx);
             }
         }
-        if key(Key::S) {
-            let pos = ctx.pointer_latest_pos().unwrap_or(self.canvas_rect.center());
-            self.flags.toolbox = Some(crate::marking::Toolbox::new(pos));
-        }
-        let in_sketch = self.tab().sketch.is_some();
-        let bindings: &[(Key, &'static str)] = if in_sketch {
-            &[
-                (Key::L, "sk_line"),
-                (Key::R, "sk_rect"),
-                (Key::C, "sk_circle"),
-                (Key::P, "sk_point"),
-                (Key::E, "extrude"),
-                (Key::I, "measure"),
-                (Key::D, "sk_dimension"),
-                (Key::T, "sk_trim"),
-                (Key::O, "sk_offset"),
-            ]
-        } else {
-            &[
-                (Key::E, "extrude"),
-                (Key::Q, "press_pull"),
-                (Key::F, "fillet"),
-                (Key::M, "move"),
-                (Key::J, "joint"),
-                (Key::H, "hole"),
-                (Key::I, "measure"),
-                (Key::A, "appearance"),
-                (Key::L, "sk_line"),
-                (Key::R, "sk_rect"),
-                (Key::C, "sk_circle"),
-            ]
+    }
+
+    /// Run a keyboard action: a tool id or an `@` command.
+    fn run_action(&mut self, action: &'static str, in_sketch: bool, ctx: &egui::Context) {
+        let now = self.now();
+        let view = |app: &mut Self, dir: glam::Vec3| {
+            let tab = app.tab();
+            let mut target = tab.camera;
+            target.look_from(dir);
+            if dir.x.abs() < 1e-4 && dir.z.abs() < 1e-4 {
+                let q = std::f32::consts::FRAC_PI_2;
+                target.yaw = (tab.camera.yaw / q).round() * q;
+            }
+            tab.animate_to(target, now);
         };
-        for (k, id) in bindings {
-            if key(*k) {
-                if !in_sketch && id.starts_with("sk_") {
-                    // Sketch shortcuts outside a sketch start a new one first (like Fusion).
-                    self.actions.push(Action::Tool("create_sketch"));
-                } else {
-                    self.actions.push(Action::Tool(id));
+        match action {
+            "@undo" => self.actions.push(Action::Undo),
+            "@redo" => self.actions.push(Action::Redo),
+            "@new" => self.actions.push(Action::NewDesign),
+            "@open" => self.actions.push(Action::Open),
+            "@save" => self.actions.push(Action::Save),
+            "@save_as" => self.actions.push(Action::SaveAs),
+            "@delete" => self.actions.push(Action::DeleteSelection),
+            "@fit" => self.actions.push(Action::Fit),
+            "@toolbox" => {
+                let pos = ctx.pointer_latest_pos().unwrap_or(self.canvas_rect.center());
+                self.flags.toolbox = Some(crate::marking::Toolbox::new(pos));
+            }
+            "@repeat" => {
+                self.flags.toolbox = None;
+                if self.tab().command.is_none() {
+                    if let Some(t) = self.last_tool {
+                        self.actions.push(Action::Tool(t));
+                    }
                 }
             }
+            "@select_all" => self.actions.push(Action::Tool("select_all")),
+            "@hide" | "@unhide_all" => {
+                let tab = self.tab();
+                let ids: Vec<u64> = if action == "@hide" { tab.selected_bodies() } else { tab.model.bodies.iter().map(|b| b.id).collect() };
+                let show = action == "@unhide_all";
+                if !ids.is_empty() {
+                    tab.edit(if show { "Show All" } else { "Hide" }, |d| {
+                        for id in &ids {
+                            let mut m = d.body_meta(*id);
+                            m.visible = show;
+                            d.bodies.insert(*id, m);
+                        }
+                    });
+                    tab.selection.clear();
+                }
+            }
+            "@toggle_sketch" => self.actions.push(if in_sketch { Action::FinishSketch } else { Action::Tool("create_sketch") }),
+            "@view_home" => {
+                let tab = self.tab();
+                let h = tab.home;
+                tab.animate_to(h, now);
+            }
+            "@view_front" => view(self, glam::Vec3::Z),
+            "@view_back" => view(self, glam::Vec3::NEG_Z),
+            "@view_top" => view(self, glam::Vec3::Y),
+            "@view_bottom" => view(self, glam::Vec3::NEG_Y),
+            "@view_right" => view(self, glam::Vec3::X),
+            "@view_left" => view(self, glam::Vec3::NEG_X),
+            "@toggle_ortho" => {
+                let c = &mut self.tab().camera;
+                c.ortho = !c.ortho;
+            }
+            id if !in_sketch && id.starts_with("sk_") => {
+                // Sketch shortcuts outside a sketch start a new one first (like Fusion).
+                self.actions.push(Action::Tool("create_sketch"));
+            }
+            id => self.actions.push(Action::Tool(id)),
         }
     }
 }
@@ -1439,7 +1535,21 @@ impl eframe::App for Merge360App {
             self.toasts_ui_pub(&ctx);
         }
         self.dialogs(&ctx);
+        self.preferences_ui(&ctx);
         self.process_actions();
+        self.autosave();
+        if self.prefs.show_fps {
+            let dt = ctx.input(|i| i.stable_dt).max(1e-4);
+            let r = self.canvas_rect;
+            ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("fps"))).text(
+                r.left_bottom() + egui::vec2(10.0, -60.0),
+                egui::Align2::LEFT_BOTTOM,
+                format!("{:.0} fps  ({:.1} ms)", 1.0 / dt, dt * 1000.0),
+                egui::FontId::monospace(11.0),
+                theme::TEXT_DIM,
+            );
+            ctx.request_repaint();
+        }
         self.dev_hooks(&ctx);
         // Keep animating while the camera transitions or toasts are visible.
         if self.tabs[self.active].anim.is_some() || !self.toasts.is_empty() {

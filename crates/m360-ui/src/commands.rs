@@ -9,6 +9,7 @@ use crate::app::{Action, Merge360App};
 use crate::state::{CombineField, Command, SelItem};
 use crate::theme;
 use crate::widgets::{angle_field, command_dialog, length_field, row_label, selection_field};
+use crate::i18n::tr;
 
 /// Volume (mm³) and centroid of a closed mesh.
 pub fn mass_props(m: &BodyMesh) -> (f64, DVec3) {
@@ -57,9 +58,9 @@ fn item_points(app: &Merge360App, item: &SelItem) -> Vec<Vec3> {
 
 fn units_combo(ui: &mut egui::Ui, units: &mut Units) -> bool {
     let mut changed = false;
-    egui::ComboBox::from_id_salt("units").selected_text(units.label()).show_ui(ui, |ui| {
+    egui::ComboBox::from_id_salt("units").selected_text(tr(units.label())).show_ui(ui, |ui| {
         for u in Units::ALL {
-            if ui.selectable_value(units, u, u.label()).changed() {
+            if ui.selectable_value(units, u, tr(u.label())).changed() {
                 changed = true;
             }
         }
@@ -173,10 +174,10 @@ impl Merge360App {
                                 ui.end_row();
                                 row_label(ui, "Rotation");
                                 egui::ComboBox::from_id_salt("coil_rot")
-                                    .selected_text(if *clockwise { "Clockwise" } else { "Counterclockwise" })
+                                    .selected_text(tr(if *clockwise { "Clockwise" } else { "Counterclockwise" }))
                                     .show_ui(ui, |ui| {
-                                        ui.selectable_value(clockwise, true, "Clockwise");
-                                        ui.selectable_value(clockwise, false, "Counterclockwise");
+                                        ui.selectable_value(clockwise, true, tr("Clockwise"));
+                                        ui.selectable_value(clockwise, false, tr("Counterclockwise"));
                                     });
                                 ui.end_row();
                                 row_label(ui, "Revolutions");
@@ -192,16 +193,16 @@ impl Merge360App {
                                 angle_field(ui, "coil_ang", taper);
                                 ui.end_row();
                                 row_label(ui, "Section");
-                                egui::ComboBox::from_id_salt("coil_sec").selected_text(section.label()).show_ui(ui, |ui| {
+                                egui::ComboBox::from_id_salt("coil_sec").selected_text(tr(section.label())).show_ui(ui, |ui| {
                                     for s in m360_core::CoilSectionType::ALL {
-                                        ui.selectable_value(section, s, s.label());
+                                        ui.selectable_value(section, s, tr(s.label()));
                                     }
                                 });
                                 ui.end_row();
                                 row_label(ui, "Section Position");
-                                egui::ComboBox::from_id_salt("coil_pos").selected_text(position.label()).show_ui(ui, |ui| {
+                                egui::ComboBox::from_id_salt("coil_pos").selected_text(tr(position.label())).show_ui(ui, |ui| {
                                     for p in m360_core::CoilPosition::ALL {
-                                        ui.selectable_value(position, p, p.label());
+                                        ui.selectable_value(position, p, tr(p.label()));
                                     }
                                 });
                                 ui.end_row();
@@ -212,13 +213,13 @@ impl Merge360App {
                             _ => {}
                         }
                         row_label(ui, "Operation");
-                        egui::ComboBox::from_id_salt("prim_op").selected_text("New Body").show_ui(ui, |ui| {
-                            let _ = ui.selectable_label(true, "New Body");
+                        egui::ComboBox::from_id_salt("prim_op").selected_text(tr("New Body")).show_ui(ui, |ui| {
+                            let _ = ui.selectable_label(true, tr("New Body"));
                         });
                         ui.end_row();
                     }
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -238,7 +239,7 @@ impl Merge360App {
                             faces.clear();
                         }
                         if let Some(sk) = *sketch {
-                            if ui.button("All").on_hover_text("Select all solid profiles of this sketch (e.g. text)").clicked() {
+                            if ui.button(tr("All")).on_hover_text(tr("Select all solid profiles of this sketch (e.g. text)")).clicked() {
                                 if let Some((_, ents)) = self.tabs[self.active].sketch_entities(sk) {
                                     *profiles = m360_core::sketch::solid_profiles(&ents);
                                 }
@@ -247,21 +248,21 @@ impl Merge360App {
                     });
                     ui.end_row();
                     row_label(ui, "Start");
-                    ui.label("Profile Plane");
+                    ui.label(tr("Profile Plane"));
                     ui.end_row();
                     row_label(ui, "Direction");
-                    egui::ComboBox::from_id_salt("ex_dir").selected_text(if *symmetric { "Symmetric" } else { "One Side" }).show_ui(ui, |ui| {
-                        ui.selectable_value(symmetric, false, "One Side");
-                        ui.selectable_value(symmetric, true, "Symmetric");
+                    egui::ComboBox::from_id_salt("ex_dir").selected_text(tr(if *symmetric { "Symmetric" } else { "One Side" })).show_ui(ui, |ui| {
+                        ui.selectable_value(symmetric, false, tr("One Side"));
+                        ui.selectable_value(symmetric, true, tr("Symmetric"));
                     });
                     ui.end_row();
                     row_label(ui, "Extent Type");
-                    ui.label("Distance");
+                    ui.label(tr("Distance"));
                     ui.end_row();
                     row_label(ui, "Distance");
                     ui.horizontal(|ui| {
                         length_field(ui, "ex_dist", distance, units);
-                        if ui.button("Flip").on_hover_text("Flip direction").clicked() {
+                        if ui.button(tr("Flip")).on_hover_text(tr("Flip direction")).clicked() {
                             *distance = -*distance;
                         }
                     });
@@ -275,14 +276,14 @@ impl Merge360App {
                         *op = if *distance < 0.0 { ExtrudeOp::Cut } else { ExtrudeOp::Join };
                     }
                     row_label(ui, "Operation");
-                    egui::ComboBox::from_id_salt("ex_op").selected_text(op.label()).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("ex_op").selected_text(tr(op.label())).show_ui(ui, |ui| {
                         for o in ExtrudeOp::ALL {
-                            ui.selectable_value(op, o, o.label());
+                            ui.selectable_value(op, o, tr(o.label()));
                         }
                     });
                     ui.end_row();
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -325,7 +326,7 @@ impl Merge360App {
                 let text = if bodies.is_empty() { "Select".into() } else { format!("{} Bodies", bodies.len()) };
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Move Object");
-                    ui.label("Bodies");
+                    ui.label(tr("Bodies"));
                     ui.end_row();
                     row_label(ui, "Objects");
                     if selection_field(ui, true, &text).clicked() {
@@ -333,7 +334,7 @@ impl Merge360App {
                     }
                     ui.end_row();
                     row_label(ui, "Move Type");
-                    ui.label("Translate + Rotate");
+                    ui.label(tr("Translate + Rotate"));
                     ui.end_row();
                     for (i, name) in ["X Distance", "Y Distance", "Z Distance"].iter().enumerate() {
                         row_label(ui, name);
@@ -396,25 +397,25 @@ impl Merge360App {
                     });
                     ui.end_row();
                     row_label(ui, "Type");
-                    ui.label("Angle");
+                    ui.label(tr("Angle"));
                     ui.end_row();
                     row_label(ui, "Angle");
                     ui.horizontal(|ui| {
                         angle_field(ui, "rev_angle", angle_deg);
-                        if ui.button("Full").clicked() {
+                        if ui.button(tr("Full")).clicked() {
                             *angle_deg = 360.0;
                         }
                     });
                     ui.end_row();
                     row_label(ui, "Operation");
-                    egui::ComboBox::from_id_salt("rev_op").selected_text(op.label()).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("rev_op").selected_text(tr(op.label())).show_ui(ui, |ui| {
                         for o in ExtrudeOp::ALL {
-                            ui.selectable_value(op, o, o.label());
+                            ui.selectable_value(op, o, tr(o.label()));
                         }
                     });
                     ui.end_row();
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -426,7 +427,7 @@ impl Merge360App {
                 let ok = sketch.is_some() && !profiles.is_empty() && path_sketch.is_some() && !path.is_empty() && preview_err.is_none();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Type");
-                    ui.label("Single path");
+                    ui.label(tr("Single path"));
                     ui.end_row();
                     row_label(ui, "Profile");
                     let t = if profiles.is_empty() { "Select".to_string() } else { format!("{} selected", profiles.len()) };
@@ -441,14 +442,14 @@ impl Merge360App {
                     }
                     ui.end_row();
                     row_label(ui, "Operation");
-                    egui::ComboBox::from_id_salt("sw_op").selected_text(op.label()).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("sw_op").selected_text(tr(op.label())).show_ui(ui, |ui| {
                         for o in ExtrudeOp::ALL {
-                            ui.selectable_value(op, o, o.label());
+                            ui.selectable_value(op, o, tr(o.label()));
                         }
                     });
                     ui.end_row();
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -466,7 +467,7 @@ impl Merge360App {
                     }
                     ui.end_row();
                     row_label(ui, "Section");
-                    ui.label("Circular");
+                    ui.label(tr("Circular"));
                     ui.end_row();
                     row_label(ui, "Section Size");
                     length_field(ui, "pipe_d", diameter, units);
@@ -480,14 +481,14 @@ impl Merge360App {
                         ui.end_row();
                     }
                     row_label(ui, "Operation");
-                    egui::ComboBox::from_id_salt("pipe_op").selected_text(op.label()).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("pipe_op").selected_text(tr(op.label())).show_ui(ui, |ui| {
                         for o in ExtrudeOp::ALL {
-                            ui.selectable_value(op, o, o.label());
+                            ui.selectable_value(op, o, tr(o.label()));
                         }
                     });
                     ui.end_row();
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -505,17 +506,17 @@ impl Merge360App {
                     }
                     ui.end_row();
                     row_label(ui, "");
-                    ui.label(egui::RichText::new("Select profiles in order").small().color(theme::TEXT_DIM));
+                    ui.label(egui::RichText::new(tr("Select profiles in order")).small().color(theme::TEXT_DIM));
                     ui.end_row();
                     row_label(ui, "Operation");
-                    egui::ComboBox::from_id_salt("loft_op").selected_text(op.label()).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("loft_op").selected_text(tr(op.label())).show_ui(ui, |ui| {
                         for o in ExtrudeOp::ALL {
-                            ui.selectable_value(op, o, o.label());
+                            ui.selectable_value(op, o, tr(o.label()));
                         }
                     });
                     ui.end_row();
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -535,17 +536,17 @@ impl Merge360App {
                     }
                     ui.end_row();
                     ui.label("");
-                    compute = ui.add_enabled(bodies.len() >= 2, egui::Button::new("Compute")).clicked();
+                    compute = ui.add_enabled(bodies.len() >= 2, egui::Button::new(tr("Compute"))).clicked();
                     ui.end_row();
                     if let Some(rs) = results {
                         if rs.is_empty() {
                             ui.label("");
-                            ui.label(RichText::new("No interference").color(theme::SUCCESS));
+                            ui.label(RichText::new(tr("No interference")).color(theme::SUCCESS));
                             ui.end_row();
                         }
                         let name = |id: u64| bodies.iter().position(|b| *b == id).map_or(String::new(), |k| names[k].clone());
                         for i in rs.iter() {
-                            ui.colored_label(theme::ERROR, "⚠");
+                            ui.colored_label(theme::ERROR, tr("⚠"));
                             ui.label(format!("{} ↔ {}: {} mm³", name(i.a), name(i.b), (i.volume * 100.0).round() / 100.0));
                             ui.end_row();
                         }
@@ -573,7 +574,7 @@ impl Merge360App {
                     }
                     ui.end_row();
                     row_label(ui, "Thread Type");
-                    ui.label("ISO Metric profile");
+                    ui.label(tr("ISO Metric profile"));
                     ui.end_row();
                     row_label(ui, "Size");
                     let before = *size;
@@ -598,14 +599,14 @@ impl Merge360App {
                         ui.end_row();
                     }
                     row_label(ui, "Modeled");
-                    ui.add_enabled(false, egui::Checkbox::new(&mut false, "")).on_disabled_hover_text("Cosmetic threads only for now");
+                    ui.add_enabled(false, egui::Checkbox::new(&mut false, "")).on_disabled_hover_text(tr("Cosmetic threads only for now"));
                     ui.end_row();
                     if let Some(c) = cyl {
                         let nominal = ISO_THREADS[*size].1;
                         let face_d = 2.0 * c.radius;
                         let expect = if c.internal { nominal - 1.0825 * ISO_THREADS[*size].2 } else { nominal };
                         if (face_d - expect).abs() > 0.5 {
-                            ui.colored_label(theme::ERROR, "⚠");
+                            ui.colored_label(theme::ERROR, tr("⚠"));
                             ui.colored_label(theme::ERROR, format!("Face ⌀ {} does not match {}", units.format(face_d), ISO_THREADS[*size].0));
                             ui.end_row();
                         }
@@ -632,10 +633,10 @@ impl Merge360App {
                     length_field(ui, "shell_t", thickness, units);
                     ui.end_row();
                     row_label(ui, "Direction");
-                    ui.label("Inside");
+                    ui.label(tr("Inside"));
                     ui.end_row();
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -700,7 +701,7 @@ impl Merge360App {
                     }
                     ui.end_row();
                     row_label(ui, "Motion");
-                    egui::ComboBox::from_id_salt("joint_motion").selected_text(motion.label()).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("joint_motion").selected_text(tr(motion.label())).show_ui(ui, |ui| {
                         for m in [m360_core::JointMotion::Rigid, m360_core::JointMotion::Revolute { angle_deg: 0.0 }, m360_core::JointMotion::Slider { offset: 0.0 }] {
                             if ui.selectable_label(motion.label() == m.label(), m.label()).clicked() {
                                 *motion = m;
@@ -770,7 +771,7 @@ impl Merge360App {
                     }
                     if *method == RefPlaneMethod::ThreePoints {
                         ui.label("");
-                        ui.label(RichText::new("Click near the ends of edges").small().color(theme::TEXT_DIM));
+                        ui.label(RichText::new(tr("Click near the ends of edges")).small().color(theme::TEXT_DIM));
                         ui.end_row();
                     }
                 });
@@ -808,7 +809,7 @@ impl Merge360App {
                 let text = if bodies.is_empty() { "Select".to_string() } else { format!("{} Bodies", bodies.len()) };
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Pattern Type");
-                    ui.label("Bodies");
+                    ui.label(tr("Bodies"));
                     ui.end_row();
                     row_label(ui, "Objects");
                     if selection_field(ui, true, &text).clicked() {
@@ -864,7 +865,7 @@ impl Merge360App {
                 let text = if bodies.is_empty() { "Select".to_string() } else { format!("{} Bodies", bodies.len()) };
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Pattern Type");
-                    ui.label("Bodies");
+                    ui.label(tr("Bodies"));
                     ui.end_row();
                     row_label(ui, "Objects");
                     if selection_field(ui, !*picking_plane, &text).clicked() {
@@ -885,7 +886,7 @@ impl Merge360App {
                 let ok = plane.is_some() && !points.is_empty() && preview_err.is_none();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Placement");
-                    ui.label("Single / multiple points");
+                    ui.label(tr("Single / multiple points"));
                     ui.end_row();
                     row_label(ui, "Face / Points");
                     let text = if points.is_empty() { "Select".to_string() } else { format!("{} Points", points.len()) };
@@ -895,13 +896,13 @@ impl Merge360App {
                     }
                     ui.end_row();
                     row_label(ui, "Extents");
-                    egui::ComboBox::from_id_salt("hole_ext").selected_text(if *through_all { "All" } else { "Distance" }).show_ui(ui, |ui| {
-                        ui.selectable_value(through_all, false, "Distance");
-                        ui.selectable_value(through_all, true, "All");
+                    egui::ComboBox::from_id_salt("hole_ext").selected_text(tr(if *through_all { "All" } else { "Distance" })).show_ui(ui, |ui| {
+                        ui.selectable_value(through_all, false, tr("Distance"));
+                        ui.selectable_value(through_all, true, tr("All"));
                     });
                     ui.end_row();
                     row_label(ui, "Hole Type");
-                    egui::ComboBox::from_id_salt("hole_type").selected_text(kind.label()).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("hole_type").selected_text(tr(kind.label())).show_ui(ui, |ui| {
                         let d = *diameter;
                         for k in [
                             m360_core::HoleType::Simple,
@@ -942,7 +943,7 @@ impl Merge360App {
                         }
                     }
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -967,13 +968,13 @@ impl Merge360App {
                     length_field(ui, "fillet_size", size, units);
                     ui.end_row();
                     row_label(ui, "Kind");
-                    egui::ComboBox::from_id_salt("fillet_kind").selected_text(if *chamfer { "Chamfer" } else { "Fillet" }).show_ui(ui, |ui| {
-                        ui.selectable_value(chamfer, false, "Fillet");
-                        ui.selectable_value(chamfer, true, "Chamfer");
+                    egui::ComboBox::from_id_salt("fillet_kind").selected_text(tr(if *chamfer { "Chamfer" } else { "Fillet" })).show_ui(ui, |ui| {
+                        ui.selectable_value(chamfer, false, tr("Fillet"));
+                        ui.selectable_value(chamfer, true, tr("Chamfer"));
                     });
                     ui.end_row();
                     if let Some(e) = &preview_err {
-                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, tr("⚠"));
                         ui.colored_label(theme::ERROR, e);
                         ui.end_row();
                     }
@@ -983,7 +984,7 @@ impl Merge360App {
             }
             Command::SketchPlane => {
                 let r = command_dialog(ctx, title, anchor, false, |ui| {
-                    ui.label("Select a plane or a planar face.");
+                    ui.label(tr("Select a plane or a planar face."));
                     ui.end_row();
                     for (name, b) in [("XY Plane", m360_core::BasePlane::XY), ("XZ Plane", m360_core::BasePlane::XZ), ("YZ Plane", m360_core::BasePlane::YZ)] {
                         if ui.button(name).clicked() {
@@ -1013,7 +1014,7 @@ impl Merge360App {
                     ui.label(if sel.is_empty() { "Select bodies".to_string() } else { format!("{} Bodies", sel.len()) });
                     ui.end_row();
                     row_label(ui, "Library");
-                    ui.label("Fusion Appearance Library");
+                    ui.label(tr("Fusion Appearance Library"));
                     ui.end_row();
                 });
                 // Swatch grid in its own area under the dialog.
@@ -1023,7 +1024,7 @@ impl Merge360App {
             }
             Command::Parameters => {
                 let mut open = true;
-                egui::Window::new("Parameters")
+                egui::Window::new(tr("Parameters"))
                     .open(&mut open)
                     .default_size([520.0, 360.0])
                     .default_pos(self.canvas_rect.center() - egui::vec2(260.0, 180.0))
@@ -1144,7 +1145,7 @@ impl Merge360App {
                     }
                 }
                 if matches!(op, ExtrudeOp::Cut | ExtrudeOp::Intersect) && participants.is_empty() {
-                    self.toast(crate::app::ToastKind::Warning, "No bodies intersect the extrusion; nothing to cut.");
+                    self.toast(crate::app::ToastKind::Warning, tr("No bodies intersect the extrusion; nothing to cut."));
                 }
                 let new = editing.is_none();
                 let faces: Vec<m360_core::FaceRef> = faces.into_iter().map(|f| f.0).collect();
@@ -1165,7 +1166,7 @@ impl Merge360App {
             Command::Revolve { sketch: Some(sketch), profiles, axis: Some(axis), angle_deg, op, editing, .. } => {
                 let participants = self.overlapping_bodies(op);
                 if matches!(op, ExtrudeOp::Cut | ExtrudeOp::Intersect) && participants.is_empty() {
-                    self.toast(crate::app::ToastKind::Warning, "No bodies intersect the revolve; nothing to cut.");
+                    self.toast(crate::app::ToastKind::Warning, tr("No bodies intersect the revolve; nothing to cut."));
                 }
                 let new = editing.is_none();
                 self.commit_feature(FeatureKind::Revolve { sketch, profiles, axis, angle_deg, op, participants }, editing);
@@ -1237,7 +1238,7 @@ impl Merge360App {
             Command::Hole { plane: Some(plane), points, diameter, depth, through_all, kind, editing } => {
                 let participants = self.overlapping_bodies(ExtrudeOp::Cut);
                 if participants.is_empty() {
-                    self.toast(crate::app::ToastKind::Warning, "The hole does not intersect any body.");
+                    self.toast(crate::app::ToastKind::Warning, tr("The hole does not intersect any body."));
                     return;
                 }
                 self.commit_feature(FeatureKind::Hole { plane, points, diameter, depth, through_all, kind, participants }, editing);
@@ -1334,7 +1335,7 @@ impl Merge360App {
         egui::Area::new(egui::Id::new("appearance_swatches")).fixed_pos(pos).order(egui::Order::Foreground).show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_width(286.0);
-                ui.label(RichText::new("In This Design / Library").small().color(theme::TEXT_DIM));
+                ui.label(RichText::new(tr("In This Design / Library")).small().color(theme::TEXT_DIM));
                 egui::Grid::new("swatches").spacing([6.0, 6.0]).show(ui, |ui| {
                     for (i, (name, c)) in MATERIALS.iter().enumerate() {
                         let col = Color32::from_rgb((c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8);
@@ -1347,7 +1348,7 @@ impl Merge360App {
                         }
                         if resp.on_hover_text(*name).clicked() {
                             if sel.is_empty() {
-                                self.toast(crate::app::ToastKind::Info, "Select bodies first, then click an appearance.");
+                                self.toast(crate::app::ToastKind::Info, tr("Select bodies first, then click an appearance."));
                             } else {
                                 let ids = sel.to_vec();
                                 let color = *c;
@@ -1377,8 +1378,8 @@ impl Merge360App {
         egui::ScrollArea::vertical().show(ui, |ui| {
             // ---- user parameters
             ui.horizontal(|ui| {
-                ui.label(RichText::new("User Parameters").strong());
-                if ui.small_button("+ Add").clicked() {
+                ui.label(RichText::new(tr("User Parameters")).strong());
+                if ui.small_button(tr("+ Add")).clicked() {
                     let mut k = params.len() + 1;
                     while params.iter().any(|p| p.name == format!("d{k}")) {
                         k += 1;
@@ -1405,7 +1406,7 @@ impl Merge360App {
                         None => ui.colored_label(theme::ERROR, err.unwrap_or_default()),
                     };
                     let rc = ui.add(egui::TextEdit::singleline(&mut comment).desired_width(120.0));
-                    if ui.small_button("✕").on_hover_text("Delete parameter").clicked() {
+                    if ui.small_button(tr("✕")).on_hover_text(tr("Delete parameter")).clicked() {
                         remove = Some(i);
                     }
                     ui.end_row();
@@ -1439,8 +1440,8 @@ impl Merge360App {
                 }
             });
             ui.add_space(10.0);
-            ui.label(RichText::new("Model Parameters").strong());
-            ui.label(RichText::new("Type a value or an expression using user parameters (e.g. width / 2 + 3 mm).").small().color(theme::TEXT_DIM));
+            ui.label(RichText::new(tr("Model Parameters")).strong());
+            ui.label(RichText::new(tr("Type a value or an expression using user parameters (e.g. width / 2 + 3 mm).")).small().color(theme::TEXT_DIM));
             let features = self.tabs[self.active].doc.features.clone();
             egui::Grid::new("params").striped(true).num_columns(4).spacing([16.0, 4.0]).show(ui, |ui| {
                 for h in ["Feature", "Parameter", "Expression", "Value"] {
@@ -1498,59 +1499,67 @@ impl Merge360App {
 
     fn misc_windows(&mut self, ctx: &egui::Context) {
         if self.flags.about {
-            egui::Window::new("About Merge360").collapsible(false).resizable(false).open(&mut self.flags.about).show(ctx, |ui| {
-                ui.heading("Merge360");
+            egui::Window::new(tr("About Merge360")).collapsible(false).resizable(false).open(&mut self.flags.about).show(ctx, |ui| {
+                ui.heading(tr("Merge360"));
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-                ui.label("A parametric 3D CAD application written in Rust,");
-                ui.label("inspired by the Fusion 360 workflow. Offline-only.");
+                ui.label(tr("A parametric 3D CAD application written in Rust,"));
+                ui.label(tr("inspired by the Fusion 360 workflow. Offline-only."));
                 ui.add_space(6.0);
-                ui.label(RichText::new("Kernel: truck (B-rep) · UI: egui · Rendering: wgpu").color(theme::TEXT_DIM));
+                ui.label(RichText::new(tr("Kernel: truck (B-rep) · UI: egui · Rendering: wgpu")).color(theme::TEXT_DIM));
             });
         }
         if self.flags.shortcuts {
-            egui::Window::new("Keyboard Shortcuts").collapsible(false).open(&mut self.flags.shortcuts).show(ctx, |ui| {
-                egui::Grid::new("keys").striped(true).show(ui, |ui| {
-                    for (k, d) in [
-                        ("S", "Toolbox (search tools)"),
-                        ("E", "Extrude"),
-                        ("M", "Move/Copy"),
-                        ("I", "Measure"),
-                        ("A", "Appearance"),
-                        ("L / R / C / P", "Line / Rectangle / Circle / Point (sketch)"),
-                        ("Enter", "Repeat last command"),
-                        ("Esc", "Cancel / clear selection"),
-                        ("Delete", "Delete selection"),
-                        ("F6", "Fit to view"),
-                        ("Ctrl+Z / Ctrl+Y", "Undo / Redo"),
-                        ("Ctrl+S / Ctrl+O / Ctrl+N", "Save / Open / New"),
-                        ("Middle drag", "Pan"),
-                        ("Shift + Middle drag", "Orbit"),
-                        ("Wheel", "Zoom at cursor"),
-                        ("Right click", "Marking menu"),
-                    ] {
-                        ui.label(RichText::new(k).strong());
-                        ui.label(d);
+            let bindings = self.prefs.bindings();
+            let nav = self.prefs.navigation;
+            let mut open_prefs = false;
+            egui::Window::new(tr("Keyboard Shortcuts")).collapsible(false).open(&mut self.flags.shortcuts).show(ctx, |ui| {
+                ui.label(RichText::new(format!("{}: {}", tr("Keyboard shortcuts"), self.prefs.keymap.label())).strong());
+                egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
+                    egui::Grid::new("keys").striped(true).show(ui, |ui| {
+                        for b in &bindings {
+                            ui.label(RichText::new(b.chord.text()).strong());
+                            ui.label(tr(crate::prefs::action_label(b.action)));
+                            ui.label(RichText::new(tr(b.ctx.label())).color(theme::TEXT_DIM));
+                            ui.end_row();
+                        }
+                        ui.label(RichText::new("Esc").strong());
+                        ui.label(tr("Cancel / clear selection"));
                         ui.end_row();
-                    }
+                        for (what, how) in nav.describe() {
+                            ui.label(RichText::new(tr(how)).strong());
+                            ui.label(tr(what));
+                            ui.end_row();
+                        }
+                        ui.label(RichText::new(tr("Right click")).strong());
+                        ui.label(tr("Marking menu"));
+                        ui.end_row();
+                    });
                 });
+                if ui.button(tr("Customize…")).clicked() {
+                    open_prefs = true;
+                }
             });
+            if open_prefs {
+                self.prefs_ui.open = true;
+                self.prefs_ui.page = 2;
+            }
         }
         if let Some(i) = self.flags.confirm_close {
             let name = self.tabs.get(i).map(|t| t.doc.name.clone()).unwrap_or_default();
             let mut decision = None;
             egui::Modal::new(egui::Id::new("confirm_close")).show(ctx, |ui| {
                 ui.set_width(320.0);
-                ui.heading("Save changes?");
+                ui.heading(tr("Save changes?"));
                 ui.label(format!("\"{name}\" has unsaved changes."));
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    if theme::primary_button(ui, "Save").clicked() {
+                    if theme::primary_button(ui, tr("Save")).clicked() {
                         decision = Some(0);
                     }
-                    if theme::secondary_button(ui, "Don't Save").clicked() {
+                    if theme::secondary_button(ui, tr("Don't Save")).clicked() {
                         decision = Some(1);
                     }
-                    if theme::secondary_button(ui, "Cancel").clicked() {
+                    if theme::secondary_button(ui, tr("Cancel")).clicked() {
                         decision = Some(2);
                     }
                 });

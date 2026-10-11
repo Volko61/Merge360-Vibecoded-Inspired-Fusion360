@@ -5,6 +5,7 @@ use eframe::egui::{self, pos2, vec2, Color32, Pos2, RichText, Sense, Stroke};
 use crate::app::{Action, Merge360App};
 use crate::icons::{self, Icon};
 use crate::{theme, tools};
+use crate::i18n::tr;
 
 pub struct MarkingMenu {
     pub center: Pos2,
@@ -45,16 +46,16 @@ impl Merge360App {
         match item {
             Item::Tool(id) => {
                 let t = tools::find(id);
-                (t.map_or(id.to_string(), |t| t.label.to_string()), t.map_or(Icon::Generic, |t| t.icon), tools::is_implemented(id))
+                (t.map_or(id.to_string(), |t| tr(t.label).to_string()), t.map_or(Icon::Generic, |t| t.icon), tools::is_implemented(id))
             }
             Item::Repeat => match self.last_tool.and_then(tools::find) {
-                Some(t) => (format!("Repeat {}", t.label), t.icon, true),
-                None => ("Repeat".into(), Icon::Generic, false),
+                Some(t) => (format!("{} {}", tr("Repeat"), tr(t.label)), t.icon, true),
+                None => (tr("Repeat").into(), Icon::Generic, false),
             },
-            Item::Undo => ("Undo".into(), Icon::Undo, self.tabs[self.active].history.can_undo()),
-            Item::Redo => ("Redo".into(), Icon::Redo, self.tabs[self.active].history.can_redo()),
-            Item::ToggleVisibility => ("Show/Hide".into(), Icon::Eye, !self.tabs[self.active].selected_bodies().is_empty()),
-            Item::FinishSketch => ("Finish Sketch".into(), Icon::FinishSketch, true),
+            Item::Undo => (tr("Undo").into(), Icon::Undo, self.tabs[self.active].history.can_undo()),
+            Item::Redo => (tr("Redo").into(), Icon::Redo, self.tabs[self.active].history.can_redo()),
+            Item::ToggleVisibility => (tr("Show/Hide").into(), Icon::Eye, !self.tabs[self.active].selected_bodies().is_empty()),
+            Item::FinishSketch => (tr("Finish Sketch").into(), Icon::FinishSketch, true),
         }
     }
 
@@ -202,8 +203,10 @@ impl Merge360App {
         let in_sketch = self.tabs[self.active].sketch.is_some();
         let all = tools::all_tools(in_sketch);
         let q = tb.query.to_lowercase();
-        let mut matches: Vec<tools::Tool> = all.into_iter().filter(|t| q.is_empty() || t.label.to_lowercase().contains(&q)).collect();
-        matches.sort_by_key(|t| (!tools::is_implemented(t.id), !t.label.to_lowercase().starts_with(&q)));
+        // Search both the translated and the English names.
+        let hit = |t: &tools::Tool, f: &dyn Fn(&str) -> bool| f(&tr(t.label).to_lowercase()) || f(&t.label.to_lowercase());
+        let mut matches: Vec<tools::Tool> = all.into_iter().filter(|t| q.is_empty() || hit(t, &|l| l.contains(&q))).collect();
+        matches.sort_by_key(|t| (!tools::is_implemented(t.id), !hit(t, &|l| l.starts_with(&q))));
         matches.truncate(12);
         tb.index = tb.index.min(matches.len().saturating_sub(1));
         let mut run: Option<&'static str> = None;
@@ -211,8 +214,8 @@ impl Merge360App {
         let area = egui::Area::new(egui::Id::new("toolbox")).fixed_pos(tb.pos - vec2(130.0, 20.0)).order(egui::Order::Foreground).show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_width(260.0);
-                ui.label(RichText::new("TOOLBOX").size(11.0).strong().color(theme::TEXT_DIM));
-                let r = ui.add(egui::TextEdit::singleline(&mut tb.query).hint_text("Search tools…").desired_width(250.0));
+                ui.label(RichText::new(tr("TOOLBOX")).size(11.0).strong().color(theme::TEXT_DIM));
+                let r = ui.add(egui::TextEdit::singleline(&mut tb.query).hint_text(tr("Search tools…")).desired_width(250.0));
                 if !tb.focused {
                     r.request_focus();
                     tb.focused = true;
@@ -235,15 +238,15 @@ impl Merge360App {
                     let resp = ui.horizontal(|ui| {
                         let (ir, _) = ui.allocate_exact_size(vec2(20.0, 20.0), Sense::hover());
                         icons::paint(ui.painter(), ir, t.icon, None);
-                        let text = RichText::new(t.label).color(if implemented { theme::TEXT } else { theme::TEXT_DIM });
-                        ui.add(egui::Button::new(text).shortcut_text(t.shortcut.unwrap_or("")).selected(k == tb.index).min_size(vec2(226.0, 22.0)))
+                        let text = RichText::new(tr(t.label)).color(if implemented { theme::TEXT } else { theme::TEXT_DIM });
+                        ui.add(egui::Button::new(text).shortcut_text(crate::prefs::shortcut_label(t.id).unwrap_or_default()).selected(k == tb.index).min_size(vec2(226.0, 22.0)))
                     });
                     if resp.inner.clicked() {
                         run = Some(t.id);
                     }
                 }
                 if matches.is_empty() {
-                    ui.label(RichText::new("No matching tools").color(theme::TEXT_DIM));
+                    ui.label(RichText::new(tr("No matching tools")).color(theme::TEXT_DIM));
                 }
             });
         });

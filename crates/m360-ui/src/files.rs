@@ -7,6 +7,7 @@ use eframe::egui::{self, RichText};
 use crate::app::{Action, Merge360App};
 use crate::icons::{self, Icon};
 use crate::theme;
+use crate::i18n::tr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileMode {
@@ -56,7 +57,7 @@ impl FileDialog {
     }
 }
 
-fn config_dir() -> Option<PathBuf> {
+pub fn config_dir() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
@@ -164,13 +165,13 @@ impl Merge360App {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if ui.button("⬆").on_hover_text("Parent folder").clicked() {
+                    if ui.button(tr("⬆")).on_hover_text(tr("Parent folder")).clicked() {
                         if let Some(p) = dlg.dir.parent() {
                             dlg.dir = p.to_path_buf();
                             dlg.dir_text = dlg.dir.display().to_string();
                         }
                     }
-                    if ui.button("⌂").on_hover_text("Home").clicked() {
+                    if ui.button(tr("⌂")).on_hover_text(tr("Home")).clicked() {
                         if let Some(h) = std::env::var_os("HOME") {
                             dlg.dir = PathBuf::from(h);
                             dlg.dir_text = dlg.dir.display().to_string();
@@ -220,7 +221,7 @@ impl Merge360App {
                 });
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.label("Name:");
+                    ui.label(tr("Name:"));
                     let r = ui.add(egui::TextEdit::singleline(&mut dlg.name).desired_width(300.0));
                     // Focus the name field for the first frames (the window's
                     // sizing pass swallows a single request).
@@ -231,7 +232,7 @@ impl Merge360App {
                     ui.label(RichText::new(format!(".{}", dlg.mode.ext())).color(theme::TEXT_DIM));
                     let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if theme::secondary_button(ui, "Cancel").clicked() {
+                        if theme::secondary_button(ui, tr("Cancel")).clicked() {
                             close = true;
                         }
                         let label = match dlg.mode {
@@ -300,28 +301,28 @@ impl Merge360App {
             .frame(egui::Frame::new().fill(theme::PANEL_BG).inner_margin(8).stroke(egui::Stroke::new(1.0, theme::PANEL_BORDER)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("DATA PANEL").strong().size(12.0));
+                    ui.label(RichText::new(tr("DATA PANEL")).strong().size(12.0));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("✕").clicked() {
+                        if ui.small_button(tr("✕")).clicked() {
                             self.flags.data_panel = false;
                         }
                     });
                 });
-                ui.label(RichText::new("Local designs (no cloud)").color(theme::TEXT_DIM).small());
+                ui.label(RichText::new(tr("Local designs (no cloud)")).color(theme::TEXT_DIM).small());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    if theme::primary_button(ui, "New Design").clicked() {
+                    if theme::primary_button(ui, tr("New Design")).clicked() {
                         self.actions.push(Action::NewDesign);
                     }
-                    if theme::secondary_button(ui, "Open…").clicked() {
+                    if theme::secondary_button(ui, tr("Open…")).clicked() {
                         self.actions.push(Action::Open);
                     }
                 });
                 ui.separator();
-                ui.label(RichText::new("RECENT").small().color(theme::TEXT_DIM));
+                ui.label(RichText::new(tr("RECENT")).small().color(theme::TEXT_DIM));
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     if self.recent.is_empty() {
-                        ui.label(RichText::new("Saved designs will appear here.").color(theme::TEXT_DIM));
+                        ui.label(RichText::new(tr("Saved designs will appear here.")).color(theme::TEXT_DIM));
                     }
                     for p in self.recent.clone() {
                         let name = p.file_stem().unwrap_or_default().to_string_lossy().into_owned();

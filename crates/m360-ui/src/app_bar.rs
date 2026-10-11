@@ -7,6 +7,7 @@ use crate::files::FileMode;
 use crate::icons::{self, Icon};
 use crate::theme;
 use crate::tools::{self, egui_color::Accent, Tab};
+use crate::i18n::tr;
 
 fn bar_icon(ui: &mut egui::Ui, icon: Icon, tooltip: &str, enabled: bool) -> egui::Response {
     let size = egui::vec2(28.0, 28.0);
@@ -59,29 +60,29 @@ impl Merge360App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let user = bar_icon(ui, Icon::User, "Local user (offline)", true);
                         egui::Popup::menu(&user).show(|ui| {
-                            ui.label(RichText::new("Merge360 — offline mode").strong());
-                            ui.label("No account needed: everything is stored locally.");
-                            if ui.button("Preferences…").clicked() {
+                            ui.label(RichText::new(tr("Merge360 — offline mode")).strong());
+                            ui.label(tr("No account needed: everything is stored locally."));
+                            if ui.button(tr("Preferences…")).clicked() {
                                 self.actions.push(Action::Tool("preferences"));
                             }
                         });
                         let help = bar_icon(ui, Icon::Help, "Help", true);
                         egui::Popup::menu(&help).show(|ui| {
-                            if ui.button("Open Sample Design").clicked() {
+                            if ui.button(tr("Open Sample Design")).clicked() {
                                 self.open_sample();
                             }
-                            if ui.button("Keyboard Shortcuts").clicked() {
+                            if ui.button(tr("Keyboard Shortcuts")).clicked() {
                                 self.flags.shortcuts = true;
                             }
-                            if ui.button("About Merge360").clicked() {
+                            if ui.button(tr("About Merge360")).clicked() {
                                 self.flags.about = true;
                             }
                         });
                         let bell = bar_icon(ui, Icon::Bell, "Notifications", true);
                         egui::Popup::menu(&bell).show(|ui| {
                             ui.set_min_width(220.0);
-                            ui.label(RichText::new("Notifications").strong());
-                            ui.label(RichText::new("You're all caught up.").color(theme::TEXT_DIM));
+                            ui.label(RichText::new(tr("Notifications")).strong());
+                            ui.label(RichText::new(tr("You're all caught up.")).color(theme::TEXT_DIM));
                         });
                     });
                 });
@@ -123,15 +124,15 @@ impl Merge360App {
 
     fn file_menu(&mut self, ui: &mut egui::Ui) {
         ui.set_min_width(220.0);
-        if ui.add(egui::Button::new("New Design").shortcut_text("Ctrl+N")).clicked() {
+        if ui.add(egui::Button::new(tr("New Design")).shortcut_text("Ctrl+N")).clicked() {
             self.actions.push(Action::NewDesign);
         }
-        if ui.add(egui::Button::new("Open…").shortcut_text("Ctrl+O")).clicked() {
+        if ui.add(egui::Button::new(tr("Open…")).shortcut_text("Ctrl+O")).clicked() {
             self.actions.push(Action::Open);
         }
         ui.menu_button("Recent Designs", |ui| {
             if self.recent.is_empty() {
-                ui.label(RichText::new("No recent designs").color(theme::TEXT_DIM));
+                ui.label(RichText::new(tr("No recent designs")).color(theme::TEXT_DIM));
             }
             for p in self.recent.clone() {
                 let name = p.file_name().map_or_else(|| p.display().to_string(), |n| n.to_string_lossy().into_owned());
@@ -141,38 +142,38 @@ impl Merge360App {
             }
         });
         ui.separator();
-        if ui.add(egui::Button::new("Save").shortcut_text("Ctrl+S")).clicked() {
+        if ui.add(egui::Button::new(tr("Save")).shortcut_text("Ctrl+S")).clicked() {
             self.actions.push(Action::Save);
         }
-        if ui.add(egui::Button::new("Save As…").shortcut_text("Ctrl+Shift+S")).clicked() {
+        if ui.add(egui::Button::new(tr("Save As…")).shortcut_text("Ctrl+Shift+S")).clicked() {
             self.actions.push(Action::SaveAs);
         }
         ui.menu_button("Export", |ui| {
-            if ui.button("STL (*.stl)").clicked() {
+            if ui.button(tr("STL (*.stl)")).clicked() {
                 self.actions.push(Action::Export(FileMode::ExportStl));
             }
-            if ui.button("STEP (*.step)").clicked() {
+            if ui.button(tr("STEP (*.step)")).clicked() {
                 self.actions.push(Action::Export(FileMode::ExportStep));
             }
         });
-        if ui.button("3D Print").clicked() {
+        if ui.button(tr("3D Print")).clicked() {
             self.actions.push(Action::Export(FileMode::ExportStl));
         }
-        if ui.button("Capture Image…").clicked() {
-            self.toast(ToastKind::Info, "Capture Image is not available yet in Merge360.");
+        if ui.button(tr("Capture Image…")).clicked() {
+            self.toast(ToastKind::Info, tr("Capture Image is not available yet in Merge360."));
         }
         ui.separator();
         ui.menu_button("View", |ui| {
-            ui.checkbox(&mut self.flags.browser_open, "Show Browser");
-            ui.checkbox(&mut self.flags.timeline_open, "Show Timeline");
-            ui.checkbox(&mut self.flags.comments_open, "Show Comments");
-            ui.checkbox(&mut self.flags.data_panel, "Show Data Panel");
+            ui.checkbox(&mut self.flags.browser_open, tr("Show Browser"));
+            ui.checkbox(&mut self.flags.timeline_open, tr("Show Timeline"));
+            ui.checkbox(&mut self.flags.comments_open, tr("Show Comments"));
+            ui.checkbox(&mut self.flags.data_panel, tr("Show Data Panel"));
         });
         ui.separator();
-        if ui.button("Close Design").clicked() {
+        if ui.button(tr("Close Design")).clicked() {
             self.actions.push(Action::CloseTab(self.active));
         }
-        if ui.button("Exit").clicked() {
+        if ui.button(tr("Exit")).clicked() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
@@ -221,7 +222,7 @@ impl Merge360App {
                                 let name = tools::WORKSPACES[self.flags.workspace].0;
                                 ui.vertical(|ui| {
                                     ui.add_space(14.0);
-                                    ui.label(RichText::new(format!("The {name} workspace is not available yet. Switch back to DESIGN.")).color(theme::TEXT_DIM));
+                                    ui.label(RichText::new(format!("{}: {}", tr(name), tr("this workspace is not available yet."))).color(theme::TEXT_DIM));
                                 });
                                 return;
                             }
@@ -239,7 +240,7 @@ impl Merge360App {
         // Workspace switcher
         let ws = tools::WORKSPACES[self.flags.workspace].0;
         let resp = ui.add(
-            egui::Button::new(RichText::new(format!("{ws}     ")).strong().color(theme::TEXT))
+            egui::Button::new(RichText::new(format!("{}     ", tr(ws))).strong().color(theme::TEXT))
                 .fill(Color32::WHITE)
                 .stroke(egui::Stroke::new(1.0, theme::PANEL_BORDER))
                 .min_size(egui::vec2(110.0, 22.0)),
@@ -248,11 +249,11 @@ impl Merge360App {
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(180.0);
             for (i, (name, available)) in tools::WORKSPACES.iter().enumerate() {
-                let label = if *available { name.to_string() } else { format!("{name}  (coming soon)") };
+                let label = if *available { tr(name).to_string() } else { format!("{}  ({})", tr(name), tr("coming soon")) };
                 if ui.selectable_label(self.flags.workspace == i, label).clicked() {
                     self.flags.workspace = i;
                     if !available {
-                        self.toast(ToastKind::Info, format!("The {name} workspace is not available yet."));
+                        self.toast(ToastKind::Info, format!("{}: {}", tr(name), tr("this workspace is not available yet.")));
                     }
                 }
             }
@@ -260,20 +261,20 @@ impl Merge360App {
         ui.add_space(14.0);
         if self.flags.workspace != tools::WS_DESIGN {
             let name = tools::WORKSPACES[self.flags.workspace].0;
-            tab_label(ui, name, true, theme::ACCENT);
+            tab_label(ui, tr(name), true, theme::ACCENT);
             return;
         }
         if in_sketch {
-            tab_label(ui, "SKETCH", true, theme::SKETCH_GREEN);
+            tab_label(ui, tr("SKETCH"), true, theme::SKETCH_GREEN);
             for tab in tools::DESIGN_TABS.iter().take(1) {
-                if tab_label(ui, tab.name, false, theme::ACCENT).clicked() {
-                    self.toast(ToastKind::Info, "Finish the sketch to return to the SOLID tools.");
+                if tab_label(ui, tr(tab.name), false, theme::ACCENT).clicked() {
+                    self.toast(ToastKind::Info, tr("Finish the sketch to return to the SOLID tools."));
                 }
             }
             return;
         }
         for (i, tab) in tools::DESIGN_TABS.iter().enumerate() {
-            if tab_label(ui, tab.name, self.flags.toolbar_tab == i, theme::ACCENT).clicked() {
+            if tab_label(ui, tr(tab.name), self.flags.toolbar_tab == i, theme::ACCENT).clicked() {
                 self.flags.toolbar_tab = i;
             }
         }
@@ -297,12 +298,13 @@ impl Merge360App {
                     if !implemented {
                         ui.painter().rect_filled(rect, 3.0, Color32::from_white_alpha(70));
                     }
-                    let mut tip = tool.label.to_string();
-                    if let Some(k) = tool.shortcut {
+                    let mut tip = tr(tool.label).to_string();
+                    if let Some(k) = crate::prefs::shortcut_label(tool.id) {
                         tip.push_str(&format!("  ({k})"));
                     }
                     if !implemented {
-                        tip.push_str("\nNot yet available in Merge360");
+                        tip.push('\n');
+                        tip.push_str(tr("Not yet available in Merge360"));
                     }
                     if resp.on_hover_text(tip).clicked() {
                         self.actions.push(Action::Tool(tool.id));
@@ -313,7 +315,7 @@ impl Merge360App {
             // Panel dropdown label
             let width = ui.min_rect().width().max(60.0);
             let label_color = if finish { theme::SKETCH_GREEN } else { theme::TEXT };
-            let galley = ui.painter().layout_no_wrap(panel.name.to_string(), egui::FontId::proportional(10.5), label_color);
+            let galley = ui.painter().layout_no_wrap(tr(panel.name).to_string(), egui::FontId::proportional(10.5), label_color);
             let width = width.max(galley.size().x + 22.0);
             let (lrect, resp) = ui.allocate_exact_size(egui::vec2(width, 18.0), Sense::click());
             if resp.hovered() {
@@ -327,9 +329,9 @@ impl Merge360App {
                 ui.set_min_width(230.0);
                 for tool in panel.tools {
                     let implemented = tools::is_implemented(tool.id);
-                    let text = RichText::new(tool.label).color(if implemented { theme::TEXT } else { theme::TEXT_DIM });
+                    let text = RichText::new(tr(tool.label)).color(if implemented { theme::TEXT } else { theme::TEXT_DIM });
                     let (rect, _) = (ui.available_rect_before_wrap(), ());
-                    let b = egui::Button::new(text).shortcut_text(tool.shortcut.unwrap_or("")).min_size(egui::vec2(220.0, 24.0));
+                    let b = egui::Button::new(text).shortcut_text(crate::prefs::shortcut_label(tool.id).unwrap_or_default()).min_size(egui::vec2(220.0, 24.0));
                     let r = ui.horizontal(|ui| {
                         let (ir, _) = ui.allocate_exact_size(egui::vec2(20.0, 20.0), Sense::hover());
                         icons::paint(ui.painter(), ir, tool.icon, None);

@@ -7,6 +7,7 @@ use crate::app::{Action, Merge360App, ToastKind};
 use crate::icons::{self, Icon};
 use crate::state::{Environment, NavMode, VisualStyle};
 use crate::theme;
+use crate::i18n::tr;
 
 struct CubeFace {
     name: &'static str,
@@ -47,7 +48,9 @@ fn point_in_convex(p: Pos2, poly: &[Pos2]) -> bool {
 impl Merge360App {
     pub(crate) fn overlays(&mut self, ctx: &egui::Context) {
         self.browser(ctx);
-        self.view_cube(ctx);
+        if self.prefs.show_view_cube {
+            self.view_cube(ctx);
+        }
         self.nav_bar(ctx);
         self.comments(ctx);
         self.sketch_palette(ctx);
@@ -134,7 +137,7 @@ impl Merge360App {
                     let d = ax - c;
                     let angle = d.y.atan2(d.x);
                     let font = egui::FontId::proportional(10.0 * facing.sqrt());
-                    let galley = painter.layout_no_wrap(f.name.to_string(), font, Color32::from_rgb(0x3a, 0x3c, 0x40));
+                    let galley = painter.layout_no_wrap(tr(f.name).to_string(), font, Color32::from_rgb(0x3a, 0x3c, 0x40));
                     let half = galley.size() / 2.0;
                     let rot2 = egui::emath::Rot2::from_angle(angle);
                     let pos = c - rot2 * half;
@@ -168,27 +171,27 @@ impl Merge360App {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             }
             resp.context_menu(|ui| {
-                if ui.button("Go Home").clicked() {
+                if ui.button(tr("Go Home")).clicked() {
                     let tab = self.tab();
                     let h = tab.home;
                     tab.animate_to(h, now);
                 }
                 let ortho = self.tabs[self.active].camera.ortho;
-                if ui.radio(!ortho, "Perspective").clicked() {
+                if ui.radio(!ortho, tr("Perspective")).clicked() {
                     self.tab().camera.ortho = false;
                 }
-                if ui.radio(ortho, "Orthographic").clicked() {
+                if ui.radio(ortho, tr("Orthographic")).clicked() {
                     self.tab().camera.ortho = true;
                 }
                 ui.separator();
-                if ui.button("Set current view as Home").clicked() {
+                if ui.button(tr("Set current view as Home")).clicked() {
                     let tab = self.tab();
                     tab.home = tab.camera;
                 }
-                if ui.button("Reset Home").clicked() {
+                if ui.button(tr("Reset Home")).clicked() {
                     self.tab().home = m360_render::Camera::home();
                 }
-                if ui.button("Fit to View").clicked() {
+                if ui.button(tr("Fit to View")).clicked() {
                     self.actions.push(Action::Fit);
                 }
             });
@@ -200,7 +203,7 @@ impl Merge360App {
                 ui.painter().rect_filled(home, 2.0, theme::HOVER_BG);
             }
             icons::paint(ui.painter(), home.shrink(2.0), Icon::Home, None);
-            if hr.on_hover_text("Home").clicked() {
+            if hr.on_hover_text(tr("Home")).clicked() {
                 let aspect = self.canvas_rect.aspect_ratio();
                 let tab = self.tab();
                 let mut h = tab.home;
@@ -254,15 +257,15 @@ impl Merge360App {
                             let grid = nav_icon(ui, Icon::Grid, false, "Grid and Snaps");
                             egui::Popup::menu(&grid).show(|ui| {
                                 let tab = self.tab();
-                                ui.checkbox(&mut tab.display.grid, "Layout Grid");
-                                ui.checkbox(&mut tab.display.snap, "Snap to Grid");
+                                ui.checkbox(&mut tab.display.grid, tr("Layout Grid"));
+                                ui.checkbox(&mut tab.display.snap, tr("Snap to Grid"));
                                 ui.label(RichText::new(format!("Grid spacing: {}", tab.doc.units.format(crate::viewport::grid_step(&tab.camera) as f64))).color(theme::TEXT_DIM));
                             });
                             let vp = nav_icon(ui, Icon::Viewports, false, "Viewports");
                             egui::Popup::menu(&vp).show(|ui| {
-                                ui.add_enabled(false, egui::Button::new("Single Viewport ✓"));
-                                if ui.button("Multiple Views").clicked() {
-                                    self.toast(ToastKind::Info, "Multiple viewports are not available yet.");
+                                ui.add_enabled(false, egui::Button::new(tr("Single Viewport ✓")));
+                                if ui.button(tr("Multiple Views")).clicked() {
+                                    self.toast(ToastKind::Info, tr("Multiple viewports are not available yet."));
                                 }
                             });
                         });
@@ -275,36 +278,36 @@ impl Merge360App {
         let tab = self.tab();
         ui.menu_button("Visual Style", |ui| {
             for s in VisualStyle::ALL {
-                if ui.radio(tab.display.style == s, s.label()).clicked() {
+                if ui.radio(tab.display.style == s, tr(s.label())).clicked() {
                     tab.display.style = s;
                 }
             }
         });
         ui.menu_button("Environment", |ui| {
             for e in Environment::ALL {
-                if ui.radio(tab.display.environment == e, e.label()).clicked() {
+                if ui.radio(tab.display.environment == e, tr(e.label())).clicked() {
                     tab.display.environment = e;
                 }
             }
         });
         ui.menu_button("Camera", |ui| {
-            if ui.radio(!tab.camera.ortho, "Perspective").clicked() {
+            if ui.radio(!tab.camera.ortho, tr("Perspective")).clicked() {
                 tab.camera.ortho = false;
             }
-            if ui.radio(tab.camera.ortho, "Orthographic").clicked() {
+            if ui.radio(tab.camera.ortho, tr("Orthographic")).clicked() {
                 tab.camera.ortho = true;
             }
         });
         ui.separator();
-        ui.checkbox(&mut tab.display.grid, "Show Layout Grid");
+        ui.checkbox(&mut tab.display.grid, tr("Show Layout Grid"));
         let mut origin = tab.doc.origin_visible;
-        if ui.checkbox(&mut origin, "Show Origin").changed() {
+        if ui.checkbox(&mut origin, tr("Show Origin")).changed() {
             tab.doc.origin_visible = origin;
         }
         ui.separator();
-        ui.checkbox(&mut self.flags.browser_open, "Show Browser");
-        ui.checkbox(&mut self.flags.timeline_open, "Show Timeline");
-        ui.checkbox(&mut self.flags.comments_open, "Show Comments");
+        ui.checkbox(&mut self.flags.browser_open, tr("Show Browser"));
+        ui.checkbox(&mut self.flags.timeline_open, tr("Show Timeline"));
+        ui.checkbox(&mut self.flags.comments_open, tr("Show Comments"));
     }
 
     /// Look straight at the selected planar face / plane / sketch.
@@ -335,7 +338,7 @@ impl Merge360App {
                 crate::app::look_at_plane(tab, p, now);
             }
         } else {
-            self.toast(ToastKind::Info, "Select a face or plane to look at.");
+            self.toast(ToastKind::Info, tr("Select a face or plane to look at."));
         }
     }
 
@@ -354,9 +357,9 @@ impl Merge360App {
                         if ui.add(egui::Button::new(RichText::new(arrow).size(9.0)).frame(false)).clicked() {
                             self.flags.comments_open = !self.flags.comments_open;
                         }
-                        ui.label(RichText::new("COMMENTS").size(11.5).strong());
+                        ui.label(RichText::new(tr("COMMENTS")).size(11.5).strong());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.add(egui::Button::new("⊕").frame(false)).on_hover_text("Add comment").clicked() {
+                            if ui.add(egui::Button::new(tr("⊕")).frame(false)).on_hover_text(tr("Add comment")).clicked() {
                                 self.flags.comments_open = true;
                             }
                         });
@@ -398,7 +401,7 @@ impl Merge360App {
                     egui::Frame::new().inner_margin(egui::Margin::symmetric(10, 8)).show(ui, |ui| {
                         let tab = self.tab();
                         let tool = tab.sketch.as_ref().map(|s| s.tool);
-                        ui.label(RichText::new("Tools").color(theme::TEXT_DIM));
+                        ui.label(RichText::new(tr("Tools")).color(theme::TEXT_DIM));
                         ui.horizontal_wrapped(|ui| {
                             for (icon, t, id) in [
                                 (Icon::Select, crate::state::SketchTool::Select, "select"),
@@ -411,7 +414,7 @@ impl Merge360App {
                                 (Icon::Dimension, crate::state::SketchTool::Dimension, "sk_dimension"),
                                 (Icon::Point, crate::state::SketchTool::Point, "sk_point"),
                             ] {
-                                if nav_icon(ui, icon, tool == Some(t), t.label()).clicked() {
+                                if nav_icon(ui, icon, tool == Some(t), tr(t.label())).clicked() {
                                     if t == crate::state::SketchTool::Select {
                                         if let Some(s) = &mut self.tab().sketch {
                                             s.tool = t;
@@ -424,11 +427,11 @@ impl Merge360App {
                             }
                         });
                         ui.separator();
-                        ui.label(RichText::new("Options").color(theme::TEXT_DIM));
+                        ui.label(RichText::new(tr("Options")).color(theme::TEXT_DIM));
                         let tab = self.tab();
-                        ui.checkbox(&mut tab.display.grid, "Sketch Grid");
-                        ui.checkbox(&mut tab.display.snap, "Snap");
-                        if ui.button("Look At").clicked() {
+                        ui.checkbox(&mut tab.display.grid, tr("Sketch Grid"));
+                        ui.checkbox(&mut tab.display.snap, tr("Snap"));
+                        if ui.button(tr("Look At")).clicked() {
                             let now = self.now();
                             let tab = self.tab();
                             if let Some(s) = &tab.sketch {
@@ -439,7 +442,7 @@ impl Merge360App {
                         }
                         ui.add_space(6.0);
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let b = egui::Button::new(RichText::new("Finish Sketch").color(Color32::WHITE)).fill(theme::SKETCH_GREEN).min_size(vec2(100.0, 24.0));
+                            let b = egui::Button::new(RichText::new(tr("Finish Sketch")).color(Color32::WHITE)).fill(theme::SKETCH_GREEN).min_size(vec2(100.0, 24.0));
                             if ui.add(b).clicked() {
                                 self.actions.push(Action::FinishSketch);
                             }

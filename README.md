@@ -71,6 +71,12 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   automatic standard scale, overall dimensions, SVG export.
 * **RENDER workspace:** presentation view (environments, soft ground shadow, optional edges) and
   high-resolution image rendering to PNG (HD to 4K).
+* **Preferences** (user menu ▸ Preferences, saved in `~/.config/merge360/preferences.ron`):
+  language (English, Français, Deutsch, Español — extra or corrected strings can be added in
+  `~/.config/merge360/lang/<code>.txt`), keyboard shortcut presets (Fusion 360, Blender,
+  SolidWorks) with per-action rebinding, mouse navigation presets (Fusion 360, Blender,
+  SolidWorks, Inventor, Tinkercad) with zoom/orbit/pan speed and reversed zoom, interface scale,
+  default units, grid/snap defaults, ViewCube, frame-rate display and auto-saved recovery copies.
 * **Files:** native `.m360` (RON, full parametric history), STL import, STL and STEP export.
 * Fully parametric: every feature is re-editable from the timeline (double-click), roll back with
   the marker, suppress features; undo/redo for everything.

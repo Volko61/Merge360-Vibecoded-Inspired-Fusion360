@@ -7,7 +7,6 @@ pub struct Tool {
     pub id: &'static str,
     pub label: &'static str,
     pub icon: Icon,
-    pub shortcut: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -34,11 +33,12 @@ pub mod egui_color {
 }
 
 const fn t(id: &'static str, label: &'static str, icon: Icon) -> Tool {
-    Tool { id, label, icon, shortcut: None }
+    Tool { id, label, icon }
 }
 
-const fn k(id: &'static str, label: &'static str, icon: Icon, shortcut: &'static str) -> Tool {
-    Tool { id, label, icon, shortcut: Some(shortcut) }
+/// A tool with a Fusion default shortcut (the active keymap is in `prefs`).
+const fn k(id: &'static str, label: &'static str, icon: Icon, _fusion_key: &'static str) -> Tool {
+    Tool { id, label, icon }
 }
 
 const fn p(name: &'static str, featured: usize, tools: &'static [Tool]) -> Panel {
@@ -521,6 +521,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "export_3dprint",
     "export_step",
     "doc_settings",
+    "preferences",
     "select",
     "window_select",
     "select_all",

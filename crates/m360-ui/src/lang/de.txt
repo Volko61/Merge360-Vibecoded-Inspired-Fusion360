@@ -1,0 +1,589 @@
+# Merge360 UI translations: English<TAB>Translation
+ (suppressed)	 (unterdrückt)
++ Add	+ Hinzufügen
+0 = off	0 = aus
+2-Point Rectangle	2-Punkt-Rechteck
+3-Point Arc	3-Punkt-Bogen
+3D Print	3D-Druck
+A parametric 3D CAD application written in Rust,	Eine parametrische 3D-CAD-Anwendung, geschrieben in Rust,
+ADD-INS	ZUSATZMODULE
+ANIMATION	ANIMATION
+APPEARANCE	ERSCHEINUNGSBILD
+ASSEMBLE	ZUSAMMENFÜGEN
+About Merge360	Über Merge360
+Accessibility Analysis	Zugänglichkeitsanalyse
+Action	Aktion
+Add comment	Kommentar hinzufügen
+Align	Ausrichten
+All	Alle
+All features recomputed.	Alle Elemente neu berechnet.
+Analysis	Analyse
+Angle	Winkel
+Appearance	Erscheinungsbild
+Apply To	Anwenden auf
+Area	Fläche
+As-built Joint	Gelenk wie gebaut
+Auto-save recovery copy	Automatische Wiederherstellungskopie
+Axis	Achse
+Axis Perpendicular at Point	Achse lotrecht an Punkt
+Axis Perpendicular to Face at Point	Achse lotrecht zu Fläche an Punkt
+Axis Through Cylinder/Cone/Torus	Achse durch Zylinder/Kegel/Torus
+Axis Through Edge	Achse durch Kante
+Axis Through Two Planes	Achse durch zwei Ebenen
+Axis Through Two Points	Achse durch zwei Punkte
+BOX	QUADER
+BROWSER	BROWSER
+Back view	Ansicht hinten
+Bend	Biegung
+Bodies	Körper
+Body (closed)	Körper (geschlossen)
+Body Volume	Körpervolumen
+Body to Split	Zu teilender Körper
+Boss	Aufsatz
+Bottom view	Ansicht unten
+Boundary Fill	Begrenzungsfüllung
+Bounding Box	Begrenzungsrahmen
+Box	Quader
+Break	Brechen
+CENTER OF MASS	SCHWERPUNKT
+CHAMFER	FASE
+CIRCULAR PATTERN	RUNDE ANORDNUNG
+COIL	SPIRALE
+COMBINE	KOMBINIEREN
+COMMENTS	KOMMENTARE
+CONSTRAINTS	ABHÄNGIGKEITEN
+CONSTRUCT	KONSTRUIEREN
+CONVERT	KONVERTIEREN
+CREATE	ERSTELLEN
+CREATE SKETCH	SKIZZE ERSTELLEN
+CYLINDER	ZYLINDER
+Cancel	Abbrechen
+Cancel / clear selection	Abbrechen / Auswahl aufheben
+Canvas	Canvas
+Capture Image is not available yet in Merge360.	Bild aufnehmen ist in Merge360 noch nicht verfügbar.
+Capture Image…	Bild aufnehmen…
+Center Diameter Circle	Kreis durch Mittelpunkt und Durchmesser
+Center Rectangle	Mittelpunkt-Rechteck
+Center X	Mittelpunkt X
+Center Y	Mittelpunkt Y
+Center of Mass	Schwerpunkt
+Center to Center Slot	Langloch Mittelpunkt zu Mittelpunkt
+Centimeter	Zentimeter
+Chamfer	Fase
+Change Parameters	Parameter ändern
+Circular	Kreisförmig
+Circular Pattern	Runde Anordnung
+Clear Selection	Auswahl aufheben
+Click a corner where exactly two lines meet.	Klicken Sie auf eine Ecke, an der sich genau zwei Linien treffen.
+Click a shortcut, then press the new key combination (Backspace removes it, Esc cancels).	Klicken Sie auf ein Tastenkürzel und drücken Sie die neue Tastenkombination (Rücktaste entfernt es, Esc bricht ab).
+Click near the ends of edges	Klicken Sie nahe den Kantenenden
+Click the base point	Klicken Sie auf den Basispunkt
+Click the center point	Klicken Sie auf den Mittelpunkt
+Click the end of the spacing vector	Klicken Sie auf das Ende des Abstandsvektors
+Click the start of the spacing vector	Klicken Sie auf den Anfang des Abstandsvektors
+Click the target point	Klicken Sie auf den Zielpunkt
+Clockwise	Im Uhrzeigersinn
+Close Design	Konstruktion schließen
+Coil	Spirale
+Coincident	Koinzident
+Collinear	Kollinear
+Combine	Kombinieren
+Component 1	Komponente 1
+Component 2	Komponente 2
+Compute	Berechnen
+Compute All	Alle berechnen
+Concentric	Konzentrisch
+Construction	Konstruktion
+Context	Kontext
+Contour Flange	Konturlasche
+Convert Mesh	Netz konvertieren
+Cosmetic threads only for now	Vorerst nur kosmetische Gewinde
+Could not read back the rendered image.	Das gerenderte Bild konnte nicht gelesen werden.
+Counterbore	Senkung
+Counterbore Depth	Senkungstiefe
+Counterbore ⌀	⌀ der Senkung
+Counterclockwise	Gegen den Uhrzeigersinn
+Countersink	Kegelsenkung
+Countersink Angle	Senkwinkel
+Countersink ⌀	⌀ der Kegelsenkung
+Create / finish sketch	Skizze erstellen / beenden
+Create Base Feature	Basiselement erstellen
+Create Components from Bodies	Komponenten aus Körpern erstellen
+Create Copy	Kopie erstellen
+Create Flat Pattern	Abwicklung erstellen
+Create Sketch	Skizze erstellen
+Ctrl + Middle drag	Strg + Mittlere Taste ziehen
+Curvature	Krümmung
+Curvature Comb Analysis	Krümmungskammanalyse
+Curvature Map Analysis	Krümmungskartenanalyse
+Custom translations	Eigene Übersetzungen
+Customize…	Anpassen…
+Cut	Ausschneiden
+Cylinder	Zylinder
+DATA PANEL	DATENGRUPPE
+DESIGN	KONSTRUKTION
+DOCUMENT SETTINGS	DOKUMENTEINSTELLUNGEN
+DRAWING	ZEICHNUNG
+Dark Sky	Dunkler Himmel
+Decal	Abziehbild
+Default units	Standardeinheiten
+Delete	Löschen
+Delete parameter	Parameter löschen
+Delete selection	Auswahl löschen
+Depth	Tiefe
+Diameter	Durchmesser
+Dimensions must be positive.	Bemaßungen müssen positiv sein.
+Direction	Richtung
+Direction 1	Richtung 1
+Direction 2	Richtung 2
+Display	Anzeige
+Display Component Colors	Komponentenfarben anzeigen
+Dissolve Component	Komponente auflösen
+Distance	Abstand
+Document Settings	Dokumenteinstellungen
+Don't Save	Nicht speichern
+Draft	Formschräge
+Draft Analysis	Formschräge-Analyse
+Drive Joints	Gelenke steuern
+EXPORT	EXPORTIEREN
+EXTRUDE	EXTRUSION
+Edge Length	Kantenlänge
+Edges	Kanten
+Edit Feature	Element bearbeiten
+Edit Section Analysis	Schnittanalyse bearbeiten
+Edit Sketch	Skizze bearbeiten
+Ellipse	Ellipse
+Emboss	Prägen
+Enable Contact Sets	Kontaktsätze aktivieren
+Enter a positive scale factor.	Geben Sie einen positiven Skalierungsfaktor ein.
+Enter a quantity (e.g. 4) or a grid (e.g. 4 x 3).	Geben Sie eine Anzahl (z. B. 4) oder ein Raster (z. B. 4 x 3) ein.
+Enter a quantity between 2 and 360.	Geben Sie eine Anzahl zwischen 2 und 360 ein.
+Entities	Objekte
+Equal	Gleich
+Exit	Beenden
+Export STEP	STEP exportieren
+Export SVG…	SVG exportieren…
+Export…	Exportieren…
+Extend	Dehnen
+Extent Type	Ausdehnungsart
+Extents	Ausdehnung
+Extrude	Extrusion
+FILLET	ABRUNDUNG
+FINISH SKETCH	SKIZZE BEENDEN
+Face / Plane	Fläche / Ebene
+Face / Points	Fläche / Punkte
+Face Area	Flächeninhalt
+Faces	Flächen
+Faces removed	Flächen entfernt
+Faces/Body	Flächen/Körper
+Fillet	Abrunden
+Find in Timeline	In Zeitachse suchen
+Finish Sketch	Skizze beenden
+Finish the sketch to return to the SOLID tools.	Beenden Sie die Skizze, um zu den VOLUMENKÖRPER-Werkzeugen zurückzukehren.
+Fit Point Spline	Spline durch Punkte
+Fit Sheet	Blatt einpassen
+Fit to View	Einpassen
+Fit to view	Einpassen
+Fix	Fixieren
+Fix/Unfix	Fixieren/Lösen
+Flange	Lasche
+Flip	Umkehren
+Flip direction	Richtung umkehren
+Foot	Fuß
+Freeform Selection	Freihandauswahl
+Front view	Ansicht vorne
+Full	Voll
+Full Length	Volle Länge
+Fusion App Store	Fusion App Store
+Fusion Appearance Library	Fusion-Erscheinungsbildbibliothek
+GENERATIVE DESIGN	GENERATIVES DESIGN
+General	Allgemein
+Generate Face Groups	Flächengruppen generieren
+Global	Global
+Go Home	Zur Ausgangsansicht
+Grey Room	Grauer Raum
+Ground shadow	Bodenschatten
+HOLE	BOHRUNG
+Height	Höhe
+Hide Browser	Browser ausblenden
+Hide selected bodies	Ausgewählte Körper ausblenden
+Hole	Bohrung
+Hole Type	Bohrungstyp
+Hollow	Hohl
+Home	Ausgangsansicht
+Home view	Ausgangsansicht
+Horizontal/Vertical	Horizontal/Vertikal
+INSERT	EINFÜGEN
+INSPECT	PRÜFEN
+INTERFERENCE	KOLLISION
+ISO Metric profile	ISO-Metrisches Profil
+In This Design / Library	In dieser Konstruktion / Bibliothek
+Inch	Zoll
+Inner Diameter	Innendurchmesser
+Inscribed Polygon	Einbeschriebenes Polygon
+Insert DXF	DXF einfügen
+Insert Derive	Ableitung einfügen
+Insert McMaster-Carr Component	McMaster-Carr-Komponente einfügen
+Insert Mesh	Netz einfügen
+Insert SVG	SVG einfügen
+Insert a manufacturer part	Herstellerteil einfügen
+Inside	Innen
+Inside Thickness	Innere Dicke
+Interface scale	Skalierung der Oberfläche
+Interference	Kollision
+Intersect	Schneiden
+Invert Selection	Auswahl umkehren
+JOINT	GELENK
+Join	Verbinden
+Joint	Gelenk
+Joint Origin	Gelenkursprung
+Joint…	Gelenk…
+Keep Tools	Werkzeuge beibehalten
+Kernel: truck (B-rep) · UI: egui · Rendering: wgpu	Kernel: truck (B-Rep) · Oberfläche: egui · Rendering: wgpu
+Keyboard	Tastatur
+Keyboard Shortcuts	Tastenkürzel
+Keyboard shortcuts	Tastenkürzel
+Kind	Art
+LOFT	ERHEBUNG
+Language	Sprache
+Layout Grid	Layoutraster
+Left view	Ansicht links
+Length	Länge
+Library	Bibliothek
+Lifecycle	Lebenszyklus
+Line	Linie
+Lip / Groove	Lippe / Nut
+Local designs (no cloud)	Lokale Konstruktionen (ohne Cloud)
+Loft	Erhebung
+Look At	Ansehen
+MAKE	HERSTELLEN
+MANAGE	VERWALTEN
+MANUFACTURE	FERTIGUNG
+MEASURE	MESSEN
+MESH	NETZ
+MIDPLANE	MITTELEBENE
+MIRROR	SPIEGELN
+MODIFY	ÄNDERN
+MOVE/COPY	VERSCHIEBEN/KOPIEREN
+Manage Materials	Materialien verwalten
+Marking menu	Markierungsmenü
+Mass (steel)	Masse (Stahl)
+Measure	Messen
+Merge360 — offline mode	Merge360 — Offline-Modus
+Mesh Section Sketch	Netzschnittskizze
+Meter	Meter
+Middle drag	Mittlere Taste ziehen
+Middle drag / Shift + Right drag	Mittlere Taste ziehen / Umschalt + rechte Taste ziehen
+Midplane	Mittelebene
+Midpoint	Mittelpunkt
+Millimeter	Millimeter
+Minimum Distance	Minimaler Abstand
+Minimum Radius Analysis	Analyse des minimalen Radius
+Mirror	Spiegeln
+Mirror Plane	Spiegelebene
+Model	Modell
+Model Parameters	Modellparameter
+Modeled	Modelliert
+Motion	Bewegung
+Motion Link	Bewegungsverknüpfung
+Motion Study	Bewegungsstudie
+Move Object	Objekt verschieben
+Move Type	Verschiebungstyp
+Move to End	An das Ende verschieben
+Move/Copy	Verschieben/Kopieren
+Multiple Views	Mehrere Ansichten
+Multiple viewports are not available yet.	Mehrere Ansichtsfenster sind noch nicht verfügbar.
+Name:	Name:
+Named Views	Benannte Ansichten
+Navigation	Navigation
+New Body	Neuer Körper
+New Component	Neue Komponente
+New Design	Neue Konstruktion
+No account needed: everything is stored locally.	Kein Konto erforderlich: Alles wird lokal gespeichert.
+No bodies intersect the extrusion; nothing to cut.	Kein Körper schneidet die Extrusion; nichts zu schneiden.
+No bodies intersect the revolve; nothing to cut.	Kein Körper schneidet die Drehung; nichts zu schneiden.
+No interference	Keine Kollision
+No matching tools	Keine passenden Werkzeuge
+No recent designs	Keine zuletzt verwendeten Konstruktionen
+Not yet available in Merge360	In Merge360 noch nicht verfügbar
+Nothing to export: no visible bodies.	Nichts zu exportieren: keine sichtbaren Körper.
+Notifications	Benachrichtigungen
+OFFSET PLANE	VERSETZTE EBENE
+OK	OK
+Objects	Objekte
+Offset	Versatz
+Offset Plane	Versetzte Ebene
+On Center	Mittig
+One Side	Eine Seite
+Only planar faces can be extruded.	Nur ebene Flächen können extrudiert werden.
+Only straight edges between flat faces can be filleted for now.	Vorerst können nur gerade Kanten zwischen ebenen Flächen abgerundet werden.
+Open	Öffnen
+Open Sample Design	Beispielkonstruktion öffnen
+Open…	Öffnen…
+Operation	Vorgang
+Options	Optionen
+Orbit	Orbit
+Orbit speed	Orbit-Geschwindigkeit
+Origin	Ursprung
+Orthographic	Orthogonal
+Outside	Außen
+PARAMETERS	PARAMETER
+PIPE	ROHR
+PLANE AT ANGLE	EBENE IM WINKEL
+PLANE THROUGH THREE POINTS	EBENE DURCH DREI PUNKTE
+PLASTIC	KUNSTSTOFF
+PREPARE	VORBEREITEN
+PROPERTIES	EIGENSCHAFTEN
+Paint Selection	Malauswahl
+Pan	Pan
+Pan speed	Pan-Geschwindigkeit
+Pan, Zoom, Orbit shortcuts	Pan-, Zoom-, Orbit-Kürzel
+Parallel	Parallel
+Parameters	Parameter
+Parent folder	Übergeordneter Ordner
+Patch	Pflaster
+Path	Pfad
+Pattern Type	Anordnungstyp
+Pattern on Path	Anordnung auf Pfad
+Perpendicular	Lotrecht
+Perspective	Perspektive
+Photo Booth	Fotostudio
+Physical Material	Physisches Material
+Pipe	Rohr
+Pitch	Steigung
+Placement	Platzierung
+Plain White	Einfarbig weiß
+Plane	Ebene
+Plane Along Path	Ebene entlang Pfad
+Plane Cut	Ebenenschnitt
+Plane Tangent to Face at Point	Ebene tangential zu Fläche an Punkt
+Plane Through Three Points	Ebene durch drei Punkte
+Plane Through Two Edges	Ebene durch zwei Kanten
+Plane at Angle	Ebene im Winkel
+Plastic Rules	Kunststoffregeln
+Point	Punkt
+Point Along Path	Punkt entlang Pfad
+Point Through Three Planes	Punkt durch drei Ebenen
+Point Through Two Edges	Punkt durch zwei Kanten
+Point at Center of Circle/Sphere/Torus	Punkt im Mittelpunkt von Kreis/Kugel/Torus
+Point at Edge and Plane	Punkt an Kante und Ebene
+Point at Vertex	Punkt an Scheitelpunkt
+Preferences	Einstellungen
+Preferences…	Einstellungen…
+Press Pull	Drücken/Ziehen
+Press keys…	Tasten drücken…
+Profile	Profil
+Profile Plane	Profilebene
+Profiles	Profile
+Project	Projizieren
+Properties	Eigenschaften
+Quantity	Anzahl
+RECENT	ZULETZT VERWENDET
+RECTANGULAR PATTERN	RECHTECKIGE ANORDNUNG
+RENDER	RENDERN
+REVOLVE	DREHUNG
+Rectangular Pattern	Rechteckige Anordnung
+Redo	Wiederholen
+Reduce	Reduzieren
+Refold Faces	Flächen zurückfalten
+Release	Freigabe
+Remesh	Neu vernetzen
+Rename	Umbenennen
+Render Image	Bild rendern
+Repair	Reparieren
+Repeat	Wiederholen
+Repeat last command	Letzten Befehl wiederholen
+Replace Face	Fläche ersetzen
+Reset Home	Ausgangsansicht zurücksetzen
+Reset to preset	Auf Vorgabe zurücksetzen
+Rest	Auflage
+Restore Defaults	Standardwerte wiederherstellen
+Reverse Normal	Normale umkehren
+Reverse zoom direction	Zoomrichtung umkehren
+Revolute	Drehgelenk
+Revolutions	Umdrehungen
+Revolve	Drehung
+Rib	Rippe
+Right click	Rechtsklick
+Right drag	Rechte Taste ziehen
+Right view	Ansicht rechts
+Rigid	Starr
+Rigid Group	Starre Gruppe
+Roll History Marker Here	Verlaufsmarkierung hierher verschieben
+Rotation	Drehung
+Rotation Axis	Drehachse
+Rule Fillet	Regelbasierte Abrundung
+Ruled	Regelfläche
+SCALE	SKALIEREN
+SECTION ANALYSIS	SCHNITTANALYSE
+SELECT	AUSWÄHLEN
+SETUP	EINRICHTUNG
+SHEET METAL	BLECH
+SHELL	WANDSTÄRKE
+SIMULATION	SIMULATION
+SKETCH	SKIZZE
+SOLID	VOLUMENKÖRPER
+SPHERE	KUGEL
+SPLIT BODY	KÖRPER TEILEN
+SURFACE	FLÄCHE
+SWEEP	SWEEPING
+Save	Speichern
+Save As	Speichern unter
+Save As…	Speichern unter…
+Save as STL	Als STL speichern
+Save changes?	Änderungen speichern?
+Saved designs will appear here.	Gespeicherte Konstruktionen werden hier angezeigt.
+Scale	Skalieren
+Scale Factor	Skalierungsfaktor
+Scripts and Add-Ins	Skripte und Zusatzmodule
+Search actions…	Aktionen suchen…
+Search tools…	Werkzeuge suchen…
+Section	Querschnitt
+Section Analysis	Schnittanalyse
+Section Position	Querschnittsposition
+Section Size	Querschnittsgröße
+Section Thickness	Querschnittsdicke
+Select	Auswählen
+Select All	Alle auswählen
+Select a cylindrical face.	Wählen Sie eine zylindrische Fläche.
+Select a face or plane to look at.	Wählen Sie eine Fläche oder Ebene zum Ansehen.
+Select a line as the mirror line.	Wählen Sie eine Linie als Spiegellinie.
+Select a plane or a planar face.	Wählen Sie eine Ebene oder ebene Fläche.
+Select all	Alle auswählen
+Select all solid profiles of this sketch (e.g. text)	Alle geschlossenen Profile dieser Skizze auswählen (z. B. Text)
+Select bodies first, then click an appearance.	Wählen Sie zuerst Körper und klicken Sie dann auf ein Erscheinungsbild.
+Select bodies or features to delete.	Wählen Sie zu löschende Körper oder Elemente.
+Select profiles in order	Profile der Reihe nach auswählen
+Select the mirror line	Spiegellinie auswählen
+Selection	Auswahl
+Set current view as Home	Aktuelle Ansicht als Ausgangsansicht festlegen
+Settings are saved in	Einstellungen werden gespeichert in
+Shaded	Schattiert
+Shaded with Hidden Edges	Schattiert mit verdeckten Kanten
+Shaded with Visible Edges Only	Schattiert nur mit sichtbaren Kanten
+Sheet Metal Rules	Blechregeln
+Shell	Wandstärke
+Shift + Middle drag	Umschalt + mittlere Taste ziehen
+Shortcut	Kürzel
+Show Browser	Browser anzeigen
+Show Comments	Kommentare anzeigen
+Show Data Panel	Datengruppe anzeigen
+Show Layout Grid	Layoutraster anzeigen
+Show Origin	Ursprung anzeigen
+Show Timeline	Zeitachse anzeigen
+Show all bodies	Alle Körper anzeigen
+Show edges	Kanten anzeigen
+Show frame rate	Bildrate anzeigen
+Show grid in new designs	Raster in neuen Konstruktionen anzeigen
+Show the ViewCube	ViewCube anzeigen
+Show/Hide	Ein-/Ausblenden
+Silhouette Split	Silhouettenteilung
+Simple	Einfach
+Single / multiple points	Einzelne / mehrere Punkte
+Single Viewport ✓	Einzelnes Ansichtsfenster ✓
+Single path	Einzelner Pfad
+Size	Größe
+Sketch	Skizze
+Sketch Dimension	Skizzenbemaßung
+Sketch Grid	Skizzenraster
+Sketch Scale	Skizze skalieren
+Sketch tools are available while editing a sketch.	Skizzenwerkzeuge sind beim Bearbeiten einer Skizze verfügbar.
+Sketches	Skizzen
+Slider	Schieber
+Smooth	Glätten
+Snap	Fang
+Snap Fit	Schnappverbindung
+Snap to Grid	Am Raster fangen
+Snap to grid in new designs	Am Raster fangen in neuen Konstruktionen
+Spacing	Abstand
+Sphere	Kugel
+Split Body	Körper teilen
+Split Face	Fläche teilen
+Splitting Tool	Teilungswerkzeug
+Square	Quadratisch
+Start	Start
+Stitch	Vernähen
+Sweep	Sweeping
+Symmetric	Symmetrisch
+Symmetry	Symmetrie
+THREAD	GEWINDE
+TOOLBOX	WERKZEUGKASTEN
+TORUS	TORUS
+Tangent	Tangential
+Tangent Plane	Tangentialebene
+Taper Angle	Verjüngungswinkel
+Target Body	Zielkörper
+Tessellate	Tessellieren
+Text	Text
+The fillet radius is too large for these lines.	Der Abrundungsradius ist für diese Linien zu groß.
+The hole does not intersect any body.	Die Bohrung schneidet keinen Körper.
+Thicken	Aufdicken
+Thread	Gewinde
+Thread Type	Gewindetyp
+Toggle orthographic / perspective	Orthogonal / Perspektive umschalten
+Tool Bodies	Werkzeugkörper
+Toolbox (search tools)	Werkzeugkasten (Werkzeuge suchen)
+Tools	Werkzeuge
+Top view	Ansicht oben
+Torus	Torus
+Torus Diameter	Torusdurchmesser
+Total Angle	Gesamtwinkel
+Translate + Rotate	Verschieben + Drehen
+Triangular (External)	Dreieckig (außen)
+Triangular (Internal)	Dreieckig (innen)
+Trim	Stutzen
+Type	Typ
+Type a value or an expression using user parameters (e.g. width / 2 + 3 mm).	Geben Sie einen Wert oder einen Ausdruck mit Benutzerparametern ein (z. B. breite / 2 + 3 mm).
+UTILITIES	DIENSTPROGRAMME
+UTILITY	DIENSTPROGRAMM
+Undo	Rückgängig
+Unfold	Abwickeln
+Units	Einheiten
+Unstitch	Trennen
+Untrim	Stutzen aufheben
+Update Views	Ansichten aktualisieren
+User Parameters	Benutzerparameter
+Views are generated from all visible bodies (Front, Top, Right, Isometric).	Ansichten werden aus allen sichtbaren Körpern erzeugt (Vorne, Oben, Rechts, Isometrisch).
+Volume	Volumen
+Web	Steg
+Wheel	Mausrad
+Wheel / Ctrl + Middle drag	Mausrad / Strg + mittlere Taste ziehen
+Wheel / Shift + Middle drag	Mausrad / Umschalt + mittlere Taste ziehen
+Width	Breite
+Window Selection	Fensterauswahl
+Wireframe	Drahtkörper
+X Axis	X-Achse
+XY Plane	XY-Ebene
+XZ Plane	XZ-Ebene
+Y Axis	Y-Achse
+YZ Plane	YZ-Ebene
+You're all caught up.	Sie sind auf dem neuesten Stand.
+Z Axis	Z-Achse
+Zebra Analysis	Zebra-Analyse
+Zoom	Zoom
+Zoom speed	Zoomgeschwindigkeit
+Zoom towards the cursor	Zum Cursor zoomen
+coming soon	demnächst
+inspired by the Fusion 360 workflow. Offline-only.	inspiriert vom Fusion 360-Arbeitsablauf. Nur offline.
+selected	ausgewählt
+this workspace is not available yet.	dieser Arbeitsbereich ist noch nicht verfügbar.
+Δ X / Y / Z	Δ X / Y / Z
+Shift+	Umschalt+
+Blender	Blender
+Front	Vorne
+Top	Oben
+Right	Rechts
+Isometric	Isometrisch
+Select a plane or planar face	Wählen Sie eine Ebene oder ebene Fläche
+Select a plane or planar face to sketch on	Wählen Sie eine Ebene oder ebene Fläche für die Skizze
+Click on a planar face to place holes	Klicken Sie auf eine ebene Fläche, um Bohrungen zu platzieren
+Select a face on the component to move	Wählen Sie eine Fläche der zu verschiebenden Komponente
+Select the face to join it to	Wählen Sie die Fläche, mit der es verbunden wird
+Select a sketch profile or a planar face	Wählen Sie ein Skizzenprofil oder eine ebene Fläche
+FRONT	VORNE
+BACK	HINTEN
+RIGHT	RECHTS
+LEFT	LINKS
+TOP	OBEN
+BOTTOM	UNTEN
+Untitled	Unbenannt

@@ -7,6 +7,7 @@ use crate::browser::feature_icon;
 use crate::icons::{self, Icon};
 use crate::state::SelItem;
 use crate::theme;
+use crate::i18n::tr;
 
 const ITEM_W: f32 = 30.0;
 const ITEM_GAP: f32 = 3.0;
@@ -43,10 +44,10 @@ impl Merge360App {
                     }
                     let gear = icons::icon_button(ui, Icon::Gear, 24.0, "Timeline settings");
                     egui::Popup::menu(&gear).show(|ui| {
-                        if ui.button("Compute All").clicked() {
+                        if ui.button(tr("Compute All")).clicked() {
                             self.actions.push(Action::Tool("compute_all"));
                         }
-                        if ui.button("Move to End").clicked() {
+                        if ui.button(tr("Move to End")).clicked() {
                             let tab = self.tab();
                             let n = tab.doc.features.len();
                             tab.doc.set_marker(n);
@@ -121,13 +122,13 @@ impl Merge360App {
             }
             resp.context_menu(|ui| {
                 let is_sketch = matches!(f.kind, m360_core::FeatureKind::Sketch { .. });
-                if ui.button(if is_sketch { "Edit Sketch" } else { "Edit Feature" }).clicked() {
+                if ui.button(tr(if is_sketch { "Edit Sketch" } else { "Edit Feature" })).clicked() {
                     self.actions.push(Action::EditFeature(f.uid));
                 }
-                if ui.button("Roll History Marker Here").clicked() {
+                if ui.button(tr("Roll History Marker Here")).clicked() {
                     new_marker = Some(i + 1);
                 }
-                if ui.button(if f.suppressed { "Unsuppress Features" } else { "Suppress Features" }).clicked() {
+                if ui.button(tr(if f.suppressed { "Unsuppress Features" } else { "Suppress Features" })).clicked() {
                     let uid = f.uid;
                     self.tabs[active].edit("Suppress", |d| {
                         if let Some(f) = d.feature_mut(uid) {
@@ -135,11 +136,11 @@ impl Merge360App {
                         }
                     });
                 }
-                if ui.button("Rename").clicked() {
+                if ui.button(tr("Rename")).clicked() {
                     self.flags.rename = Some((SelItem::Feature(f.uid), f.name.clone()));
                 }
                 ui.separator();
-                if ui.button(RichText::new("Delete").color(theme::ERROR)).clicked() {
+                if ui.button(RichText::new(tr("Delete")).color(theme::ERROR)).clicked() {
                     let uid = f.uid;
                     self.tabs[active].edit("Delete Feature", |d| d.delete_feature(uid));
                 }

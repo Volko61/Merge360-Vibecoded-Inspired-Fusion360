@@ -7,6 +7,7 @@ use crate::app::{Action, Merge360App};
 use crate::icons::{self, Icon};
 use crate::state::{Command, SelItem};
 use crate::theme;
+use crate::i18n::tr;
 
 const ROW_H: f32 = 22.0;
 const INDENT: f32 = 14.0;
@@ -76,7 +77,7 @@ fn row(ui: &mut egui::Ui, id: egui::Id, r: Row) -> RowResponse {
     } else {
         theme::TEXT
     };
-    ui.painter().text(egui::pos2(x, cy), egui::Align2::LEFT_CENTER, r.label, egui::FontId::proportional(12.5), color);
+    ui.painter().text(egui::pos2(x, cy), egui::Align2::LEFT_CENTER, tr(r.label), egui::FontId::proportional(12.5), color);
     RowResponse { resp, toggled_eye }
 }
 
@@ -111,9 +112,9 @@ impl Merge360App {
                             if ui.add(egui::Button::new(RichText::new(arrow).size(9.0)).frame(false)).clicked() {
                                 ui.data_mut(|d| d.insert_temp(header_id, !open));
                             }
-                            ui.label(RichText::new("BROWSER").size(11.5).strong().color(theme::TEXT));
+                            ui.label(RichText::new(tr("BROWSER")).size(11.5).strong().color(theme::TEXT));
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.add(egui::Button::new(RichText::new("✕").size(10.0)).frame(false)).on_hover_text("Hide Browser").clicked() {
+                                if ui.add(egui::Button::new(RichText::new(tr("✕")).size(10.0)).frame(false)).on_hover_text(tr("Hide Browser")).clicked() {
                                     self.flags.browser_open = false;
                                 }
                             });
@@ -137,10 +138,10 @@ impl Merge360App {
         let title = self.tabs[active].title();
         let r = row(ui, root_id, Row { open_default: true, depth: 0, expandable: true, eye: None, icon: Icon::Component, label: &title, selected: false, dim: false, error: false });
         r.resp.context_menu(|ui| {
-            if ui.button("Save").clicked() {
+            if ui.button(tr("Save")).clicked() {
                 self.actions.push(Action::Save);
             }
-            if ui.button("Export…").clicked() {
+            if ui.button(tr("Export…")).clicked() {
                 self.actions.push(Action::Export(crate::files::FileMode::ExportStep));
             }
         });
@@ -229,14 +230,14 @@ impl Merge360App {
                         self.click_item(SelItem::ConstructionPlane(uid), ctrl);
                     }
                     r.resp.context_menu(|ui| {
-                        if ui.button("Create Sketch").clicked() {
+                        if ui.button(tr("Create Sketch")).clicked() {
                             self.tabs[active].selection = vec![SelItem::ConstructionPlane(uid)];
                             self.actions.push(Action::Tool("create_sketch"));
                         }
-                        if ui.button("Edit Feature").clicked() {
+                        if ui.button(tr("Edit Feature")).clicked() {
                             self.actions.push(Action::EditFeature(uid));
                         }
-                        if ui.button(RichText::new("Delete").color(theme::ERROR)).clicked() {
+                        if ui.button(RichText::new(tr("Delete")).color(theme::ERROR)).clicked() {
                             self.tabs[active].edit("Delete Plane", |d| d.delete_feature(uid));
                         }
                     });
@@ -259,10 +260,10 @@ impl Merge360App {
                     self.actions.push(Action::Tool("section_analysis"));
                 }
                 r.resp.context_menu(|ui| {
-                    if ui.button("Edit Section Analysis").clicked() {
+                    if ui.button(tr("Edit Section Analysis")).clicked() {
                         self.actions.push(Action::Tool("section_analysis"));
                     }
-                    if ui.button(RichText::new("Delete").color(theme::ERROR)).clicked() {
+                    if ui.button(RichText::new(tr("Delete")).color(theme::ERROR)).clicked() {
                         self.tabs[active].section = None;
                     }
                 });
@@ -324,13 +325,13 @@ impl Merge360App {
                 self.tabs[active].selection = members.iter().map(|b| SelItem::Body(*b)).collect();
             }
             r.resp.context_menu(|ui| {
-                if ui.button("Rename").clicked() {
+                if ui.button(tr("Rename")).clicked() {
                     self.flags.rename = Some((SelItem::Feature(c.id), c.name.clone()));
                 }
-                if ui.button("Joint…").clicked() {
+                if ui.button(tr("Joint…")).clicked() {
                     self.actions.push(Action::Tool("joint"));
                 }
-                if ui.button("Dissolve Component").clicked() {
+                if ui.button(tr("Dissolve Component")).clicked() {
                     let id = c.id;
                     self.tabs[active].edit("Dissolve Component", |d| {
                         d.components.retain(|k| k.id != id);
@@ -373,13 +374,13 @@ impl Merge360App {
                         self.click_item(SelItem::Sketch(uid), ctrl);
                     }
                     r.resp.context_menu(|ui| {
-                        if ui.button("Edit Sketch").clicked() {
+                        if ui.button(tr("Edit Sketch")).clicked() {
                             self.actions.push(Action::EditSketch(uid));
                         }
-                        if ui.button(if visible { "Hide" } else { "Show" }).clicked() {
+                        if ui.button(tr(if visible { "Hide" } else { "Show" })).clicked() {
                             self.tabs[active].doc.sketch_visible.insert(uid, !visible);
                         }
-                        if ui.button("Delete").clicked() {
+                        if ui.button(tr("Delete")).clicked() {
                             self.tabs[active].edit("Delete Sketch", |d| d.delete_feature(uid));
                         }
                     });
@@ -430,34 +431,34 @@ impl Merge360App {
             if !sel {
                 self.tabs[active].selection = vec![SelItem::Body(id)];
             }
-            if ui.button("Move/Copy").clicked() {
+            if ui.button(tr("Move/Copy")).clicked() {
                 self.actions.push(Action::Tool("move"));
             }
-            if ui.button("Appearance").clicked() {
+            if ui.button(tr("Appearance")).clicked() {
                 self.actions.push(Action::Tool("appearance"));
             }
-            if ui.button("Properties").clicked() {
+            if ui.button(tr("Properties")).clicked() {
                 self.actions.push(Action::Tool("properties"));
             }
-            if ui.button("Create Components from Bodies").clicked() {
+            if ui.button(tr("Create Components from Bodies")).clicked() {
                 self.actions.push(Action::Tool("new_component"));
             }
             ui.separator();
-            if ui.button("Rename").clicked() {
+            if ui.button(tr("Rename")).clicked() {
                 self.flags.rename = Some((SelItem::Body(id), meta.name.clone()));
             }
-            if ui.button(if meta.visible { "Hide Body" } else { "Show Body" }).clicked() {
+            if ui.button(tr(if meta.visible { "Hide Body" } else { "Show Body" })).clicked() {
                 toggle(self);
             }
-            if ui.button("Find in Timeline").clicked() {
+            if ui.button(tr("Find in Timeline")).clicked() {
                 let feat = self.tabs[active].model.body(id).map(|b| b.last_feature);
                 self.tabs[active].timeline_hover = feat;
             }
-            if ui.button("Save as STL").clicked() {
+            if ui.button(tr("Save as STL")).clicked() {
                 self.actions.push(Action::Export(crate::files::FileMode::ExportStl));
             }
             ui.separator();
-            if ui.button(RichText::new("Delete").color(theme::ERROR)).clicked() {
+            if ui.button(RichText::new(tr("Delete")).color(theme::ERROR)).clicked() {
                 self.actions.push(Action::DeleteSelection);
             }
         });

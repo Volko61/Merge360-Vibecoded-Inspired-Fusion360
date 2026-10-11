@@ -9,6 +9,7 @@ use m360_kernel::BodyMesh;
 
 use crate::app::{Merge360App, ToastKind};
 use crate::theme;
+use crate::i18n::tr;
 
 /// Sheet size (mm) — ISO A3 landscape.
 const SHEET: Vec2 = Vec2::new(420.0, 297.0);
@@ -373,16 +374,16 @@ impl Merge360App {
     pub(crate) fn drawing_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.add_space(8.0);
-            if theme::secondary_button(ui, "Update Views").clicked() {
+            if theme::secondary_button(ui, tr("Update Views")).clicked() {
                 self.drawing = None;
             }
-            if theme::secondary_button(ui, "Fit Sheet").clicked() {
+            if theme::secondary_button(ui, tr("Fit Sheet")).clicked() {
                 self.drawing_view = (1.0, Vec2::ZERO);
             }
-            if theme::primary_button(ui, "Export SVG…").clicked() {
+            if theme::primary_button(ui, tr("Export SVG…")).clicked() {
                 self.export_drawing_svg();
             }
-            ui.label(egui::RichText::new("Views are generated from all visible bodies (Front, Top, Right, Isometric).").color(theme::TEXT_DIM));
+            ui.label(egui::RichText::new(tr("Views are generated from all visible bodies (Front, Top, Right, Isometric).")).color(theme::TEXT_DIM));
         });
     }
 

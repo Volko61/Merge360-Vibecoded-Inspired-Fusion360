@@ -352,7 +352,7 @@ pub fn trim(entities: &[SketchEntity], idx: usize, click: [f64; 2]) -> Option<Ve
             let tc = (dot(sub(click, a), d) / len2).clamp(0.0, 1.0);
             let mut ts: Vec<f64> = cuts.iter().map(|p| dot(sub(*p, a), d) / len2).filter(|t| *t > 1e-9 && *t < 1.0 - 1e-9).collect();
             ts.sort_by(f64::total_cmp);
-            let lo = ts.iter().copied().filter(|t| *t < tc).last().unwrap_or(0.0);
+            let lo = ts.iter().copied().rfind(|t| *t < tc).unwrap_or(0.0);
             let hi = ts.iter().copied().find(|t| *t > tc).unwrap_or(1.0);
             let mut out = Vec::new();
             if lo > 0.0 {
@@ -390,7 +390,7 @@ pub fn trim(entities: &[SketchEntity], idx: usize, click: [f64; 2]) -> Option<Ve
             let tc = rel(click).min(sw);
             let mut ts: Vec<f64> = cuts.iter().map(|p| rel(*p)).filter(|t| *t > 1e-9 && *t < sw - 1e-9).collect();
             ts.sort_by(f64::total_cmp);
-            let lo = ts.iter().copied().filter(|t| *t < tc).last().unwrap_or(0.0);
+            let lo = ts.iter().copied().rfind(|t| *t < tc).unwrap_or(0.0);
             let hi = ts.iter().copied().find(|t| *t > tc).unwrap_or(sw);
             let mut out = Vec::new();
             if lo > 1e-9 {
@@ -405,9 +405,12 @@ pub fn trim(entities: &[SketchEntity], idx: usize, click: [f64; 2]) -> Option<Ve
     }
 }
 
-/// Ordered chain of lines/arcs: (start, end, arc midpoint), and whether it is closed.
-pub fn order_chain(entities: &[SketchEntity], chain: &[usize]) -> Option<(Vec<([f64; 2], [f64; 2], Option<[f64; 2]>)>, bool)> {
-    let mut segs: Vec<([f64; 2], [f64; 2], Option<[f64; 2]>)> = Vec::new();
+/// A chain segment: (start, end, arc midpoint).
+pub type ChainSeg = ([f64; 2], [f64; 2], Option<[f64; 2]>);
+
+/// Ordered chain of lines/arcs, and whether it is closed.
+pub fn order_chain(entities: &[SketchEntity], chain: &[usize]) -> Option<(Vec<ChainSeg>, bool)> {
+    let mut segs: Vec<ChainSeg> = Vec::new();
     for &i in chain {
         match entities.get(i)? {
             SketchEntity::Line { a, b } => segs.push((*a, *b, None)),
@@ -416,7 +419,7 @@ pub fn order_chain(entities: &[SketchEntity], chain: &[usize]) -> Option<(Vec<([
         }
     }
     let same = |p: [f64; 2], q: [f64; 2]| norm(sub(p, q)) < 1e-6;
-    let degree = |p: [f64; 2], s: &[([f64; 2], [f64; 2], Option<[f64; 2]>)]| s.iter().filter(|x| same(x.0, p) || same(x.1, p)).count();
+    let degree = |p: [f64; 2], s: &[ChainSeg]| s.iter().filter(|x| same(x.0, p) || same(x.1, p)).count();
     let start = segs.iter().position(|x| degree(x.0, &segs) == 1 || degree(x.1, &segs) == 1).unwrap_or(0);
     let mut first = segs.remove(start);
     if degree(first.0, &segs) > 0 && degree(first.1, &segs) == 0 {
@@ -435,7 +438,7 @@ pub fn order_chain(entities: &[SketchEntity], chain: &[usize]) -> Option<(Vec<([
 
 /// Offset an ordered chain to its left by `d` (negative: right), joining
 /// consecutive offset curves at their intersections.
-fn offset_chain(chain: &[([f64; 2], [f64; 2], Option<[f64; 2]>)], closed: bool, d: f64) -> Option<Vec<SketchEntity>> {
+fn offset_chain(chain: &[ChainSeg], closed: bool, d: f64) -> Option<Vec<SketchEntity>> {
     // Offset curve representation.
     #[derive(Clone, Copy)]
     enum C {

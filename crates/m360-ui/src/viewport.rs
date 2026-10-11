@@ -614,6 +614,16 @@ impl Merge360App {
         let scene = self.build_scene(ui.ctx().pixels_per_point());
         let ppp = ui.ctx().pixels_per_point();
         let size = [(rect.width() * ppp).round() as u32, (rect.height() * ppp).round() as u32];
+        if let Some((w, h)) = self.render_settings.capture.take() {
+            // Same view, rendered at the requested resolution.
+            let mut big = self.build_scene(ppp);
+            big.pixels_per_point = (ppp * (h as f32 / size[1].max(1) as f32)).max(1.0);
+            if let (Some(vp), Some(rs)) = (self.viewport.as_mut(), frame.wgpu_render_state()) {
+                if let Some((cw, ch, px)) = vp.capture(rs, [w, h], &big) {
+                    self.save_render(cw, ch, px);
+                }
+            }
+        }
         match (self.viewport.as_mut(), frame.wgpu_render_state()) {
             (Some(vp), Some(rs)) if size[0] > 0 && size[1] > 0 => {
                 let tex = vp.render(rs, size, &scene);
@@ -1339,6 +1349,31 @@ impl Merge360App {
             }
         }
 
+        let render_ws = self.flags.workspace == crate::tools::WS_RENDER;
+        if render_ws {
+            for d in &mut scene.bodies {
+                d.show_edges = self.render_settings.show_edges;
+                d.highlight = [0.0; 4];
+                d.hover_face = None;
+                d.selected_faces.clear();
+            }
+            if self.render_settings.ground_shadow && !tab.model.bodies.is_empty() {
+                let (min, max) = scene_bounds(tab);
+                let c = Vec3::new((min.x + max.x) * 0.5, min.y - 0.01 * (max - min).length(), (min.z + max.z) * 0.5);
+                let (rx, rz) = ((max.x - min.x) * 0.75 + 2.0, (max.z - min.z) * 0.75 + 2.0);
+                let n = 48;
+                for k in 0..n {
+                    let a0 = k as f32 / n as f32 * std::f32::consts::TAU;
+                    let a1 = (k + 1) as f32 / n as f32 * std::f32::consts::TAU;
+                    let p0 = c + Vec3::new(a0.cos() * rx, 0.0, a0.sin() * rz);
+                    let p1 = c + Vec3::new(a1.cos() * rx, 0.0, a1.sin() * rz);
+                    scene.tris.push(FlatVertex::new(c, [0.0, 0.0, 0.0, 0.35]));
+                    scene.tris.push(FlatVertex::new(p0, [0.0, 0.0, 0.0, 0.0]));
+                    scene.tris.push(FlatVertex::new(p1, [0.0, 0.0, 0.0, 0.0]));
+                }
+            }
+            return scene;
+        }
         let in_sketch = tab.sketch.as_ref().map(|s| s.uid);
         let grid_alpha = if dark_env { 0.25 } else { 0.35 };
 

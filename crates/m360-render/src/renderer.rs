@@ -351,7 +351,7 @@ impl Viewport3D {
             "viewport color",
             COLOR_FORMAT,
             1,
-            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
         );
         let resolve_view = resolve.create_view(&Default::default());
         let msaa = (self.samples > 1).then(|| {
@@ -425,6 +425,47 @@ impl Viewport3D {
                 usage: wgpu::BufferUsages::VERTEX,
             })
         })
+    }
+
+    /// Render `scene` offscreen at full resolution and read the RGBA pixels back.
+    pub fn capture(&mut self, rs: &egui_wgpu::RenderState, size: [u32; 2], scene: &Scene) -> Option<(u32, u32, Vec<u8>)> {
+        let software = self.software;
+        self.software = false;
+        self.last_hash = None;
+        self.render(rs, size, scene);
+        self.software = software;
+        self.last_hash = None; // the on-screen view is re-rendered next frame
+        let t = self.targets.as_ref()?;
+        let [w, h] = t.size;
+        let bpr = (w * 4).div_ceil(256) * 256;
+        let device = &rs.device;
+        let buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("capture"),
+            size: (bpr * h) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("capture") });
+        enc.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo { texture: &t.resolve, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buf,
+                layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(bpr), rows_per_image: Some(h) },
+            },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        );
+        rs.queue.submit(Some(enc.finish()));
+        buf.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        device.poll(wgpu::PollType::wait_indefinitely()).ok()?;
+        let data = buf.slice(..).get_mapped_range().ok()?;
+        let mut out = Vec::with_capacity((w * h * 4) as usize);
+        for row in 0..h {
+            let start = (row * bpr) as usize;
+            out.extend_from_slice(&data[start..start + (w * 4) as usize]);
+        }
+        drop(data);
+        buf.unmap();
+        Some((w, h, out))
     }
 
     /// Render `scene` at `size` physical pixels and return the egui texture.

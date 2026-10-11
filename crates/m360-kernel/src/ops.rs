@@ -95,7 +95,7 @@ pub fn split(solid: &Solid, point: glam::DVec3, normal: glam::DVec3) -> Result<(
 
 /// Uniform scale about a point.
 pub fn scale(solid: &Solid, point: glam::DVec3, factor: f64) -> Result<Solid> {
-    if !(factor > 1e-9) {
+    if factor.is_nan() || factor <= 1e-9 {
         return Err(KernelError::InvalidParameter("scale factor must be positive".into()));
     }
     let m = DMat4::from_translation(point) * DMat4::from_scale(glam::DVec3::splat(factor)) * DMat4::from_translation(-point);

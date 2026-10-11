@@ -118,7 +118,7 @@ pub fn make_frustum(frame: &Frame, r0: f64, z0: f64, r1: f64, z1: f64) -> Result
             .map_err(|e| KernelError::OperationFailed(format!("cone: {e:?}")))?;
         let bottom = builder::try_attach_plane(&[w0.inverse()])
             .map_err(|e| KernelError::OperationFailed(format!("cone: {e:?}")))?;
-        let top = builder::try_attach_plane(&[w1.clone()])
+        let top = builder::try_attach_plane(std::slice::from_ref(&w1))
             .map_err(|e| KernelError::OperationFailed(format!("cone: {e:?}")))?;
         shell.push(bottom);
         shell.push(top);

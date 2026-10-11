@@ -15,6 +15,7 @@
 //! param distance -30      # set a command parameter (distance, op, height, …)
 //! shot /path/file.png     # screenshot
 //! dump /path/doc.ron      # write the document (RON)
+//! workspace drawing       # switch workspace (design, render, drawing)
 //! quit
 //! ```
 
@@ -42,6 +43,7 @@ enum Step {
     Param(String, String),
     Shot(String),
     Dump(String),
+    Workspace(String),
     Quit,
 }
 
@@ -57,6 +59,7 @@ pub struct Script {
     pub quit: bool,
     pub params: Vec<(String, String)>,
     pub dump: Option<String>,
+    pub workspace: Option<String>,
 }
 
 fn parse_p(t: &[&str]) -> Option<(P, usize)> {
@@ -116,6 +119,7 @@ impl Script {
                 "param" => Step::Param(rest.first()?.to_string(), rest.get(1)?.to_string()),
                 "shot" => Step::Shot(rest.first()?.to_string()),
                 "dump" => Step::Dump(rest.first()?.to_string()),
+                "workspace" => Step::Workspace(rest.first()?.to_string()),
                 "quit" => Step::Quit,
                 other => {
                     eprintln!("script: unknown command {other}");
@@ -124,7 +128,7 @@ impl Script {
             };
             steps.push(step);
         }
-        Some(Self { steps, idx: 0, phase: 0, wait: 30, ok: false, tool: None, shot: None, quit: false, params: Vec::new(), dump: None })
+        Some(Self { steps, idx: 0, phase: 0, wait: 30, ok: false, tool: None, shot: None, quit: false, params: Vec::new(), dump: None, workspace: None })
     }
 
     pub fn running(&self) -> bool {
@@ -209,6 +213,7 @@ impl Script {
             Step::Param(k, v) => self.params.push((k.clone(), v.clone())),
             Step::Shot(p) => self.shot = Some(p.clone()),
             Step::Dump(p) => self.dump = Some(p.clone()),
+            Step::Workspace(w) => self.workspace = Some(w.clone()),
             Step::Quit => self.quit = true,
         }
         if next {

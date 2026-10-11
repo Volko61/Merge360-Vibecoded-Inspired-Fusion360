@@ -54,11 +54,17 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
 * **Construct:** Offset Plane.
 * **Inspect:** Measure (edge length, face area, body volume, minimum distance), Section Analysis
   (with section caps), Center of Mass, Properties.
+* **DRAWING workspace:** A3 sheet with title block, Front / Top / Right / Isometric views in
+  third-angle layout with hidden-line removal (dashed), true silhouettes of curved faces,
+  automatic standard scale, overall dimensions, SVG export.
+* **RENDER workspace:** presentation view (environments, soft ground shadow, optional edges) and
+  high-resolution image rendering to PNG (HD to 4K).
 * **Files:** native `.m360` (RON, full parametric history), STL and STEP export.
 * Fully parametric: every feature is re-editable from the timeline (double-click), roll back with
   the marker, suppress features; undo/redo for everything.
 
-Tools that are not implemented yet (joints, draft, thread, the other workspaces, …) are present
+Tools that are not implemented yet (joints, draft, thread, the Animation / Simulation /
+Manufacture / Generative Design workspaces, …) are present
 in the UI and report “not available yet”. Kernel limitations (truck): fillets meeting three at a
 corner, shells of non-prismatic bodies and booleans of exactly coplanar faces may fail; such
 features turn red in the timeline with an explanation.
@@ -105,3 +111,4 @@ Dev hooks (environment variables) used for automated visual checks:
 * `M360_FULLSCREEN=1` — start fullscreen; `M360_FPS=1` — print frame rate
 * `M360_CAMERA="yaw,pitch,dist,tx,ty,tz"` — set the initial camera
 * `M360_SCRIPT=file` — replay scripted input (see `crates/m360-ui/src/script.rs`)
+* `M360_STYLE=wire` — start in wireframe

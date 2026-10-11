@@ -289,9 +289,7 @@ pub fn solve(entities: &mut [SketchEntity], constraints: &[SketchConstraint], dr
                 out.extend([drag_w * (x[*v] - t[0]), drag_w * (x[*v + 1] - t[1])]);
             }
         }
-        for i in 0..n {
-            out.push(reg_w * (x[i] - l.x0[i]));
-        }
+        out.extend(x.iter().zip(&l.x0).map(|(v, v0)| reg_w * (v - v0)));
         Ok(nc)
     };
     let cost = |r: &[f64]| r.iter().map(|v| v * v).sum::<f64>();

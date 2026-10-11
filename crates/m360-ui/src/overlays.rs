@@ -449,6 +449,10 @@ impl Merge360App {
         });
     }
 
+    pub(crate) fn toasts_ui_pub(&mut self, ctx: &egui::Context) {
+        self.toasts_ui(ctx);
+    }
+
     fn toasts_ui(&mut self, ctx: &egui::Context) {
         let now = self.now();
         for t in &mut self.toasts {

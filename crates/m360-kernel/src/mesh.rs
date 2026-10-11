@@ -73,7 +73,7 @@ impl BodyMesh {
         out.positions = self.positions.iter().map(|p| mf.transform_point3(Vec3::from(*p)).to_array()).collect();
         out.normals = self.normals.iter().map(|n| (nm * Vec3::from(*n)).normalize_or_zero().to_array()).collect();
         if flip {
-            for t in out.indices.chunks_exact_mut(3) {
+            for t in out.indices.as_chunks_mut::<3>().0 {
                 t.swap(1, 2);
             }
         }

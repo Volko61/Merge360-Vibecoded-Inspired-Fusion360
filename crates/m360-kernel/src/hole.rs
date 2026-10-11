@@ -26,7 +26,7 @@ pub struct HoleSpec {
 /// ring for countersinks. Bottoms are flat.
 pub fn hole_tools(center: DVec3, normal: DVec3, spec: &HoleSpec) -> Result<Vec<Solid>> {
     let r = spec.diameter / 2.0;
-    if !(r > 1e-6) || !(spec.depth > 1e-6) {
+    if r.is_nan() || r <= 1e-6 || spec.depth.is_nan() || spec.depth <= 1e-6 {
         return Err(KernelError::InvalidParameter("diameter and depth must be greater than zero".into()));
     }
     let n = normal.normalize();

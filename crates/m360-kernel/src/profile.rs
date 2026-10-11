@@ -165,7 +165,7 @@ impl Loop2 {
                 }
                 // (start, end, transit) triples, reversed if clockwise.
                 let n = segs.len();
-                let mut tri: Vec<([f64; 2], [f64; 2], Option<[f64; 2]>)> =
+                let mut tri: Vec<PathTriple> =
                     (0..n).map(|i| (segs[(i + n - 1) % n].end, segs[i].end, segs[i].transit)).collect();
                 if self.signed_area() < 0.0 {
                     tri = tri.into_iter().rev().map(|(a, b, m)| (b, a, m)).collect();
@@ -188,6 +188,9 @@ impl Loop2 {
         Ok(w)
     }
 }
+
+/// (start, end, arc transit) of a path segment.
+type PathTriple = ([f64; 2], [f64; 2], Option<[f64; 2]>);
 
 /// A region: an outer loop minus holes.
 #[derive(Debug, Clone, PartialEq)]

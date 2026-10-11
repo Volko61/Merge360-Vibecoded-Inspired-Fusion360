@@ -308,7 +308,7 @@ pub fn path_segments(model: &Model, sketch: u64, path: &[usize]) -> Result<Vec<m
     use m360_kernel::sweep::PathSeg;
     let (plane, ents) = sketch_of(model, sketch)?;
     // (start, end, arc midpoint) in plane coordinates.
-    let mut segs: Vec<([f64; 2], [f64; 2], Option<[f64; 2]>)> = Vec::new();
+    let mut segs: Vec<crate::sketch::ChainSeg> = Vec::new();
     for &i in path {
         match ents.get(i) {
             Some(SketchEntity::Line { a, b }) => segs.push((*a, *b, None)),
@@ -320,7 +320,7 @@ pub fn path_segments(model: &Model, sketch: u64, path: &[usize]) -> Result<Vec<m
         return Err("no path selected".into());
     }
     let same = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]) < 1e-6;
-    let degree = |p: [f64; 2], segs: &[([f64; 2], [f64; 2], Option<[f64; 2]>)]| {
+    let degree = |p: [f64; 2], segs: &[crate::sketch::ChainSeg]| {
         segs.iter().filter(|s| same(s.0, p) || same(s.1, p)).count()
     };
     // Start at an open end if there is one.

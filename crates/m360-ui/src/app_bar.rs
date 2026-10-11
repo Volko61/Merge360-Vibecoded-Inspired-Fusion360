@@ -203,7 +203,21 @@ impl Merge360App {
                     egui::ScrollArea::horizontal().show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.add_space(6.0);
-                            if self.flags.workspace != 0 {
+                            if self.flags.workspace == tools::WS_DRAWING {
+                                ui.vertical(|ui| {
+                                    ui.add_space(18.0);
+                                    self.drawing_toolbar(ui);
+                                });
+                                return;
+                            }
+                            if self.flags.workspace == tools::WS_RENDER {
+                                ui.vertical(|ui| {
+                                    ui.add_space(18.0);
+                                    self.render_toolbar(ui);
+                                });
+                                return;
+                            }
+                            if self.flags.workspace != tools::WS_DESIGN {
                                 let name = tools::WORKSPACES[self.flags.workspace].0;
                                 ui.vertical(|ui| {
                                     ui.add_space(14.0);
@@ -244,6 +258,11 @@ impl Merge360App {
             }
         });
         ui.add_space(14.0);
+        if self.flags.workspace != tools::WS_DESIGN {
+            let name = tools::WORKSPACES[self.flags.workspace].0;
+            tab_label(ui, name, true, theme::ACCENT);
+            return;
+        }
         if in_sketch {
             tab_label(ui, "SKETCH", true, theme::SKETCH_GREEN);
             for tab in tools::DESIGN_TABS.iter().take(1) {

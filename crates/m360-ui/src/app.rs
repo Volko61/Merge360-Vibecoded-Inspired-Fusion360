@@ -74,6 +74,9 @@ pub struct Merge360App {
     pub pending_sketch_plane: Option<PlaneRef>,
     pub script: Option<crate::script::Script>,
     pub fps: Option<(std::time::Instant, u32)>,
+    pub drawing: Option<crate::drawing::DrawingCache>,
+    pub drawing_view: (f32, glam::Vec2),
+    pub render_settings: crate::render_ws::RenderSettings,
     pub untitled_counter: usize,
 }
 
@@ -110,6 +113,9 @@ impl Merge360App {
             canvas: Default::default(),
             pending_sketch_plane: None,
             fps: None,
+            drawing: None,
+            drawing_view: (1.0, glam::Vec2::ZERO),
+            render_settings: Default::default(),
             script: std::env::var("M360_SCRIPT").ok().and_then(|p| crate::script::Script::load(&p)),
             untitled_counter: 1,
         };
@@ -244,6 +250,11 @@ impl Merge360App {
                     }
                     (Some(Command::Fillet { chamfer, .. }), "chamfer") => *chamfer = v == "true",
                     _ => eprintln!("script: cannot set {k} on the current command"),
+                }
+            }
+            if let Some(w) = s.workspace.take() {
+                if let Some(i) = crate::tools::WORKSPACES.iter().position(|(n, _)| n.eq_ignore_ascii_case(&w)) {
+                    self.flags.workspace = i;
                 }
             }
             if let Some(p) = s.dump.take() {
@@ -540,7 +551,6 @@ impl Merge360App {
                 // Fusion's Press Pull: fillet on edges, extrude on profiles.
                 let on_edges = tab.selection.iter().any(|s| matches!(s, SelItem::Edge(..)));
                 self.run_tool(if on_edges { "fillet" } else { "extrude" });
-                return;
             }
             "delete" => self.delete_selection(),
             "appearance" => tab.command = Some(Command::Appearance),
@@ -1223,10 +1233,19 @@ impl eframe::App for Merge360App {
         if self.flags.data_panel {
             self.data_panel(ui);
         }
+        let drawing = self.flags.workspace == crate::tools::WS_DRAWING;
         egui::CentralPanel::no_frame().show(ui, |ui| {
-            self.canvas(ui, frame);
+            if drawing {
+                self.drawing_ui(ui);
+            } else {
+                self.canvas(ui, frame);
+            }
         });
-        self.overlays(&ctx);
+        if !drawing {
+            self.overlays(&ctx);
+        } else {
+            self.toasts_ui_pub(&ctx);
+        }
         self.dialogs(&ctx);
         self.process_actions();
         self.dev_hooks(&ctx);

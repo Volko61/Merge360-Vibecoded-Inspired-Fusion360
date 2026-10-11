@@ -90,7 +90,7 @@ fn cap_loops(mesh: &BodyMesh, faces: &[u32], frame: &Frame) -> Option<Vec<Vec<[f
     let key = |p: [f32; 3]| [(p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64, (p[2] * 1e4).round() as i64];
     let mut pos: HashMap<[i64; 3], [f32; 3]> = HashMap::new();
     let mut count: HashMap<([i64; 3], [i64; 3]), i32> = HashMap::new();
-    for t in mesh.indices.chunks_exact(3) {
+    for t in mesh.indices.as_chunks::<3>().0 {
         if !faces.contains(&mesh.face_ids[t[0] as usize]) {
             continue;
         }
@@ -116,7 +116,7 @@ fn cap_loops(mesh: &BodyMesh, faces: &[u32], frame: &Frame) -> Option<Vec<Vec<[f
         loop {
             let p = Vec3::from(pos[&cur]).as_dvec3() - frame.origin;
             lp.push([p.dot(frame.u), p.dot(frame.v)]);
-            let Some(n) = next.remove(&cur) else { return None };
+            let n = next.remove(&cur)?;
             cur = n;
             if cur == start {
                 break;
@@ -192,7 +192,7 @@ pub fn offset_polygon(p: &[[f64; 2]], t: f64) -> Option<Vec<[f64; 2]>> {
 
 /// Hollow out a prismatic solid with walls of `thickness`.
 pub fn shell(solid: &Solid, mesh: &BodyMesh, thickness: f64, open: OpenCaps) -> Result<Solid> {
-    if !(thickness > 1e-6) {
+    if thickness.is_nan() || thickness <= 1e-6 {
         return Err(KernelError::InvalidParameter("thickness must be greater than zero".into()));
     }
     let prism = detect_prism(mesh).ok_or_else(|| {

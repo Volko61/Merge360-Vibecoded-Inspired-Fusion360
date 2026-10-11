@@ -437,14 +437,18 @@ pub const SKETCH_TAB: Tab = Tab {
     ],
 };
 
+pub const WS_DESIGN: usize = 0;
+pub const WS_RENDER: usize = 2;
+pub const WS_DRAWING: usize = 6;
+
 pub const WORKSPACES: &[(&str, bool)] = &[
     ("DESIGN", true),
     ("GENERATIVE DESIGN", false),
-    ("RENDER", false),
+    ("RENDER", true),
     ("ANIMATION", false),
     ("SIMULATION", false),
     ("MANUFACTURE", false),
-    ("DRAWING", false),
+    ("DRAWING", true),
 ];
 
 /// Tools that are wired up in this build.

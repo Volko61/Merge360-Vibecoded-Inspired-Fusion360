@@ -30,6 +30,7 @@ pub struct SketchGeom {
     pub name: String,
     pub plane: PlaneRef,
     pub entities: Vec<SketchEntity>,
+    pub constraints: Vec<crate::solver::SketchConstraint>,
 }
 
 #[derive(Clone)]
@@ -411,12 +412,13 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             }
             Ok(())
         }
-        FeatureKind::Sketch { plane, entities } => {
+        FeatureKind::Sketch { plane, entities, constraints } => {
             model.sketches.push(SketchGeom {
                 uid: f.uid,
                 name: f.name.clone(),
                 plane: *plane,
                 entities: entities.clone(),
+                constraints: constraints.clone(),
             });
             Ok(())
         }

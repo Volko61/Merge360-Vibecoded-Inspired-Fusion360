@@ -54,6 +54,7 @@ impl Merge360App {
         self.toasts_ui(ctx);
         self.marking_menu(ctx);
         self.toolbox(ctx);
+        self.dim_edit_ui(ctx);
     }
 
     fn view_cube(&mut self, ctx: &egui::Context) {
@@ -407,6 +408,7 @@ impl Merge360App {
                                 (Icon::Circle, crate::state::SketchTool::Circle, "sk_circle"),
                                 (Icon::Arc, crate::state::SketchTool::Arc, "sk_arc"),
                                 (Icon::Polygon, crate::state::SketchTool::Polygon, "sk_polygon"),
+                                (Icon::Dimension, crate::state::SketchTool::Dimension, "sk_dimension"),
                                 (Icon::Point, crate::state::SketchTool::Point, "sk_point"),
                             ] {
                                 if nav_icon(ui, icon, tool == Some(t), t.label()).clicked() {

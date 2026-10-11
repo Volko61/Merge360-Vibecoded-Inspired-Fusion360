@@ -20,7 +20,7 @@ pub fn sample_document() -> Document {
         SketchEntity::Circle { c: [40.0, -20.0], r: 8.0 },
     ];
     entities.extend(rectangle([-20.0, -12.0], [20.0, 12.0]));
-    let sk = d.add_feature(FeatureKind::Sketch { plane: top, entities });
+    let sk = d.add_feature(FeatureKind::Sketch { plane: top, entities, constraints: vec![] });
     d.add_feature(FeatureKind::Extrude {
         sketch: sk,
         profiles: vec![0, 1, 2, 3],

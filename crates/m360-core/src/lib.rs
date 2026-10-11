@@ -5,6 +5,7 @@ pub mod feature;
 pub mod history;
 pub mod model;
 pub mod sketch;
+pub mod solver;
 pub mod units;
 
 pub use document::{BodyMeta, Document, NamedView};

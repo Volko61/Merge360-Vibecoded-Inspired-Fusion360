@@ -30,7 +30,13 @@ pub struct CanvasState {
     pub last_pointer: Option<Pos2>,
     pub cursor_world: Option<Vec3>,
     pub sketch_cursor: Option<[f64; 2]>,
+    /// Unsnapped cursor position on the sketch plane.
+    pub sketch_raw: Option<[f64; 2]>,
     pub snapped: bool,
+    /// Document state at the start of a sketch point drag.
+    pub drag_before: Option<m360_core::Document>,
+    /// Screen rectangles of constraint/dimension labels: (rect, sketch, index).
+    pub labels: Vec<(egui::Rect, u64, usize)>,
     pub com: Option<Vec3>,
 }
 
@@ -201,7 +207,35 @@ impl Merge360App {
         if mode == PickMode::Sketch {
             let tab = &self.tabs[active];
             if let Some(s) = &tab.sketch {
+                // Constraint / dimension labels.
+                if let Some((r, uid, i)) = self.canvas.labels.iter().find(|(r, u, _)| *u == s.uid && r.contains(pos)) {
+                    let _ = r;
+                    return Some((SelItem::SketchConstraint(*uid, *i), Vec3::ZERO));
+                }
                 if let Some((plane, ents)) = tab.sketch_entities(s.uid) {
+                    // Entity points (only for tools that act on points).
+                    let wants_points = matches!(
+                        s.tool,
+                        SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_)
+                    );
+                    if wants_points {
+                        let mut best_p: Option<(f32, m360_core::solver::PointRef)> = None;
+                        for e in 0..ents.len() {
+                            for p in m360_core::solver::points_of(&ents, e) {
+                                let Some(q) = m360_core::solver::point_of(&ents, p) else { continue };
+                                if let Some(sp) = self.to_screen(&cam, to_world(&plane, q)) {
+                                    let d = (sp - pos).length();
+                                    if d < 8.0 && best_p.is_none_or(|b| d < b.0) {
+                                        best_p = Some((d, p));
+                                    }
+                                }
+                            }
+                        }
+                        if let Some((_, p)) = best_p {
+                            let q = m360_core::solver::point_of(&ents, p).unwrap();
+                            return Some((SelItem::SketchPoint(s.uid, p), to_world(&plane, q)));
+                        }
+                    }
                     let mut best_d = 7.0;
                     let mut hit = None;
                     for (i, e) in ents.iter().enumerate() {
@@ -567,6 +601,9 @@ impl Merge360App {
         let ctx = ui.ctx().clone();
         let rect = self.canvas_rect;
         let pointer = ctx.input(|i| i.pointer.hover_pos());
+        if pointer.is_some() {
+            self.canvas.last_pointer = pointer;
+        }
         let inside = pointer.is_some_and(|p| rect.contains(p)) && resp.hovered() || resp.dragged();
         let (shift, ctrl) = ctx.input(|i| (i.modifiers.shift, i.modifiers.command));
         let middle_down = ctx.input(|i| i.pointer.middle_down());
@@ -636,6 +673,32 @@ impl Merge360App {
             return;
         }
 
+        // Dragging sketch points with the Select tool.
+        let sketch_select = self.tabs[self.active].sketch.as_ref().is_some_and(|s| s.tool == SketchTool::Select);
+        if sketch_select {
+            let dragging = self.tabs[self.active].sketch.as_ref().is_some_and(|s| s.drag.is_some());
+            if dragging {
+                if let Some(p) = pointer {
+                    self.update_sketch_cursor(p);
+                }
+                if primary_down {
+                    self.sketch_drag(false, false);
+                } else {
+                    self.sketch_drag(false, true);
+                }
+                return;
+            }
+            if resp.drag_started_by(egui::PointerButton::Primary) {
+                if let Some(SelItem::SketchPoint(_, p)) = self.tabs[self.active].hover {
+                    if let Some(s) = &mut self.tab().sketch {
+                        s.drag = Some(p);
+                    }
+                    self.sketch_drag(true, false);
+                    return;
+                }
+            }
+        }
+
         // Start of a primary drag: manipulator, or window selection.
         if resp.drag_started_by(egui::PointerButton::Primary) {
             if let Some(press) = ctx.input(|i| i.pointer.press_origin()) {
@@ -686,6 +749,14 @@ impl Merge360App {
         }
 
         if resp.double_clicked() {
+            if let Some(SelItem::SketchConstraint(uid, i)) = self.tabs[self.active].hover {
+                let c = self.tabs[self.active].model.sketches.iter().find(|k| k.uid == uid).and_then(|k| k.constraints.get(i).cloned());
+                if let Some(c) = c {
+                    let units = self.tabs[self.active].doc.units;
+                    self.open_dim_edit(Some(i), c, pointer.unwrap_or_default(), units);
+                }
+                return;
+            }
             if let Some(s) = &self.tabs[self.active].sketch {
                 if s.tool == SketchTool::Line {
                     if let Some(s) = &mut self.tab().sketch {
@@ -708,7 +779,7 @@ impl Merge360App {
     fn canvas_click(&mut self, hover: Option<SelItem>, additive: bool) {
         // Sketch drawing consumes clicks.
         if self.tabs[self.active].sketch.as_ref().is_some_and(|s| s.tool != SketchTool::Select) {
-            self.sketch_click();
+            self.sketch_click(hover);
             return;
         }
         if matches!(self.tabs[self.active].command, Some(Command::Fillet { .. })) {
@@ -1346,9 +1417,93 @@ impl Merge360App {
             }
         }
 
+        // Constraint glyphs and dimensions of the sketch being edited.
+        self.canvas.labels.clear();
+        let tab = &self.tabs[self.active];
+        if let Some(sk) = tab.sketch.as_ref().and_then(|s| tab.model.sketches.iter().find(|k| k.uid == s.uid)) {
+            let cam = tab.camera;
+            let units = tab.doc.units;
+            let plane = sk.plane;
+            let scr = |q: [f64; 2]| self.to_screen(&cam, to_world(&plane, q));
+            let mut per_entity: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+            let mut labels = Vec::new();
+            for (ci, c) in sk.constraints.iter().enumerate() {
+                use m360_core::solver::{point_of, SketchConstraint as C};
+                let selected = tab.selection.contains(&SelItem::SketchConstraint(sk.uid, ci));
+                let hovered = tab.hover == Some(SelItem::SketchConstraint(sk.uid, ci));
+                let (text, pos, dim) = match c {
+                    C::Distance { a, b, value } => {
+                        let (Some(pa), Some(pb)) = (point_of(&sk.entities, *a), point_of(&sk.entities, *b)) else { continue };
+                        let (Some(sa), Some(sb)) = (scr(pa), scr(pb)) else { continue };
+                        let d = (sb - sa).normalized();
+                        let n = egui::vec2(-d.y, d.x) * 18.0;
+                        // Dimension line with extension lines.
+                        let stroke = egui::Stroke::new(1.0, Color32::from_rgb(40, 40, 46));
+                        painter.line_segment([sa, sa + n * 1.2], stroke);
+                        painter.line_segment([sb, sb + n * 1.2], stroke);
+                        painter.arrow(sa + n + (sb - sa) * 0.5, (sa - sb) * 0.5, stroke);
+                        painter.arrow(sa + n + (sb - sa) * 0.5, (sb - sa) * 0.5, stroke);
+                        (format!("{:.2}", units.from_mm(*value)), sa + (sb - sa) * 0.5 + n, true)
+                    }
+                    C::Diameter { entity, value } => {
+                        let center = match sk.entities.get(*entity) {
+                            Some(SketchEntity::Circle { c, r }) => Some((*c, *r)),
+                            Some(SketchEntity::Arc { a, m, b }) => m360_kernel::profile::circumcircle(*a, *m, *b),
+                            _ => None,
+                        };
+                        let Some((c, r)) = center else { continue };
+                        let k = std::f64::consts::FRAC_1_SQRT_2;
+                        let (Some(sc), Some(se)) = (scr(c), scr([c[0] + r * k, c[1] + r * k])) else { continue };
+                        let stroke = egui::Stroke::new(1.0, Color32::from_rgb(40, 40, 46));
+                        let dir = (se - sc).normalized();
+                        painter.arrow(se + dir * 22.0, -dir * 22.0, stroke);
+                        (format!("⌀{:.2}", units.from_mm(*value)), se + dir * 30.0, true)
+                    }
+                    other => {
+                        let Some(&e) = other.entities().first() else { continue };
+                        let anchor = match sk.entities.get(e) {
+                            Some(SketchEntity::Line { a, b }) => [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0],
+                            Some(SketchEntity::Circle { c, r }) => [c[0] + r, c[1]],
+                            Some(SketchEntity::Arc { m, .. }) => *m,
+                            Some(SketchEntity::Point { p }) => *p,
+                            None => continue,
+                        };
+                        let anchor = match other {
+                            C::Fix(p) | C::Coincident(p, _) => point_of(&sk.entities, *p).unwrap_or(anchor),
+                            _ => anchor,
+                        };
+                        let Some(sa) = scr(anchor) else { continue };
+                        let k = per_entity.entry(e).or_insert(0);
+                        *k += 1;
+                        (other.glyph().to_string(), sa + egui::vec2(10.0 + 16.0 * (*k - 1) as f32, -14.0), false)
+                    }
+                };
+                let font = egui::FontId::proportional(if dim { 12.0 } else { 10.5 });
+                let color = if selected { Color32::WHITE } else if dim { Color32::from_rgb(25, 25, 30) } else { Color32::from_rgb(30, 90, 30) };
+                let galley = painter.layout_no_wrap(text, font, color);
+                let r = egui::Rect::from_center_size(pos, galley.size() + egui::vec2(6.0, 2.0));
+                let bg = if selected {
+                    theme::ACCENT
+                } else if hovered {
+                    theme::HOVER_BG
+                } else if dim {
+                    Color32::from_white_alpha(225)
+                } else {
+                    Color32::from_rgba_unmultiplied(225, 245, 225, 235)
+                };
+                painter.rect_filled(r, 2.0, bg);
+                if !dim {
+                    painter.rect_stroke(r, 2.0, egui::Stroke::new(1.0, Color32::from_rgb(90, 150, 90)), egui::StrokeKind::Inside);
+                }
+                painter.galley(r.center() - galley.size() / 2.0, galley, color);
+                labels.push((r, sk.uid, ci));
+            }
+            self.canvas.labels = labels;
+        }
+
         // Sketch dimension label next to the cursor.
         let tab = &self.tabs[self.active];
-        if let (Some(s), Some(cur)) = (&tab.sketch, self.canvas.sketch_cursor) {
+        if let (Some(s), Some(cur)) = (tab.sketch.as_ref().filter(|s| !matches!(s.tool, SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_))), self.canvas.sketch_cursor) {
             if let Some((plane, _)) = tab.sketch_entities(s.uid) {
                 if let Some(text) = crate::sketch::rubber_band_label(s, cur, tab.doc.units) {
                     if let Some(p) = self.to_screen(&tab.camera, to_world(&plane, cur)) {

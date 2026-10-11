@@ -240,6 +240,7 @@ mod tests {
         use crate::{ExtrudeOp, SketchEntity};
         let mut d = Document::default();
         let sk = d.add_feature(FeatureKind::Sketch {
+            constraints: vec![],
             plane: PlaneRef::XY,
             entities: {
                 let mut e = crate::sketch::rectangle([-10.0, -10.0], [10.0, 10.0]);
@@ -279,6 +280,7 @@ mod tests {
         let mut d = Document::default();
         // Rectangle away from the Y axis on the XY plane, revolved into a tube.
         let sk = d.add_feature(FeatureKind::Sketch {
+            constraints: vec![],
             plane: PlaneRef::XY,
             entities: crate::sketch::rectangle([5.0, 0.0], [10.0, 20.0]),
         });
@@ -291,6 +293,7 @@ mod tests {
             participants: vec![],
         });
         let slot = d.add_feature(FeatureKind::Sketch {
+            constraints: vec![],
             plane: PlaneRef::XZ,
             entities: vec![
                 SketchEntity::Line { a: [30.0, 0.0], b: [40.0, 0.0] },

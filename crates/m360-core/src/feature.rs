@@ -158,6 +158,8 @@ pub enum FeatureKind {
     Sketch {
         plane: PlaneRef,
         entities: Vec<SketchEntity>,
+        #[serde(default)]
+        constraints: Vec<crate::solver::SketchConstraint>,
     },
     Revolve {
         sketch: u64,

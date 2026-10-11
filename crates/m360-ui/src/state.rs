@@ -27,6 +27,10 @@ pub enum SelItem {
     Edge(BodyId, u32),
     /// A construction plane feature.
     ConstructionPlane(u64),
+    /// A point of a sketch entity.
+    SketchPoint(u64, m360_core::solver::PointRef),
+    /// A sketch constraint or dimension (by index).
+    SketchConstraint(u64, usize),
 }
 
 impl SelItem {
@@ -132,6 +136,58 @@ pub enum SketchTool {
     Point,
     Arc,
     Polygon,
+    Dimension,
+    Constrain(ConKind),
+}
+
+/// Geometric constraint tools of the SKETCH tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConKind {
+    HorizontalVertical,
+    Coincident,
+    Tangent,
+    Equal,
+    Parallel,
+    Perpendicular,
+    Fix,
+    Concentric,
+}
+
+impl ConKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            ConKind::HorizontalVertical => "Horizontal/Vertical",
+            ConKind::Coincident => "Coincident",
+            ConKind::Tangent => "Tangent",
+            ConKind::Equal => "Equal",
+            ConKind::Parallel => "Parallel",
+            ConKind::Perpendicular => "Perpendicular",
+            ConKind::Fix => "Fix",
+            ConKind::Concentric => "Concentric",
+        }
+    }
+    /// Number of picks needed.
+    pub fn picks(self) -> usize {
+        match self {
+            ConKind::HorizontalVertical | ConKind::Fix => 1,
+            _ => 2,
+        }
+    }
+    /// Whether the tool picks points (else entities).
+    pub fn wants_points(self) -> bool {
+        matches!(self, ConKind::Coincident | ConKind::Fix)
+    }
+}
+
+/// An open inline dimension editor in sketch mode.
+#[derive(Debug, Clone)]
+pub struct DimEdit {
+    /// Existing constraint being edited, or the draft of a new one.
+    pub index: Option<usize>,
+    pub draft: m360_core::solver::SketchConstraint,
+    pub text: String,
+    pub pos: eframe::egui::Pos2,
+    pub focus: u8,
 }
 
 impl SketchTool {
@@ -145,6 +201,8 @@ impl SketchTool {
             SketchTool::Point => "Point",
             SketchTool::Arc => "3-Point Arc",
             SketchTool::Polygon => "Inscribed Polygon",
+            SketchTool::Dimension => "Sketch Dimension",
+            SketchTool::Constrain(k) => k.label(),
         }
     }
 }
@@ -159,6 +217,11 @@ pub struct SketchSession {
     pub saved_camera: Camera,
     pub show_profile: bool,
     pub look_at: bool,
+    /// Picks of the current constraint / dimension tool.
+    pub picked: Vec<SelItem>,
+    pub dim_edit: Option<DimEdit>,
+    /// Point being dragged with the Select tool.
+    pub drag: Option<m360_core::solver::PointRef>,
 }
 
 /// Context for editing an existing feature from the timeline.

@@ -311,6 +311,7 @@ impl Merge360App {
             if let Some(s) = &mut self.tab().sketch {
                 s.tool = tool;
                 s.pending.clear();
+                s.picked.clear();
             } else {
                 self.toast(ToastKind::Info, "Sketch tools are available while editing a sketch.");
             }
@@ -549,7 +550,7 @@ impl Merge360App {
         let before = tab.doc.clone();
         let mut uid = 0;
         tab.edit("Create Sketch", |d| {
-            uid = d.add_feature(FeatureKind::Sketch { plane, entities: Vec::new() });
+            uid = d.add_feature(FeatureKind::Sketch { plane, entities: Vec::new(), constraints: Vec::new() });
         });
         tab.command = None;
         tab.selection.clear();
@@ -562,6 +563,9 @@ impl Merge360App {
             saved_camera: saved,
             show_profile: true,
             look_at: true,
+            picked: Vec::new(),
+            dim_edit: None,
+            drag: None,
         });
         look_at_plane(tab, plane, now);
     }
@@ -588,6 +592,9 @@ impl Merge360App {
             saved_camera: saved,
             show_profile: true,
             look_at: true,
+            picked: Vec::new(),
+            dim_edit: None,
+            drag: None,
         });
         tab.selection.clear();
         look_at_plane(tab, plane, now);
@@ -713,14 +720,30 @@ impl Merge360App {
                 .collect();
             idx.sort_unstable();
             idx.dedup();
-            if !idx.is_empty() {
+            let mut cidx: Vec<usize> = tab
+                .selection
+                .iter()
+                .filter_map(|x| match x {
+                    SelItem::SketchConstraint(u, i) if *u == uid => Some(*i),
+                    _ => None,
+                })
+                .collect();
+            cidx.sort_unstable();
+            cidx.dedup();
+            if !idx.is_empty() || !cidx.is_empty() {
                 tab.edit("Delete Sketch Entity", |d| {
-                    if let Some(FeatureKind::Sketch { entities, .. }) = d.feature_mut(uid).map(|f| &mut f.kind) {
+                    if let Some(FeatureKind::Sketch { entities, constraints, .. }) = d.feature_mut(uid).map(|f| &mut f.kind) {
+                        for i in cidx.iter().rev() {
+                            if *i < constraints.len() {
+                                constraints.remove(*i);
+                            }
+                        }
                         for i in idx.iter().rev() {
                             if *i < entities.len() {
                                 entities.remove(*i);
                             }
                         }
+                        *constraints = constraints.iter().filter_map(|c| c.remapped(&idx)).collect();
                     }
                 });
                 tab.selection.clear();
@@ -1036,6 +1059,15 @@ pub(crate) fn sketch_tool(id: &str) -> Option<SketchTool> {
         "sk_circle" => SketchTool::Circle,
         "sk_point" => SketchTool::Point,
         "sk_arc" => SketchTool::Arc,
+        "sk_dimension" => SketchTool::Dimension,
+        "con_horizontal" => SketchTool::Constrain(crate::state::ConKind::HorizontalVertical),
+        "con_coincident" => SketchTool::Constrain(crate::state::ConKind::Coincident),
+        "con_tangent" => SketchTool::Constrain(crate::state::ConKind::Tangent),
+        "con_equal" => SketchTool::Constrain(crate::state::ConKind::Equal),
+        "con_parallel" => SketchTool::Constrain(crate::state::ConKind::Parallel),
+        "con_perpendicular" => SketchTool::Constrain(crate::state::ConKind::Perpendicular),
+        "con_fix" => SketchTool::Constrain(crate::state::ConKind::Fix),
+        "con_concentric" => SketchTool::Constrain(crate::state::ConKind::Concentric),
         "sk_polygon" => SketchTool::Polygon,
         _ => return None,
     })

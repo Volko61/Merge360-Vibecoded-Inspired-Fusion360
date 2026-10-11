@@ -714,7 +714,9 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                             shells.extend(tool.into_boundaries());
                             Solid::new(shells)
                         });
-                    replace(model, rebuilt(model, target, joined, f.uid));
+                    // Faceted profiles (text, splines) keep hiding their facet edges.
+                    let keep = model.body(target).map_or(cos, |b| b.smooth_cos.min(cos));
+                    replace(model, new_body_smooth(target, joined, f.uid, keep));
                 }
                 ExtrudeOp::Cut | ExtrudeOp::Intersect => {
                     if live.is_empty() {
@@ -736,7 +738,8 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                             Some(r) => r,
                             None => ops::boolean(&t.solid, &[tool], bop).map_err(|e| e.to_string())?,
                         };
-                        replace(model, rebuilt(model, id, res, f.uid));
+                        let keep = model.body(id).map_or(cos, |b| b.smooth_cos.min(cos));
+                        replace(model, new_body_smooth(id, res, f.uid, keep));
                     }
                 }
             }

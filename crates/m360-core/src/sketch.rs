@@ -6,6 +6,76 @@ use crate::feature::SketchEntity;
 
 const MERGE_TOL: f64 = 1e-4;
 
+/// Samples per spline span.
+const SPLINE_STEPS: usize = 16;
+
+/// Centripetal Catmull-Rom spline through `pts` (closed if the ends meet).
+pub fn spline_points(pts: &[[f64; 2]]) -> Vec<[f64; 2]> {
+    let n = pts.len();
+    if n < 3 {
+        return pts.to_vec();
+    }
+    let closed = same(pts[0], pts[n - 1]);
+    let p: Vec<[f64; 2]> = if closed { pts[..n - 1].to_vec() } else { pts.to_vec() };
+    let m = p.len();
+    let get = |i: isize| -> [f64; 2] {
+        if closed {
+            p[i.rem_euclid(m as isize) as usize]
+        } else if i < 0 {
+            // Reflected end tangents.
+            add(p[0], sub(p[0], p[1]))
+        } else if i as usize >= m {
+            add(p[m - 1], sub(p[m - 1], p[m - 2]))
+        } else {
+            p[i as usize]
+        }
+    };
+    let spans = if closed { m } else { m - 1 };
+    let mut out = vec![p[0]];
+    for s in 0..spans as isize {
+        let (p0, p1, p2, p3) = (get(s - 1), get(s), get(s + 1), get(s + 2));
+        // Centripetal parametrisation (alpha = 0.5) avoids cusps and loops.
+        let knot = |a: [f64; 2], b: [f64; 2]| norm(sub(b, a)).sqrt().max(1e-9);
+        let (t1, t2, t3) = (knot(p0, p1), knot(p1, p2), knot(p2, p3));
+        let (t0, t1, t2, t3) = (0.0, t1, t1 + t2, t1 + t2 + t3);
+        for k in 1..=SPLINE_STEPS {
+            let t = t1 + (t2 - t1) * k as f64 / SPLINE_STEPS as f64;
+            let lerp = |a: [f64; 2], b: [f64; 2], ta: f64, tb: f64| add(mul(a, (tb - t) / (tb - ta)), mul(b, (t - ta) / (tb - ta)));
+            let a1 = lerp(p0, p1, t0, t1);
+            let a2 = lerp(p1, p2, t1, t2);
+            let a3 = lerp(p2, p3, t2, t3);
+            let b1 = lerp(a1, a2, t0, t2);
+            let b2 = lerp(a2, a3, t1, t3);
+            out.push(lerp(b1, b2, t1, t2));
+        }
+    }
+    out
+}
+
+/// Points of an ellipse (closed, last point != first).
+pub fn ellipse_points(c: [f64; 2], a: [f64; 2], b: f64, n: usize) -> Vec<[f64; 2]> {
+    let la = norm(a).max(1e-12);
+    let v = [-a[1] / la * b, a[0] / la * b];
+    (0..n)
+        .map(|i| {
+            let t = i as f64 / n as f64 * std::f64::consts::TAU;
+            add(c, add(mul(a, t.cos()), mul(v, t.sin())))
+        })
+        .collect()
+}
+
+/// Polyline of a free-form curve (spline or ellipse), else `None`.
+pub fn curve_polyline(e: &SketchEntity) -> Option<(Vec<[f64; 2]>, bool)> {
+    match e {
+        SketchEntity::Spline { pts } if pts.len() >= 2 => {
+            let closed = pts.len() >= 4 && same(pts[0], pts[pts.len() - 1]);
+            Some((spline_points(pts), closed))
+        }
+        SketchEntity::Ellipse { c, a, b } => Some((ellipse_points(*c, *a, *b, 72), true)),
+        _ => None,
+    }
+}
+
 fn same(a: [f64; 2], b: [f64; 2]) -> bool {
     (a[0] - b[0]).hypot(a[1] - b[1]) < MERGE_TOL
 }
@@ -26,6 +96,24 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
         }
     };
     for e in entities {
+        if let Some((pts, closed)) = curve_polyline(e) {
+            if closed {
+                let mut p = pts;
+                if p.len() > 1 && same(p[0], p[p.len() - 1]) {
+                    p.pop();
+                }
+                out.push(Loop2::Polygon(p));
+            } else {
+                // Open splines take part in loops as chains of short lines.
+                for w in pts.windows(2) {
+                    let (ia, ib) = (vid(w[0], &mut verts), vid(w[1], &mut verts));
+                    if ia != ib {
+                        edges.push((ia, ib, None));
+                    }
+                }
+            }
+            continue;
+        }
         let (a, b, m) = match e {
             SketchEntity::Circle { c, r } if *r > 1e-9 => {
                 out.push(Loop2::Circle { c: *c, r: *r });
@@ -209,6 +297,11 @@ pub fn map_entity(e: &SketchEntity, f: impl Fn([f64; 2]) -> [f64; 2], rs: f64) -
         SketchEntity::Circle { c, r } => SketchEntity::Circle { c: f(c), r: r * rs },
         SketchEntity::Point { p } => SketchEntity::Point { p: f(p) },
         SketchEntity::Arc { a, m, b } => SketchEntity::Arc { a: f(a), m: f(m), b: f(b) },
+        SketchEntity::Spline { ref pts } => SketchEntity::Spline { pts: pts.iter().map(|p| f(*p)).collect() },
+        SketchEntity::Ellipse { c, a, b } => {
+            let nc = f(c);
+            SketchEntity::Ellipse { c: nc, a: sub(f(add(c, a)), nc), b: b * rs }
+        }
     }
 }
 
@@ -374,6 +467,14 @@ fn arc_entity(c: [f64; 2], r: f64, t0: f64, sweep: f64) -> SketchEntity {
 /// Intersection points of two entities.
 pub fn intersections(e1: &SketchEntity, e2: &SketchEntity) -> Vec<[f64; 2]> {
     use SketchEntity::*;
+    // Free-form curves intersect through their polylines.
+    for (x, y) in [(e1, e2), (e2, e1)] {
+        if let Some((pts, closed)) = curve_polyline(x) {
+            let n = pts.len();
+            let segs = if closed { n } else { n - 1 };
+            return (0..segs).flat_map(|i| intersections(&Line { a: pts[i], b: pts[(i + 1) % n] }, y)).collect();
+        }
+    }
     let circ = |e: &SketchEntity| -> Option<([f64; 2], f64)> {
         match e {
             Circle { c, r } => Some((*c, *r)),
@@ -393,7 +494,7 @@ pub fn intersections(e1: &SketchEntity, e2: &SketchEntity) -> Vec<[f64; 2]> {
                 None => false,
             },
             Circle { .. } => true,
-            Point { .. } => false,
+            Point { .. } | Spline { .. } | Ellipse { .. } => false,
         }
     };
     let raw: Vec<[f64; 2]> = match (e1, e2) {
@@ -506,8 +607,113 @@ pub fn trim(entities: &[SketchEntity], idx: usize, click: [f64; 2]) -> Option<Ve
             }
             Some(out)
         }
-        SketchEntity::Point { .. } => Some(vec![]),
+        SketchEntity::Point { .. } | SketchEntity::Spline { .. } | SketchEntity::Ellipse { .. } => Some(vec![]),
     }
+}
+
+/// Extend line `idx` from the end nearest `click` to the closest
+/// intersection with another entity.
+pub fn extend(entities: &[SketchEntity], idx: usize, click: [f64; 2]) -> Option<SketchEntity> {
+    let SketchEntity::Line { a, b } = *entities.get(idx)? else { return None };
+    let from_b = norm(sub(click, b)) <= norm(sub(click, a));
+    let (end, other) = if from_b { (b, a) } else { (a, b) };
+    let d = sub(end, other);
+    let l = norm(d);
+    if l < 1e-12 {
+        return None;
+    }
+    let ray = SketchEntity::Line { a: end, b: add(end, mul(d, 1e5 / l)) };
+    let hit = entities
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != idx)
+        .flat_map(|(_, o)| intersections(&ray, o))
+        .map(|p| (norm(sub(p, end)), p))
+        .filter(|(t, _)| *t > 1e-7)
+        .min_by(|x, y| x.0.total_cmp(&y.0))?
+        .1;
+    Some(if from_b { SketchEntity::Line { a, b: hit } } else { SketchEntity::Line { a: hit, b } })
+}
+
+/// Split entity `idx` at its intersections with the other entities.
+pub fn break_at(entities: &[SketchEntity], idx: usize) -> Option<Vec<SketchEntity>> {
+    let e = entities.get(idx)?;
+    let cuts: Vec<[f64; 2]> =
+        entities.iter().enumerate().filter(|(i, _)| *i != idx).flat_map(|(_, o)| intersections(e, o)).collect();
+    let tau = std::f64::consts::TAU;
+    let pieces = match *e {
+        SketchEntity::Line { a, b } => {
+            let d = sub(b, a);
+            let len2 = dot(d, d).max(1e-18);
+            let mut ts: Vec<f64> = cuts.iter().map(|p| dot(sub(*p, a), d) / len2).filter(|t| *t > 1e-9 && *t < 1.0 - 1e-9).collect();
+            ts.sort_by(f64::total_cmp);
+            ts.dedup_by(|x, y| (*x - *y).abs() < 1e-9);
+            let mut ks = vec![0.0];
+            ks.extend(ts);
+            ks.push(1.0);
+            ks.windows(2).map(|w| SketchEntity::Line { a: add(a, mul(d, w[0])), b: add(a, mul(d, w[1])) }).collect()
+        }
+        SketchEntity::Arc { a, m, b } => {
+            let (c, r, t0, sw) = arc_params(a, m, b)?;
+            let mut ts: Vec<f64> =
+                cuts.iter().map(|p| (angle_of(c, *p) - t0).rem_euclid(tau)).filter(|t| *t > 1e-9 && *t < sw - 1e-9).collect();
+            ts.sort_by(f64::total_cmp);
+            ts.dedup_by(|x, y| (*x - *y).abs() < 1e-9);
+            let mut ks = vec![0.0];
+            ks.extend(ts);
+            ks.push(sw);
+            ks.windows(2).map(|w| arc_entity(c, r, t0 + w[0], w[1] - w[0])).collect()
+        }
+        SketchEntity::Circle { c, r } => {
+            let mut ts: Vec<f64> = cuts.iter().map(|p| angle_of(c, *p)).collect();
+            ts.sort_by(f64::total_cmp);
+            ts.dedup_by(|x, y| (*x - *y).abs() < 1e-9);
+            if ts.len() < 2 {
+                return None;
+            }
+            let n = ts.len();
+            (0..n).map(|k| arc_entity(c, r, ts[k], (ts[(k + 1) % n] - ts[k]).rem_euclid(tau))).collect()
+        }
+        _ => return None,
+    };
+    let pieces: Vec<SketchEntity> = pieces;
+    (pieces.len() > 1).then_some(pieces)
+}
+
+/// Sketch entity approximating a projected polyline: a line, circle or arc
+/// when the points fit one, else a fit-point spline.
+pub fn entity_from_polyline(pts: &[[f64; 2]], tol: f64) -> Option<SketchEntity> {
+    let n = pts.len();
+    if n < 2 {
+        return None;
+    }
+    let (first, last) = (pts[0], pts[n - 1]);
+    let closed = n > 3 && norm(sub(first, last)) < tol;
+    if !closed {
+        let d = sub(last, first);
+        let l = norm(d);
+        if l < tol {
+            return None;
+        }
+        if pts.iter().all(|p| cross(d, sub(*p, first)).abs() / l < tol) {
+            return Some(SketchEntity::Line { a: first, b: last });
+        }
+    }
+    let mid = pts[n / 2];
+    let probe = if closed { pts[n / 3] } else { mid };
+    let third = if closed { pts[2 * n / 3] } else { last };
+    if let Some((c, r)) = m360_kernel::profile::circumcircle(first, probe, third) {
+        if pts.iter().all(|p| (norm(sub(*p, c)) - r).abs() < tol) {
+            return Some(if closed { SketchEntity::Circle { c, r } } else { SketchEntity::Arc { a: first, m: mid, b: last } });
+        }
+    }
+    // Spline through a reduced set of points.
+    let step = (n / 24).max(1);
+    let mut fit: Vec<[f64; 2]> = pts.iter().step_by(step).copied().collect();
+    if norm(sub(*fit.last().unwrap(), last)) > 1e-9 {
+        fit.push(last);
+    }
+    Some(SketchEntity::Spline { pts: fit })
 }
 
 /// A chain segment: (start, end, arc midpoint).
@@ -710,6 +916,30 @@ pub fn fillet_corner(entities: &[SketchEntity], l1: usize, l2: usize, r: f64) ->
 #[cfg(test)]
 mod edit_tests {
     use super::*;
+
+    #[test]
+    fn extend_break_and_fit() {
+        let e = vec![
+            SketchEntity::Line { a: [0.0, 0.0], b: [4.0, 0.0] },
+            SketchEntity::Line { a: [10.0, -5.0], b: [10.0, 5.0] },
+            SketchEntity::Circle { c: [10.0, 0.0], r: 2.0 },
+        ];
+        // Extends to the circle (nearest), not the line.
+        assert_eq!(extend(&e, 0, [3.9, 0.0]), Some(SketchEntity::Line { a: [0.0, 0.0], b: [8.0, 0.0] }));
+        assert_eq!(break_at(&e, 1).map(|v| v.len()), Some(3));
+        let circle: Vec<[f64; 2]> = (0..=40).map(|i| {
+            let t = i as f64 / 40.0 * std::f64::consts::TAU;
+            [3.0 + 2.0 * t.cos(), 2.0 * t.sin()]
+        }).collect();
+        assert!(matches!(entity_from_polyline(&circle, 1e-3), Some(SketchEntity::Circle { .. })));
+        let wave: Vec<[f64; 2]> = (0..30).map(|i| [i as f64, (i as f64 * 0.3).sin()]).collect();
+        assert!(matches!(entity_from_polyline(&wave, 1e-3), Some(SketchEntity::Spline { .. })));
+        // Splines and ellipses make profiles.
+        let sp = vec![SketchEntity::Spline { pts: vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]] }];
+        assert_eq!(profiles(&sp).len(), 1);
+        let el = vec![SketchEntity::Ellipse { c: [0.0, 0.0], a: [5.0, 0.0], b: 2.0 }];
+        assert!((profiles(&el)[0].area() - std::f64::consts::PI * 10.0).abs() < 0.2);
+    }
 
     #[test]
     fn trim_crossing_lines() {

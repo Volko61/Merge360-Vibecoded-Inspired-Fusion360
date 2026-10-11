@@ -1,6 +1,6 @@
 //! Minimal DXF reader: 2D geometry of the ENTITIES section as sketch
 //! entities (LINE, CIRCLE, ARC, LWPOLYLINE with bulges, POLYLINE/VERTEX,
-//! POINT). Coordinates are taken as millimetres.
+//! SPLINE, ELLIPSE, POINT). Coordinates are taken as millimetres.
 
 use crate::feature::SketchEntity;
 
@@ -119,6 +119,47 @@ pub fn read_dxf(text: &str) -> Result<Vec<SketchEntity>, String> {
                     out.push(arc_from(c, rad, a0, a1));
                 }
             }
+            "SPLINE" => {
+                // Fit points (11/21) when present, else control points (10/20).
+                let pts_of = |cx: i32, cy: i32| -> Vec<[f64; 2]> {
+                    let xs: Vec<f64> = r.groups.iter().filter(|(c, _)| *c == cx).filter_map(|(_, v)| v.trim().parse().ok()).collect();
+                    let ys: Vec<f64> = r.groups.iter().filter(|(c, _)| *c == cy).filter_map(|(_, v)| v.trim().parse().ok()).collect();
+                    xs.into_iter().zip(ys).map(|(x, y)| [x, y]).collect()
+                };
+                let mut pts = pts_of(11, 21);
+                if pts.len() < 2 {
+                    pts = pts_of(10, 20);
+                }
+                if r.i(70) & 1 == 1 && pts.len() > 2 && pts[0] != pts[pts.len() - 1] {
+                    pts.push(pts[0]);
+                }
+                if pts.len() >= 2 {
+                    out.push(SketchEntity::Spline { pts });
+                }
+            }
+            "ELLIPSE" => {
+                if let (Some(c), Some(a), Some(ratio)) = (xy(10, 20), xy(11, 21), r.f(40)) {
+                    let (t0, t1) = (r.f(41).unwrap_or(0.0), r.f(42).unwrap_or(std::f64::consts::TAU));
+                    let la = a[0].hypot(a[1]);
+                    if (t1 - t0 - std::f64::consts::TAU).abs() < 1e-6 {
+                        out.push(SketchEntity::Ellipse { c, a, b: la * ratio });
+                    } else {
+                        // Elliptical arc: a spline through points of the arc.
+                        let v = [-a[1] * ratio, a[0] * ratio];
+                        let mut t1 = t1;
+                        while t1 <= t0 {
+                            t1 += std::f64::consts::TAU;
+                        }
+                        let pts = (0..=16)
+                            .map(|k| {
+                                let t = t0 + (t1 - t0) * k as f64 / 16.0;
+                                [c[0] + a[0] * t.cos() + v[0] * t.sin(), c[1] + a[1] * t.cos() + v[1] * t.sin()]
+                            })
+                            .collect();
+                        out.push(SketchEntity::Spline { pts });
+                    }
+                }
+            }
             "POINT" => {
                 if let Some(p) = xy(10, 20) {
                     out.push(SketchEntity::Point { p });
@@ -182,9 +223,13 @@ mod tests {
             0\nCIRCLE\n10\n5\n20\n5\n40\n2\n\
             0\nARC\n10\n0\n20\n0\n40\n10\n50\n0\n51\n90\n\
             0\nLWPOLYLINE\n90\n2\n70\n1\n10\n0\n20\n0\n42\n1\n10\n10\n20\n0\n\
+            0\nELLIPSE\n10\n0\n20\n0\n11\n4\n21\n0\n40\n0.5\n41\n0\n42\n6.283185307179586\n\
+            0\nSPLINE\n70\n8\n11\n0\n21\n0\n11\n5\n21\n3\n11\n10\n21\n0\n\
             0\nENDSEC\n0\nEOF\n";
         let e = read_dxf(dxf).unwrap();
-        assert_eq!(e.len(), 5);
+        assert_eq!(e.len(), 7);
+        assert!(matches!(e[5], SketchEntity::Ellipse { b, .. } if (b - 2.0).abs() < 1e-9));
+        assert!(matches!(&e[6], SketchEntity::Spline { pts } if pts.len() == 3));
         // Quarter arc midpoint at 45°.
         let SketchEntity::Arc { m, .. } = e[2] else { panic!() };
         assert!((m[0] - 10.0 * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-9);
@@ -192,6 +237,6 @@ mod tests {
         let SketchEntity::Arc { m, .. } = e[3] else { panic!() };
         assert!((m[0] - 5.0).abs() < 1e-9 && (m[1] + 5.0).abs() < 1e-9, "{m:?}");
         // The closed polyline (half circle + line) is one profile.
-        assert_eq!(crate::sketch::profiles(&e[3..]).len(), 1);
+        assert_eq!(crate::sketch::profiles(&e[3..5]).len(), 1);
     }
 }

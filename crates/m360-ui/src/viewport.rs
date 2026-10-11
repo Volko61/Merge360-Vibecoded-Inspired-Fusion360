@@ -97,7 +97,7 @@ fn plane_frame(p: &PlaneRef) -> (Vec3, Vec3, Vec3, Vec3) {
     (f.origin.as_vec3(), f.u.as_vec3(), f.v.as_vec3(), f.n.as_vec3())
 }
 
-fn to_local(p: &PlaneRef, w: Vec3) -> [f64; 2] {
+pub(crate) fn to_local(p: &PlaneRef, w: Vec3) -> [f64; 2] {
     let f = p.frame([0.0, 0.0]);
     let d = w.as_dvec3() - f.origin;
     [d.dot(f.u), d.dot(f.v)]
@@ -171,8 +171,9 @@ enum PickMode {
 impl Merge360App {
     fn pick_mode(&self) -> PickMode {
         let tab = &self.tabs[self.active];
-        if tab.sketch.is_some() {
-            return PickMode::Sketch;
+        if let Some(s) = &tab.sketch {
+            // Project picks body edges and faces instead of sketch geometry.
+            return if s.tool == SketchTool::Project { PickMode::Edges } else { PickMode::Sketch };
         }
         match &tab.command {
             Some(Command::Primitive { plane_chosen: false, .. }) | Some(Command::SketchPlane) => PickMode::Planes,
@@ -465,6 +466,14 @@ impl Merge360App {
                 let mut pts: Vec<Pos2> = s(*a).into_iter().collect();
                 pts.extend(m360_kernel::profile::arc_points(*a, *m, *b, 32).into_iter().filter_map(s));
                 pts.windows(2).map(|w| seg_dist(pos, w[0], w[1])).fold(f32::MAX, f32::min)
+            }
+            SketchEntity::Spline { .. } | SketchEntity::Ellipse { .. } => {
+                let Some((mut pts, closed)) = m360_core::sketch::curve_polyline(e) else { return f32::MAX };
+                if closed {
+                    pts.push(pts[0]);
+                }
+                let sp: Vec<Pos2> = pts.into_iter().filter_map(s).collect();
+                sp.windows(2).map(|w| seg_dist(pos, w[0], w[1])).fold(f32::MAX, f32::min)
             }
         }
     }
@@ -1818,6 +1827,8 @@ impl Merge360App {
                             Some(SketchEntity::Circle { c, r }) => [c[0] + r, c[1]],
                             Some(SketchEntity::Arc { m, .. }) => *m,
                             Some(SketchEntity::Point { p }) => *p,
+                            Some(SketchEntity::Spline { pts }) => pts.get(pts.len() / 2).copied().unwrap_or_default(),
+                            Some(SketchEntity::Ellipse { c, a, .. }) => [c[0] + a[0], c[1] + a[1]],
                             None => continue,
                         };
                         let anchor = match other {
@@ -1962,6 +1973,12 @@ pub fn entity_points(e: &SketchEntity) -> Vec<[f64; 2]> {
             }
             v
         }
+        SketchEntity::Spline { pts } => pts.clone(),
+        SketchEntity::Ellipse { c, a, b } => {
+            let la = (a[0] * a[0] + a[1] * a[1]).sqrt().max(1e-12);
+            let v = [-a[1] / la * b, a[0] / la * b];
+            vec![*c, [c[0] + a[0], c[1] + a[1]], [c[0] - a[0], c[1] - a[1]], [c[0] + v[0], c[1] + v[1]], [c[0] - v[0], c[1] - v[1]]]
+        }
     }
 }
 
@@ -1989,6 +2006,16 @@ fn entity_lines(out: &mut Vec<LineInst>, plane: &PlaneRef, e: &SketchEntity, col
             }
         }
         SketchEntity::Point { .. } => {}
+        SketchEntity::Spline { .. } | SketchEntity::Ellipse { .. } => {
+            if let Some((mut pts, closed)) = m360_core::sketch::curve_polyline(e) {
+                if closed {
+                    pts.push(pts[0]);
+                }
+                for w in pts.windows(2) {
+                    out.push(LineInst::new(to_world(plane, w[0]), to_world(plane, w[1]), color, width));
+                }
+            }
+        }
     }
 }
 

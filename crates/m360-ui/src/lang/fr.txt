@@ -587,3 +587,9 @@ LEFT	GAUCHE
 TOP	HAUT
 BOTTOM	BAS
 Untitled	Sans titre
+points	points
+Select body edges or faces to project	Sélectionnez des arêtes ou des faces à projeter
+Click a line near the end to extend	Cliquez sur une ligne près de l'extrémité à prolonger
+Click a curve to split at its intersections	Cliquez sur une courbe pour la couper à ses intersections
+Nothing to extend to: no curve in that direction.	Rien à atteindre : aucune courbe dans cette direction.
+The curve does not cross any other curve.	La courbe ne croise aucune autre courbe.

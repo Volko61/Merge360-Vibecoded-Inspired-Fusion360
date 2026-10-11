@@ -1318,6 +1318,8 @@ impl Merge360App {
             if self.flags.marking.is_some() || self.flags.toolbox.is_some() {
                 self.flags.marking = None;
                 self.flags.toolbox = None;
+            } else if self.tab().sketch.as_ref().is_some_and(|s| s.tool == SketchTool::Spline && s.pending.len() >= 2) {
+                self.finish_spline();
             } else if self.tab().sketch.as_ref().is_some_and(|s| !s.pending.is_empty()) {
                 if let Some(s) = &mut self.tab().sketch {
                     s.pending.clear();
@@ -1380,6 +1382,9 @@ impl Merge360App {
             "@toolbox" => {
                 let pos = ctx.pointer_latest_pos().unwrap_or(self.canvas_rect.center());
                 self.flags.toolbox = Some(crate::marking::Toolbox::new(pos));
+            }
+            "@repeat" if self.tab().sketch.as_ref().is_some_and(|s| s.tool == SketchTool::Spline && s.pending.len() >= 2) => {
+                self.finish_spline();
             }
             "@repeat" => {
                 self.flags.toolbox = None;
@@ -1472,6 +1477,11 @@ pub(crate) fn sketch_tool(id: &str) -> Option<SketchTool> {
         "con_symmetry" => SketchTool::Constrain(crate::state::ConKind::Symmetry),
         "sk_polygon" => SketchTool::Polygon,
         "sk_slot" => SketchTool::Slot,
+        "sk_spline" => SketchTool::Spline,
+        "sk_project" => SketchTool::Project,
+        "sk_extend" => SketchTool::Extend,
+        "sk_break" => SketchTool::Break,
+        "sk_ellipse" => SketchTool::Ellipse,
         "sk_mirror" => SketchTool::Mirror,
         "sk_circ_pattern" => SketchTool::CircPattern,
         "sk_rect_pattern" => SketchTool::RectPattern,

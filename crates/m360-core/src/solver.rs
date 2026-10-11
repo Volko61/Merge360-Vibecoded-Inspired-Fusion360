@@ -125,6 +125,9 @@ pub fn point_of(entities: &[SketchEntity], p: PointRef) -> Option<[f64; 2]> {
         (SketchEntity::Arc { a, .. }, 0) => *a,
         (SketchEntity::Arc { b, .. }, 1) => *b,
         (SketchEntity::Arc { m, .. }, 2) => *m,
+        (SketchEntity::Spline { pts }, k) => *pts.get(k as usize)?,
+        (SketchEntity::Ellipse { c, .. }, 0) => *c,
+        (SketchEntity::Ellipse { c, a, .. }, 1) => [c[0] + a[0], c[1] + a[1]],
         _ => return None,
     })
 }
@@ -135,6 +138,8 @@ pub fn points_of(entities: &[SketchEntity], e: usize) -> Vec<PointRef> {
         Some(SketchEntity::Line { .. }) => 2,
         Some(SketchEntity::Circle { .. }) | Some(SketchEntity::Point { .. }) => 1,
         Some(SketchEntity::Arc { .. }) => 3,
+        Some(SketchEntity::Spline { pts }) => pts.len().min(255) as u8,
+        Some(SketchEntity::Ellipse { .. }) => 2,
         None => 0,
     };
     (0..n).map(|i| PointRef::new(e, i)).collect()
@@ -434,6 +439,16 @@ pub fn solve(entities: &mut [SketchEntity], constraints: &[SketchConstraint], dr
                 *a = get(PointRef::new(e, 0));
                 *b = get(PointRef::new(e, 1));
                 *m = get(PointRef::new(e, 2));
+            }
+            SketchEntity::Spline { pts } => {
+                for (k, p) in pts.iter_mut().enumerate().take(255) {
+                    *p = get(PointRef::new(e, k as u8));
+                }
+            }
+            SketchEntity::Ellipse { c, a, .. } => {
+                *c = get(PointRef::new(e, 0));
+                let tip = get(PointRef::new(e, 1));
+                *a = [tip[0] - c[0], tip[1] - c[1]];
             }
         }
     }

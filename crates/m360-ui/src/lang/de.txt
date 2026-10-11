@@ -587,3 +587,9 @@ LEFT	LINKS
 TOP	OBEN
 BOTTOM	UNTEN
 Untitled	Unbenannt
+points	Punkte
+Select body edges or faces to project	Wählen Sie zu projizierende Kanten oder Flächen
+Click a line near the end to extend	Klicken Sie eine Linie nahe dem zu dehnenden Ende an
+Click a curve to split at its intersections	Klicken Sie auf eine Kurve, um sie an ihren Schnittpunkten zu teilen
+Nothing to extend to: no curve in that direction.	Nichts zum Dehnen: keine Kurve in dieser Richtung.
+The curve does not cross any other curve.	Die Kurve schneidet keine andere Kurve.

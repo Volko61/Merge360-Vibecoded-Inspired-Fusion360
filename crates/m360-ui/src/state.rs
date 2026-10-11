@@ -145,6 +145,11 @@ pub enum SketchTool {
     Fillet,
     Text,
     Slot,
+    Spline,
+    Ellipse,
+    Project,
+    Extend,
+    Break,
     Mirror,
     CircPattern,
     RectPattern,
@@ -260,6 +265,11 @@ impl SketchTool {
             SketchTool::Fillet => "Fillet",
             SketchTool::Text => "Text",
             SketchTool::Slot => "Center to Center Slot",
+            SketchTool::Spline => "Fit Point Spline",
+            SketchTool::Ellipse => "Ellipse",
+            SketchTool::Project => "Project",
+            SketchTool::Extend => "Extend",
+            SketchTool::Break => "Break",
             SketchTool::Mirror => "Mirror",
             SketchTool::CircPattern => "Circular Pattern",
             SketchTool::RectPattern => "Rectangular Pattern",
@@ -276,13 +286,19 @@ impl SketchTool {
 
     /// Tools that edit existing geometry (clicks pick, they do not draw).
     pub fn is_edit(self) -> bool {
-        matches!(self, SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text) || self.acts_on_selection()
+        matches!(
+            self,
+            SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet | SketchTool::Text | SketchTool::Project | SketchTool::Extend | SketchTool::Break
+        ) || self.acts_on_selection()
     }
 
     /// Prompt shown next to the cursor.
     pub fn prompt(self, clicks: usize) -> Option<&'static str> {
         Some(match (self, clicks) {
             (SketchTool::Mirror, _) => "Select the mirror line",
+            (SketchTool::Project, _) => "Select body edges or faces to project",
+            (SketchTool::Extend, _) => "Click a line near the end to extend",
+            (SketchTool::Break, _) => "Click a curve to split at its intersections",
             (SketchTool::CircPattern, _) => "Click the center point",
             (SketchTool::RectPattern, 0) => "Click the start of the spacing vector",
             (SketchTool::RectPattern, _) => "Click the end of the spacing vector",

@@ -587,3 +587,9 @@ LEFT	IZQUIERDA
 TOP	SUPERIOR
 BOTTOM	INFERIOR
 Untitled	Sin título
+points	puntos
+Select body edges or faces to project	Seleccione aristas o caras que proyectar
+Click a line near the end to extend	Haga clic en una línea cerca del extremo que alargar
+Click a curve to split at its intersections	Haga clic en una curva para partirla en sus intersecciones
+Nothing to extend to: no curve in that direction.	Nada hasta donde alargar: no hay ninguna curva en esa dirección.
+The curve does not cross any other curve.	La curva no cruza ninguna otra curva.

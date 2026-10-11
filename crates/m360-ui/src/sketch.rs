@@ -30,6 +30,18 @@ pub fn rubber_band(s: &SketchSession, cursor: [f64; 2]) -> Vec<SketchEntity> {
             _ => arc_or_line(first, s.pending[1], cursor),
         },
         SketchTool::Polygon => m360_core::sketch::polygon(first, cursor, POLYGON_SIDES),
+        SketchTool::Spline => {
+            let mut pts = s.pending.clone();
+            pts.push(cursor);
+            vec![SketchEntity::Spline { pts }]
+        }
+        SketchTool::Ellipse => match s.pending.len() {
+            1 => vec![SketchEntity::Line { a: first, b: cursor }],
+            _ => {
+                let a = [s.pending[1][0] - first[0], s.pending[1][1] - first[1]];
+                vec![SketchEntity::Ellipse { c: first, a, b: line_dist(first, s.pending[1], cursor).max(1e-6) }]
+            }
+        },
         SketchTool::Slot => match s.pending.len() {
             1 => vec![SketchEntity::Line { a: first, b: cursor }],
             _ => m360_core::sketch::slot(first, s.pending[1], line_dist(first, s.pending[1], cursor)),
@@ -81,6 +93,9 @@ pub fn rubber_band_label(s: &SketchSession, cursor: [f64; 2], units: Units) -> O
             None => return None,
         },
         SketchTool::Polygon => format!("{} sides, R {}", POLYGON_SIDES, units.format(dist(first, cursor))),
+        SketchTool::Spline => format!("{} {}", s.pending.len() + 1, crate::i18n::tr("points")),
+        SketchTool::Ellipse if s.pending.len() == 1 => units.format(dist(first, cursor)),
+        SketchTool::Ellipse => format!("{} × {}", units.format(2.0 * dist(first, s.pending[1])), units.format(2.0 * line_dist(first, s.pending[1], cursor))),
         SketchTool::Slot if s.pending.len() == 1 => units.format(dist(first, cursor)),
         SketchTool::Slot => format!("width {}", units.format(2.0 * line_dist(first, s.pending[1], cursor))),
         _ => return None,
@@ -172,6 +187,32 @@ impl Merge360App {
                 } else {
                     new = rubber_band(s, cur);
                     label = "Arc";
+                    s.pending.clear();
+                }
+            }
+            SketchTool::Spline => {
+                let closes = s.pending.len() >= 3 && dist(s.pending[0], cur) < 1e-9;
+                let repeat = s.pending.last().is_some_and(|p| dist(*p, cur) < 1e-9);
+                if closes {
+                    s.pending.push(cur);
+                    new = vec![SketchEntity::Spline { pts: std::mem::take(&mut s.pending) }];
+                    label = "Spline";
+                } else if repeat && s.pending.len() >= 2 {
+                    // Double click on the last point ends the spline.
+                    new = vec![SketchEntity::Spline { pts: std::mem::take(&mut s.pending) }];
+                    label = "Spline";
+                } else if !repeat {
+                    s.pending.push(cur);
+                }
+            }
+            SketchTool::Ellipse => {
+                if s.pending.len() < 2 {
+                    if s.pending.last().is_none_or(|p| dist(*p, cur) > 1e-9) {
+                        s.pending.push(cur);
+                    }
+                } else {
+                    new = rubber_band(s, cur);
+                    label = "Ellipse";
                     s.pending.clear();
                 }
             }
@@ -304,6 +345,53 @@ impl Merge360App {
                     _ => vec![i],
                 };
                 open(self, EditPurpose::Offset(chain), 2.0);
+            }
+            (SketchTool::Extend, Some(SelItem::SketchEntity(_, i))) => {
+                let Some(click) = self.canvas.sketch_raw else { return };
+                match m360_core::sketch::extend(&ents, i, click) {
+                    Some(n) => {
+                        self.sketch_edit("Extend", move |e, _| e[i] = n);
+                    }
+                    None => self.toast(ToastKind::Info, tr("Nothing to extend to: no curve in that direction.")),
+                }
+            }
+            (SketchTool::Break, Some(SelItem::SketchEntity(_, i))) => match m360_core::sketch::break_at(&ents, i) {
+                Some(pieces) => {
+                    self.sketch_edit("Break", move |e, c| {
+                        c.retain(|k| !k.entities().contains(&i));
+                        let mut it = pieces.into_iter();
+                        if let Some(first) = it.next() {
+                            e[i] = first;
+                        }
+                        e.extend(it);
+                    });
+                }
+                None => self.toast(ToastKind::Info, tr("The curve does not cross any other curve.")),
+            },
+            (SketchTool::Project, Some(item @ (SelItem::Edge(..) | SelItem::Face(..)))) => {
+                let Some((plane, _)) = tab.sketch_entities(uid) else { return };
+                let (b, edges): (u64, Vec<u32>) = match item {
+                    SelItem::Edge(b, e) => (b, vec![e]),
+                    SelItem::Face(b, f) => {
+                        let Some(body) = tab.model.body(b) else { return };
+                        (b, body.mesh.edge_info.iter().enumerate().filter(|(_, info)| info.faces.contains(&f)).map(|(i, _)| i as u32).collect())
+                    }
+                    _ => return,
+                };
+                let Some(body) = tab.model.body(b) else { return };
+                let size = (body.mesh.bbox_max - body.mesh.bbox_min).length() as f64;
+                let tol = (size * 1e-3).max(1e-4);
+                let new: Vec<SketchEntity> = edges
+                    .iter()
+                    .filter_map(|e| body.mesh.edges.get(*e as usize))
+                    .filter_map(|pts| {
+                        let local: Vec<[f64; 2]> = pts.iter().map(|p| crate::viewport::to_local(&plane, glam::Vec3::from(*p))).collect();
+                        m360_core::sketch::entity_from_polyline(&local, tol)
+                    })
+                    .collect();
+                if !new.is_empty() {
+                    self.sketch_edit("Project", |e, _| e.extend(new));
+                }
             }
             (SketchTool::Mirror, Some(SelItem::SketchEntity(_, l))) => {
                 let targets = tab.sketch.as_ref().map(|s| s.targets.clone()).unwrap_or_default();
@@ -577,6 +665,15 @@ impl Merge360App {
                 self.sketch_edit(kind.label(), |_, c| c.extend(new));
             }
             _ => {}
+        }
+    }
+
+    /// End the spline being drawn (Enter / Esc / double click).
+    pub(crate) fn finish_spline(&mut self) {
+        let Some(s) = &mut self.tab().sketch else { return };
+        let pts = std::mem::take(&mut s.pending);
+        if pts.len() >= 2 {
+            self.sketch_edit("Spline", |e, _| e.push(SketchEntity::Spline { pts }));
         }
     }
 

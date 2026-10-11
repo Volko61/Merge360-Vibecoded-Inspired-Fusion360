@@ -163,6 +163,10 @@ pub enum SketchEntity {
     Point { p: [f64; 2] },
     /// Three-point arc from `a` through `m` to `b`.
     Arc { a: [f64; 2], m: [f64; 2], b: [f64; 2] },
+    /// Fit-point spline through `pts` (closed when the ends coincide).
+    Spline { pts: Vec<[f64; 2]> },
+    /// Ellipse: center, major semi-axis vector, minor radius.
+    Ellipse { c: [f64; 2], a: [f64; 2], b: f64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

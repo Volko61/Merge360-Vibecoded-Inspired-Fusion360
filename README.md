@@ -42,7 +42,8 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   distances, diameters) and constraints (horizontal/vertical, coincident, parallel,
   perpendicular, equal, tangent, concentric, fix) solved by a built-in constraint solver;
   drag points with the Select tool; automatic H/V constraints; midpoint, collinear and
-  symmetry constraints; center-to-center slot; trim, offset, sketch fillet; mirror (linked by
+  symmetry constraints; center-to-center slot, fit-point spline, ellipse; project body
+  edges/faces, extend, break; trim, offset, sketch fillet; mirror (linked by
   symmetry constraints), circular / rectangular pattern, move, scale; sketch text (font
   outlines, extrudable).
 * **Create:** Extrude of sketch profiles or planar body faces (push/pull; new body / join / cut /
@@ -63,7 +64,7 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   live motion value).
 * **Parameters:** user parameters and expressions (`width * 2 + 5 mm`) for any feature value.
 * **Insert:** Insert Mesh (STL, binary/ASCII) as polyhedral bodies that take part in booleans;
-  Insert DXF (lines, arcs, circles, polylines with bulges) into a new sketch.
+  Insert DXF (lines, arcs, circles, polylines with bulges, splines, ellipses) into a new sketch.
 * **Inspect:** Measure (edge length, face area, body volume, minimum distance), Interference, Section Analysis
   (with section caps), Center of Mass, Properties.
 * **DRAWING workspace:** A3 sheet with title block, Front / Top / Right / Isometric views in

@@ -24,6 +24,13 @@ pub use app::Merge360App;
 
 /// Launch the application window.
 pub fn run(open: Option<std::path::PathBuf>) -> eframe::Result {
+    // WSLg's compositor (Weston 9) segfaults when a native Wayland window is
+    // shown with hi-DPI scaling enabled (.wslgconfig). XWayland windows are
+    // scaled correctly, so use X11 under WSLg unless M360_WAYLAND is set.
+    #[cfg(target_os = "linux")]
+    if std::path::Path::new("/mnt/wslg").exists() && std::env::var_os("M360_WAYLAND").is_none() {
+        std::env::remove_var("WAYLAND_DISPLAY");
+    }
     // Prefer the native GPU APIs (Vulkan/Metal/DX12). Probing GL as well only
     // produces noisy EGL errors on systems where it is unavailable (e.g. WSL);
     // GL is used as a fallback if no native adapter works. `WGPU_BACKEND`

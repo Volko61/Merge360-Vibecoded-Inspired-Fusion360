@@ -120,6 +120,8 @@ Dev hooks (environment variables) used for automated visual checks:
 * `M360_SAMPLE=1` — open the sample design
 * `M360_SCREENSHOT=out.png` — save a screenshot after 40 frames and exit
 * `M360_FULLSCREEN=1` — start fullscreen; `M360_FPS=1` — print frame rate
+* `M360_WAYLAND=1` — use native Wayland under WSLg (by default Merge360 uses XWayland there:
+  WSLg's Weston crashes on native Wayland windows when hi-DPI scaling is enabled)
 * `M360_CAMERA="yaw,pitch,dist,tx,ty,tz"` — set the initial camera
 * `M360_SCRIPT=file` — replay scripted input (see `crates/m360-ui/src/script.rs`)
 * `M360_STYLE=wire` — start in wireframe

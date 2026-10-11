@@ -667,6 +667,12 @@ impl Merge360App {
             let t = self.canvas_time;
             self.cam_scene_lines(&mut scene.lines, t);
         }
+        if self.flags.workspace == crate::tools::WS_SIMULATION {
+            let (mut lines, mut tris) = (Vec::new(), Vec::new());
+            self.sim_scene(&mut lines, &mut tris);
+            scene.lines.extend(lines);
+            scene.tris.extend(tris);
+        }
         let ppp = ui.ctx().pixels_per_point();
         let size = [(rect.width() * ppp).round() as u32, (rect.height() * ppp).round() as u32];
         if let Some((w, h)) = self.render_settings.capture.take() {
@@ -885,6 +891,13 @@ impl Merge360App {
     }
 
     fn canvas_click(&mut self, hover: Option<SelItem>, additive: bool) {
+        if self.flags.workspace == crate::tools::WS_SIMULATION && self.sim.pick.is_some() {
+            if let Some(SelItem::Face(b, f) | SelItem::FacePlane(b, f, _)) = hover {
+                if self.sim_pick_face(b, f) {
+                    return;
+                }
+            }
+        }
         if self.flags.workspace == crate::tools::WS_MANUFACTURE && self.tabs[self.active].sketch.is_none() {
             if let Some(SelItem::Profile(uid, i)) = hover {
                 if self.cam_pick_profile(uid, i) {
@@ -1422,6 +1435,13 @@ impl Merge360App {
                 continue;
             }
             let meta = tab.doc.body_meta(b.id);
+            // Simulation results replace the studied body.
+            if self.flags.workspace == crate::tools::WS_SIMULATION
+                && matches!(self.sim.result, Some(Ok(_)))
+                && tab.doc.simulation.as_ref().is_some_and(|s| s.body == b.id)
+            {
+                continue;
+            }
             let mesh = if self.flags.workspace == crate::tools::WS_ANIMATION {
                 let m = self.anim_transform(b.id);
                 if m == glam::DMat4::IDENTITY { b.mesh.clone() } else { Arc::new(b.mesh.transformed(m)) }

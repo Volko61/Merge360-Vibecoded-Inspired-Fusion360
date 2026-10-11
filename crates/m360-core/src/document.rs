@@ -67,6 +67,9 @@ pub struct Document {
     /// Animation workspace storyboard.
     #[serde(default)]
     pub animation: crate::animation::Storyboard,
+    /// Simulation workspace study.
+    #[serde(default)]
+    pub simulation: Option<crate::simulation::SimStudy>,
 }
 
 impl Default for Document {
@@ -88,6 +91,7 @@ impl Default for Document {
             params: Vec::new(),
             cam: Vec::new(),
             animation: Default::default(),
+            simulation: None,
         }
     }
 }

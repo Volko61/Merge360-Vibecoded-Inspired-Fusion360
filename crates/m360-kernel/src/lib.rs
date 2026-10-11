@@ -12,6 +12,7 @@ pub mod profile;
 pub mod shell;
 pub mod surface;
 pub mod sweep;
+pub mod fea;
 pub mod fillet;
 pub mod hole;
 

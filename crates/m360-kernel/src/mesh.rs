@@ -462,7 +462,7 @@ fn solve3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
 }
 
 /// Heights where a vertical line (x, y) crosses the mesh, sorted.
-fn z_crossings(tris: &[[Vec3; 3]], x: f32, y: f32) -> Vec<f32> {
+pub(crate) fn z_crossings(tris: &[[Vec3; 3]], x: f32, y: f32) -> Vec<f32> {
     let mut zs = Vec::new();
     for t in tris {
         let (a, b, c) = (t[0], t[1], t[2]);

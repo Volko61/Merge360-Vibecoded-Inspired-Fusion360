@@ -683,3 +683,27 @@ Auto Explode needs at least two bodies.	Automatisch explodieren benötigt mindes
 The storyboard is empty.	Das Storyboard ist leer.
 Video frames saved in	Videobilder gespeichert in
 frames, 24 fps	Bilder, 24 fps
+STUDY	STUDIE
+New Static Stress	Neue statische Spannung
+LOADS	LASTEN
+Force	Kraft
+SOLVE	LÖSEN
+Solve	Lösen
+RESULTS	ERGEBNISSE
+Deformation	Verformung
+Stress (von Mises)	Spannung (von Mises)
+Safety Factor	Sicherheitsfaktor
+STATIC STRESS	STATISCHE SPANNUNG
+Body	Körper
+faces	Flächen
+Mesh resolution	Netzauflösung
+Click faces to fix	Zu fixierende Flächen anklicken
+Click faces to load	Zu belastende Flächen anklicken
+Max. von Mises stress	Max. Von-Mises-Spannung
+Max. displacement	Max. Verschiebung
+Min. safety factor	Min. Sicherheitsfaktor
+elements	Elemente
+iterations	Iterationen
+Normal to face	Senkrecht zur Fläche
+There is no body to study.	Es gibt keinen zu untersuchenden Körper.
+Create a study first.	Erstellen Sie zuerst eine Studie.

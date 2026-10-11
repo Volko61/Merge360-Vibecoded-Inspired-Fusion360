@@ -440,6 +440,7 @@ pub const SKETCH_TAB: Tab = Tab {
 pub const WS_DESIGN: usize = 0;
 pub const WS_RENDER: usize = 2;
 pub const WS_ANIMATION: usize = 3;
+pub const WS_SIMULATION: usize = 4;
 pub const WS_MANUFACTURE: usize = 5;
 pub const WS_DRAWING: usize = 6;
 
@@ -448,7 +449,7 @@ pub const WORKSPACES: &[(&str, bool)] = &[
     ("GENERATIVE DESIGN", false),
     ("RENDER", true),
     ("ANIMATION", true),
-    ("SIMULATION", false),
+    ("SIMULATION", true),
     ("MANUFACTURE", true),
     ("DRAWING", true),
 ];
@@ -465,6 +466,10 @@ pub const IMPLEMENTED: &[&str] = &[
     "draft",
     "cam_setup",
     "anim_transform",
+    "sim_study",
+    "sim_fixed",
+    "sim_force",
+    "sim_solve",
     "anim_explode",
     "anim_play",
     "anim_publish",
@@ -607,6 +612,14 @@ pub const CAM_TOOLS: &[Tool] = &[
     t("cam_post", "Post Process", Generic),
 ];
 
+/// SIMULATION workspace actions.
+pub const SIM_TOOLS: &[Tool] = &[
+    t("sim_study", "New Static Stress", Generic),
+    t("sim_fixed", "Fixed", Generic),
+    t("sim_force", "Force", Generic),
+    t("sim_solve", "Solve", Generic),
+];
+
 /// ANIMATION workspace actions.
 pub const ANIM_TOOLS: &[Tool] = &[
     t("anim_transform", "Transform Components", Move),
@@ -622,6 +635,7 @@ pub fn find(id: &str) -> Option<Tool> {
         .flat_map(|p| p.tools.iter())
         .chain(CAM_TOOLS.iter())
         .chain(ANIM_TOOLS.iter())
+        .chain(SIM_TOOLS.iter())
         .find(|t| t.id == id)
         .copied()
 }

@@ -49,6 +49,8 @@ impl Merge360App {
     pub(crate) fn overlays(&mut self, ctx: &egui::Context) {
         if self.flags.workspace == crate::tools::WS_MANUFACTURE {
             self.cam_browser(ctx);
+        } else if self.flags.workspace == crate::tools::WS_SIMULATION && self.tabs[self.active].doc.simulation.is_some() {
+            self.sim_panel(ctx);
         } else {
             self.browser(ctx);
         }

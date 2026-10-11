@@ -683,3 +683,27 @@ Auto Explode needs at least two bodies.	La explosión automática necesita al me
 The storyboard is empty.	El guion gráfico está vacío.
 Video frames saved in	Fotogramas del vídeo guardados en
 frames, 24 fps	fotogramas, 24 fps
+STUDY	ESTUDIO
+New Static Stress	Nueva tensión estática
+LOADS	CARGAS
+Force	Fuerza
+SOLVE	RESOLVER
+Solve	Resolver
+RESULTS	RESULTADOS
+Deformation	Deformación
+Stress (von Mises)	Tensión (von Mises)
+Safety Factor	Coeficiente de seguridad
+STATIC STRESS	TENSIÓN ESTÁTICA
+Body	Cuerpo
+faces	caras
+Mesh resolution	Resolución de malla
+Click faces to fix	Haga clic en las caras que fijar
+Click faces to load	Haga clic en las caras que cargar
+Max. von Mises stress	Tensión de von Mises máx.
+Max. displacement	Desplazamiento máx.
+Min. safety factor	Coeficiente de seguridad mín.
+elements	elementos
+iterations	iteraciones
+Normal to face	Normal a la cara
+There is no body to study.	No hay ningún cuerpo que estudiar.
+Create a study first.	Cree primero un estudio.

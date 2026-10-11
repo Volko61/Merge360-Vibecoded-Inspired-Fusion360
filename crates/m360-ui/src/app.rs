@@ -85,6 +85,7 @@ pub struct Merge360App {
     pub prefs_ui: PrefsUi,
     pub cam: crate::cam_ws::CamUi,
     pub anim: crate::anim_ws::AnimUi,
+    pub sim: crate::sim_ws::SimUi,
     pub last_autosave: f64,
 }
 
@@ -140,6 +141,7 @@ impl Merge360App {
             prefs_ui: PrefsUi::default(),
             cam: Default::default(),
             anim: Default::default(),
+            sim: Default::default(),
             last_autosave: 0.0,
         };
         cc.egui_ctx.set_zoom_factor(app.prefs.ui_scale);
@@ -278,6 +280,11 @@ impl Merge360App {
                     (Some(Command::Draft { fixed_top, .. }), "fixed_top") => *fixed_top = v == "true",
                     (_, "cam_sim") => self.cam.sim = num.unwrap_or(0.0) as f32,
                     (_, "anim_time") => self.anim.time = num.unwrap_or(0.0),
+                    (_, "sim_force") => {
+                        if let Some(l) = tab.doc.simulation.as_mut().and_then(|s| s.loads.last_mut()) {
+                            l.force = num.unwrap_or(l.force);
+                        }
+                    }
                     (Some(Command::Thread { pitch, .. }), "pitch") => *pitch = num.unwrap_or(*pitch),
                     (Some(Command::Thread { full_length, length, .. }), "length") => {
                         *full_length = false;
@@ -825,6 +832,7 @@ impl Merge360App {
             "preferences" => self.prefs_ui.open = true,
             id if id.starts_with("cam_") => self.cam_action(id),
             id if id.starts_with("anim_") => self.anim_action(id),
+            id if id.starts_with("sim_") => self.sim_action(id),
             "properties" => tab.command = Some(Command::Properties),
             "compute_all" => {
                 tab.regen.clear();

@@ -17,6 +17,7 @@ mod prefs_ui;
 mod render_ws;
 mod sample;
 mod script;
+mod sim_ws;
 mod sketch;
 mod state;
 mod theme;

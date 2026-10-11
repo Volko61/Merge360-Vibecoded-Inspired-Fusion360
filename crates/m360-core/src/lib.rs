@@ -9,6 +9,7 @@ pub mod feature;
 pub mod materials;
 pub mod history;
 pub mod model;
+pub mod simulation;
 pub mod sketch;
 pub mod solver;
 pub mod text;

@@ -683,3 +683,27 @@ Auto Explode needs at least two bodies.	L'éclatement automatique nécessite au 
 The storyboard is empty.	Le story-board est vide.
 Video frames saved in	Images de la vidéo enregistrées dans
 frames, 24 fps	images, 24 i/s
+STUDY	ÉTUDE
+New Static Stress	Nouvelle contrainte statique
+LOADS	CHARGES
+Force	Force
+SOLVE	RÉSOUDRE
+Solve	Résoudre
+RESULTS	RÉSULTATS
+Deformation	Déformation
+Stress (von Mises)	Contrainte (von Mises)
+Safety Factor	Coefficient de sécurité
+STATIC STRESS	CONTRAINTE STATIQUE
+Body	Corps
+faces	faces
+Mesh resolution	Résolution du maillage
+Click faces to fix	Cliquez sur les faces à fixer
+Click faces to load	Cliquez sur les faces à charger
+Max. von Mises stress	Contrainte de von Mises max.
+Max. displacement	Déplacement max.
+Min. safety factor	Coefficient de sécurité min.
+elements	éléments
+iterations	itérations
+Normal to face	Normale à la face
+There is no body to study.	Aucun corps à étudier.
+Create a study first.	Créez d'abord une étude.

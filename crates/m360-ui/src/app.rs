@@ -336,11 +336,7 @@ impl Merge360App {
                 tab.command = Some(Command::Primitive { kind, plane_chosen: false, editing: None });
             }
             "create_sketch" => {
-                let pick = tab.selection.iter().find_map(|s| match s {
-                    SelItem::Plane(b) => Some(PlaneRef { base: *b, offset: 0.0, flip: false }),
-                    SelItem::FacePlane(_, _, p) => Some(*p),
-                    _ => None,
-                });
+                let pick = tab.selection.iter().find_map(|s| tab.plane_of(s));
                 match pick {
                     Some(p) => self.start_sketch(p),
                     None => {
@@ -392,6 +388,21 @@ impl Merge360App {
                     angle_deg: 0.0,
                     copy: false,
                     editing: None,
+                });
+            }
+            "offset_plane" => {
+                let base = tab.selection.iter().find_map(|s| tab.plane_of(s));
+                tab.selection.clear();
+                tab.command = Some(Command::OffsetPlane { base, distance: 20.0, editing: None });
+            }
+            "section_analysis" => {
+                let existing = tab.section;
+                let base = tab.selection.iter().find_map(|s| tab.plane_of(s));
+                tab.selection.clear();
+                tab.command = Some(match (existing, base) {
+                    (_, Some(p)) => Command::Section { plane: Some(p), offset: 0.0, flip: false },
+                    (Some(sec), None) => Command::Section { plane: Some(sec.plane), offset: 0.0, flip: sec.flip },
+                    (None, None) => Command::Section { plane: None, offset: 0.0, flip: false },
                 });
             }
             "rect_pattern" | "circ_pattern" => {
@@ -631,6 +642,7 @@ impl Merge360App {
                 Command::Move { bodies, translate, axis, angle_deg, copy, editing }
             }
             FeatureKind::Pattern { bodies, pattern } => Command::Pattern { bodies, pattern, editing },
+            FeatureKind::ConstructionPlane { plane } => Command::OffsetPlane { base: Some(PlaneRef { offset: 0.0, ..plane }), distance: if plane.flip { -plane.offset } else { plane.offset }, editing },
             FeatureKind::Mirror { bodies, plane } => Command::Mirror { bodies, plane: Some(plane), picking_plane: false, editing },
             FeatureKind::Hole { plane, points, diameter, depth, through_all, kind, .. } => {
                 Command::Hole { plane: Some(plane), points, diameter, depth, through_all, kind, editing }

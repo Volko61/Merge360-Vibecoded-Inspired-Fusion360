@@ -461,6 +461,8 @@ pub const IMPLEMENTED: &[&str] = &[
     "rect_pattern",
     "circ_pattern",
     "mirror",
+    "offset_plane",
+    "section_analysis",
     "sk_arc",
     "sk_polygon",
     "fillet",

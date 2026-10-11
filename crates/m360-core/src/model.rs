@@ -32,11 +32,19 @@ pub struct SketchGeom {
     pub entities: Vec<SketchEntity>,
 }
 
+#[derive(Clone)]
+pub struct PlaneGeom {
+    pub uid: u64,
+    pub name: String,
+    pub plane: PlaneRef,
+}
+
 /// Result of regenerating a document.
 #[derive(Clone, Default)]
 pub struct Model {
     pub bodies: Vec<Body>,
     pub sketches: Vec<SketchGeom>,
+    pub planes: Vec<PlaneGeom>,
     /// Feature uid -> error message (shown in red on the timeline).
     pub errors: HashMap<u64, String>,
 }
@@ -463,6 +471,10 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                     }
                 }
             }
+            Ok(())
+        }
+        FeatureKind::ConstructionPlane { plane } => {
+            model.planes.push(PlaneGeom { uid: f.uid, name: f.name.clone(), plane: *plane });
             Ok(())
         }
         FeatureKind::Revolve { sketch, profiles, axis, angle_deg, op, participants } => {

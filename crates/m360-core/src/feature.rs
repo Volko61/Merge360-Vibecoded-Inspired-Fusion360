@@ -178,6 +178,10 @@ pub enum FeatureKind {
         kind: HoleType,
         participants: Vec<BodyId>,
     },
+    /// A construction plane (Construct ▸ Offset Plane).
+    ConstructionPlane {
+        plane: PlaneRef,
+    },
     /// Copies of bodies along a rectangular grid or around an axis.
     Pattern {
         bodies: Vec<BodyId>,
@@ -322,6 +326,7 @@ impl FeatureKind {
             FeatureKind::Pattern { pattern: PatternKind::Circular { .. }, .. } => "CircularPattern",
             FeatureKind::Pattern { .. } => "RectangularPattern",
             FeatureKind::Mirror { .. } => "Mirror",
+            FeatureKind::ConstructionPlane { .. } => "Plane",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }

@@ -94,6 +94,8 @@ pub struct Scene {
     /// Triangles drawn on top of everything (manipulator heads).
     pub overlay_tris: Vec<FlatVertex>,
     pub pixels_per_point: f32,
+    /// Section plane (normal xyz, offset w): geometry with n·p > w is cut away.
+    pub section: Option<[f32; 4]>,
 }
 
 impl Default for Scene {
@@ -108,6 +110,7 @@ impl Default for Scene {
             tris: Vec::new(),
             overlay_tris: Vec::new(),
             pixels_per_point: 1.0,
+            section: None,
         }
     }
 }

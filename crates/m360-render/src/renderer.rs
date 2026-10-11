@@ -24,6 +24,8 @@ struct Globals {
     bg_bottom: [f32; 4],
     light0: [f32; 4],
     light1: [f32; 4],
+    clip: [f32; 4],
+    clip_on: [f32; 4],
 }
 
 #[repr(C)]
@@ -120,6 +122,7 @@ fn hash_scene(scene: &Scene, size: [u32; 2]) -> u64 {
         f.to_bits().hash(&mut h);
     }
     c.ortho.hash(&mut h);
+    scene.section.map(|c| c.map(f32::to_bits)).hash(&mut h);
     bytemuck::cast_slice::<_, u8>(&[scene.bg_top, scene.bg_bottom]).hash(&mut h);
     for b in &scene.bodies {
         (Arc::as_ptr(&b.mesh) as usize).hash(&mut h);
@@ -466,6 +469,8 @@ impl Viewport3D {
             bg_bottom: scene.bg_bottom,
             light0: key.extend(0.0).to_array(),
             light1: fill.extend(0.0).to_array(),
+            clip: scene.section.unwrap_or([0.0; 4]),
+            clip_on: [if scene.section.is_some() { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
         };
         queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 

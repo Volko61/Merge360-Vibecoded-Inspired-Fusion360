@@ -356,6 +356,48 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::OffsetPlane { base, distance, .. } => {
+                let ok = base.is_some();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Plane");
+                    let text = base.map_or("Select".to_string(), |p| p.label());
+                    if selection_field(ui, base.is_none(), &text).clicked() {
+                        *base = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Distance");
+                    length_field(ui, "off_plane", distance, units);
+                    ui.end_row();
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::Section { plane, offset, flip } => {
+                let ok = plane.is_some();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Face / Plane");
+                    let text = plane.map_or("Select".to_string(), |p| p.label());
+                    if selection_field(ui, plane.is_none(), &text).clicked() {
+                        *plane = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Distance");
+                    length_field(ui, "sec_off", offset, units);
+                    ui.end_row();
+                    row_label(ui, "Flip");
+                    ui.checkbox(flip, "");
+                    ui.end_row();
+                });
+                // Live section while the dialog is open.
+                let live = plane.map(|p| crate::state::SectionState {
+                    plane: m360_core::PlaneRef { offset: p.offset + if p.flip { -*offset } else { *offset }, ..p },
+                    flip: *flip,
+                    visible: true,
+                });
+                self.tab().section = live;
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Pattern { bodies, pattern, .. } => {
                 let ok = !bodies.is_empty();
                 let text = if bodies.is_empty() { "Select".to_string() } else { format!("{} Bodies", bodies.len()) };
@@ -667,6 +709,9 @@ impl Merge360App {
         match finish {
             Some(true) => self.commit_command(cmd),
             Some(false) => {
+                if matches!(cmd, Command::Section { .. }) {
+                    self.tab().section = None;
+                }
                 self.tab().command = Some(cmd);
                 self.cancel_command();
             }
@@ -718,6 +763,11 @@ impl Merge360App {
             Command::Pattern { bodies, pattern, editing } => {
                 self.commit_feature(FeatureKind::Pattern { bodies, pattern }, editing);
             }
+            Command::OffsetPlane { base: Some(base), distance, editing } => {
+                let plane = m360_core::PlaneRef { offset: base.offset + if base.flip { -distance } else { distance }, ..base };
+                self.commit_feature(FeatureKind::ConstructionPlane { plane }, editing);
+            }
+            Command::Section { .. } => {} // the section stays active (see browser ▸ Analysis)
             Command::Mirror { bodies, plane: Some(plane), editing, .. } => {
                 self.commit_feature(FeatureKind::Mirror { bodies, plane }, editing);
             }
@@ -902,6 +952,7 @@ impl Merge360App {
                             }
                             ui.end_row();
                         }
+                        FeatureKind::ConstructionPlane { plane } => row(ui, "Offset", &mut plane.offset, "po"),
                         FeatureKind::Hole { diameter, depth, .. } => {
                             row(ui, "Diameter", diameter, "hd");
                             row(ui, "Depth", depth, "hp");

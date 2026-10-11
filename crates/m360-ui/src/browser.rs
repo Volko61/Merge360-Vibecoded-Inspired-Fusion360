@@ -210,6 +210,65 @@ impl Merge360App {
             }
         }
 
+        // Construction
+        let planes: Vec<(u64, String)> = self.tabs[active].model.planes.iter().map(|p| (p.uid, p.name.clone())).collect();
+        if !planes.is_empty() {
+            let co_id = egui::Id::new(("br_construction", active));
+            row(ui, co_id, Row { open_default: true, depth: 1, expandable: true, eye: None, icon: Icon::Folder, label: "Construction", selected: false, dim: false, error: false });
+            if is_open(ui, co_id, true) {
+                for (uid, name) in planes {
+                    let tab = &self.tabs[active];
+                    let visible = tab.doc.plane_visible.get(&uid).copied().unwrap_or(true);
+                    let sel = tab.selection.contains(&SelItem::ConstructionPlane(uid));
+                    let r = row(ui, co_id.with(uid), Row { open_default: true, depth: 2, expandable: false, eye: Some(visible), icon: Icon::Plane, label: &name, selected: sel, dim: !visible, error: false });
+                    if r.toggled_eye {
+                        self.tabs[active].doc.plane_visible.insert(uid, !visible);
+                    } else if r.resp.double_clicked() {
+                        self.actions.push(Action::EditFeature(uid));
+                    } else if r.resp.clicked() {
+                        self.click_item(SelItem::ConstructionPlane(uid), ctrl);
+                    }
+                    r.resp.context_menu(|ui| {
+                        if ui.button("Create Sketch").clicked() {
+                            self.tabs[active].selection = vec![SelItem::ConstructionPlane(uid)];
+                            self.actions.push(Action::Tool("create_sketch"));
+                        }
+                        if ui.button("Edit Feature").clicked() {
+                            self.actions.push(Action::EditFeature(uid));
+                        }
+                        if ui.button(RichText::new("Delete").color(theme::ERROR)).clicked() {
+                            self.tabs[active].edit("Delete Plane", |d| d.delete_feature(uid));
+                        }
+                    });
+                }
+            }
+        }
+
+        // Analysis (section views)
+        if self.tabs[active].section.is_some() {
+            let an_id = egui::Id::new(("br_analysis", active));
+            row(ui, an_id, Row { open_default: true, depth: 1, expandable: true, eye: None, icon: Icon::Folder, label: "Analysis", selected: false, dim: false, error: false });
+            if is_open(ui, an_id, true) {
+                let on = self.tabs[active].section.as_ref().is_some_and(|s| s.visible);
+                let r = row(ui, an_id.with("sec"), Row { open_default: true, depth: 2, expandable: false, eye: Some(on), icon: Icon::Section, label: "Section1", selected: false, dim: !on, error: false });
+                if r.toggled_eye {
+                    if let Some(sec) = &mut self.tabs[active].section {
+                        sec.visible = !on;
+                    }
+                } else if r.resp.double_clicked() {
+                    self.actions.push(Action::Tool("section_analysis"));
+                }
+                r.resp.context_menu(|ui| {
+                    if ui.button("Edit Section Analysis").clicked() {
+                        self.actions.push(Action::Tool("section_analysis"));
+                    }
+                    if ui.button(RichText::new("Delete").color(theme::ERROR)).clicked() {
+                        self.tabs[active].section = None;
+                    }
+                });
+            }
+        }
+
         // Bodies
         let bo_id = egui::Id::new(("br_bodies", active));
         let folder_visible = self.tabs[active].doc.bodies_folder_visible;
@@ -368,6 +427,7 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Hole { .. } => Icon::Hole,
         FeatureKind::Pattern { .. } => Icon::Pattern,
         FeatureKind::Mirror { .. } => Icon::Mirror,
+        FeatureKind::ConstructionPlane { .. } => Icon::Plane,
         FeatureKind::Fillet { chamfer: true, .. } => Icon::Chamfer,
         FeatureKind::Fillet { .. } => Icon::Fillet,
     }

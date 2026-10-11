@@ -37,6 +37,8 @@ pub struct Document {
     pub next_uid: u64,
     pub bodies: BTreeMap<BodyId, BodyMeta>,
     pub sketch_visible: BTreeMap<u64, bool>,
+    #[serde(default)]
+    pub plane_visible: BTreeMap<u64, bool>,
     pub origin_visible: bool,
     pub bodies_folder_visible: bool,
     pub sketches_folder_visible: bool,
@@ -53,6 +55,7 @@ impl Default for Document {
             next_uid: 1,
             bodies: BTreeMap::new(),
             sketch_visible: BTreeMap::new(),
+            plane_visible: BTreeMap::new(),
             origin_visible: false,
             bodies_folder_visible: true,
             sketches_folder_visible: true,

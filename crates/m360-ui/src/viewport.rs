@@ -165,6 +165,7 @@ impl Merge360App {
             Some(Command::Measure { .. }) => PickMode::Measure,
             Some(Command::Fillet { .. }) => PickMode::Edges,
             Some(Command::Hole { .. }) => PickMode::Planes,
+            Some(Command::OffsetPlane { base: None, .. }) | Some(Command::Section { plane: None, .. }) => PickMode::Planes,
             Some(Command::Mirror { picking_plane: true, .. }) => PickMode::Planes,
             Some(Command::Mirror { .. }) | Some(Command::Pattern { .. }) => PickMode::Bodies,
             _ => PickMode::Default,
@@ -296,6 +297,24 @@ impl Merge360App {
                     let l = to_local(&p, ray.origin + ray.dir * t);
                     if l[0].abs() < s as f64 && l[1].abs() < s as f64 {
                         consider(t + cam.distance * 1e-3, SelItem::Plane(b), &mut best);
+                    }
+                }
+            }
+        }
+
+        // Construction planes.
+        if matches!(mode, PickMode::Planes | PickMode::Default) {
+            let s = origin_plane_size(&cam);
+            let tab = &self.tabs[active];
+            for pg in &tab.model.planes {
+                if !tab.doc.plane_visible.get(&pg.uid).copied().unwrap_or(true) {
+                    continue;
+                }
+                let (o, _, _, n) = plane_frame(&pg.plane);
+                if let Some(t) = ray_plane(&ray, o, n) {
+                    let l = to_local(&pg.plane, ray.origin + ray.dir * t);
+                    if l[0].abs() < s as f64 && l[1].abs() < s as f64 {
+                        consider(t + cam.distance * 1e-3, SelItem::ConstructionPlane(pg.uid), &mut best);
                     }
                 }
             }
@@ -697,14 +716,11 @@ impl Merge360App {
             return;
         }
         let point = self.canvas.cursor_world;
+        let hover_plane = hover.and_then(|h| self.tabs[self.active].plane_of(&h));
         let tab = self.tab();
         match &mut tab.command {
             Some(Command::Primitive { kind, plane_chosen, .. }) if !*plane_chosen => {
-                let plane = match hover {
-                    Some(SelItem::Plane(b)) => Some(base_plane_ref(b)),
-                    Some(SelItem::FacePlane(_, _, p)) => Some(p),
-                    _ => None,
-                };
+                let plane = hover_plane;
                 if let (Some(p), Some(w)) = (plane, point) {
                     let mut c = to_local(&p, w);
                     let step = grid_step(&tab.camera) as f64 / 10.0;
@@ -723,10 +739,8 @@ impl Merge360App {
                 }
             }
             Some(Command::Mirror { plane, picking_plane: true, .. }) => {
-                match hover {
-                    Some(SelItem::Plane(b)) => *plane = Some(base_plane_ref(b)),
-                    Some(SelItem::FacePlane(_, _, p)) => *plane = Some(p),
-                    _ => {}
+                if hover_plane.is_some() {
+                    *plane = hover_plane;
                 }
             }
             Some(Command::Mirror { bodies, picking_plane, plane, .. }) => {
@@ -763,12 +777,18 @@ impl Merge360App {
                     points.push(c);
                 }
             }
+            Some(Command::OffsetPlane { base, .. }) => {
+                if hover_plane.is_some() {
+                    *base = hover_plane;
+                }
+            }
+            Some(Command::Section { plane, .. }) => {
+                if hover_plane.is_some() {
+                    *plane = hover_plane;
+                }
+            }
             Some(Command::SketchPlane) => {
-                let plane = match hover {
-                    Some(SelItem::Plane(b)) => Some(base_plane_ref(b)),
-                    Some(SelItem::FacePlane(_, _, p)) => Some(p),
-                    _ => None,
-                };
+                let plane = hover_plane;
                 if let Some(p) = plane {
                     self.start_sketch(p);
                 }
@@ -1156,6 +1176,44 @@ impl Merge360App {
                 }
             }
         }
+        // Construction planes (and the plane being created / section plane).
+        {
+            let s = origin_plane_size(&cam);
+            let mut quads: Vec<(PlaneRef, bool, bool)> = tab
+                .model
+                .planes
+                .iter()
+                .filter(|p| tab.doc.plane_visible.get(&p.uid).copied().unwrap_or(true))
+                .map(|p| {
+                    let hl = tab.hover == Some(SelItem::ConstructionPlane(p.uid)) || tab.selection.contains(&SelItem::ConstructionPlane(p.uid));
+                    (p.plane, hl, false)
+                })
+                .collect();
+            if let Some(Command::OffsetPlane { base: Some(b), distance, .. }) = &tab.command {
+                quads.push((PlaneRef { offset: b.offset + if b.flip { -distance } else { *distance }, ..*b }, true, true));
+            }
+            if let Some(sec) = tab.section.filter(|s| s.visible) {
+                if matches!(tab.command, Some(Command::Section { .. })) {
+                    quads.push((sec.plane, true, true));
+                }
+            }
+            for (p, hl, preview) in quads {
+                let (o, u, v, _) = plane_frame(&p);
+                let fill = if preview { srgb(0.25, 0.6, 1.0, 0.25) } else if hl { srgb(0.25, 0.6, 1.0, 0.35) } else { srgb(0.95, 0.72, 0.38, 0.22) };
+                let edge = if hl { srgb(0.1, 0.45, 0.95, 1.0) } else { srgb(0.85, 0.55, 0.2, 0.9) };
+                let c = [o - u * s - v * s, o + u * s - v * s, o + u * s + v * s, o - u * s + v * s];
+                for t in [[0, 1, 2], [0, 2, 3]] {
+                    for k in t {
+                        scene.tris.push(FlatVertex::new(c[k], fill));
+                    }
+                }
+                for k in 0..4 {
+                    scene.lines.push(LineInst::new(c[k], c[(k + 1) % 4], edge, 1.2));
+                }
+            }
+        }
+        scene.section = tab.section.filter(|s| s.visible).map(|s| s.clip());
+
         // Planar face hover while picking planes.
         if let Some(SelItem::FacePlane(..)) = tab.hover {
             // Face highlight already handled by hover_face.

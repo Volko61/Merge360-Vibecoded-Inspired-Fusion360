@@ -25,6 +25,8 @@ pub enum SelItem {
     FacePlane(BodyId, u32, PlaneRef),
     /// A B-rep edge (index into the body mesh's edges).
     Edge(BodyId, u32),
+    /// A construction plane feature.
+    ConstructionPlane(u64),
 }
 
 impl SelItem {
@@ -208,6 +210,16 @@ pub enum Command {
         picking_axis: bool,
         editing: Option<EditCtx>,
     },
+    OffsetPlane {
+        base: Option<PlaneRef>,
+        distance: f64,
+        editing: Option<EditCtx>,
+    },
+    Section {
+        plane: Option<PlaneRef>,
+        offset: f64,
+        flip: bool,
+    },
     Pattern {
         bodies: Vec<BodyId>,
         pattern: m360_core::PatternKind,
@@ -262,6 +274,8 @@ impl Command {
             Command::Pattern { pattern: m360_core::PatternKind::Circular { .. }, .. } => "CIRCULAR PATTERN",
             Command::Pattern { .. } => "RECTANGULAR PATTERN",
             Command::Mirror { .. } => "MIRROR",
+            Command::OffsetPlane { .. } => "OFFSET PLANE",
+            Command::Section { .. } => "SECTION ANALYSIS",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
             Command::Fillet { .. } => "FILLET",
             Command::SketchPlane => "CREATE SKETCH",
@@ -284,7 +298,8 @@ impl Command {
             | Command::Revolve { editing, .. }
             | Command::Hole { editing, .. }
             | Command::Pattern { editing, .. }
-            | Command::Mirror { editing, .. } => editing.as_ref(),
+            | Command::Mirror { editing, .. }
+            | Command::OffsetPlane { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
@@ -336,6 +351,24 @@ pub fn edge_indices(mesh: &BodyMesh, ends: &[[[f64; 3]; 2]]) -> Vec<u32> {
         .collect()
 }
 
+/// An active section analysis.
+#[derive(Debug, Clone, Copy)]
+pub struct SectionState {
+    pub plane: PlaneRef,
+    pub flip: bool,
+    pub visible: bool,
+}
+
+impl SectionState {
+    /// Clip plane as (normal, offset): geometry with n·p > d is hidden.
+    pub fn clip(&self) -> [f32; 4] {
+        let f = self.plane.frame([0.0, 0.0]);
+        let n = if self.flip { -f.n } else { f.n };
+        let d = n.dot(f.origin);
+        [n.x as f32, n.y as f32, n.z as f32, d as f32]
+    }
+}
+
 pub struct DocTab {
     pub doc: Document,
     pub history: History,
@@ -358,6 +391,7 @@ pub struct DocTab {
     pub preview: Option<Preview>,
     pub comments: Vec<String>,
     pub fit_pending: bool,
+    pub section: Option<SectionState>,
 }
 
 impl DocTab {
@@ -384,6 +418,7 @@ impl DocTab {
             preview: None,
             comments: Vec::new(),
             fit_pending: false,
+            section: None,
         };
         t.regenerate();
         if !t.model.bodies.is_empty() {
@@ -428,6 +463,16 @@ impl DocTab {
         self.dirty = true;
         self.regenerate();
         Some(l)
+    }
+
+    /// The plane referenced by a selectable item, if any.
+    pub fn plane_of(&self, item: &SelItem) -> Option<PlaneRef> {
+        match item {
+            SelItem::Plane(b) => Some(PlaneRef { base: *b, offset: 0.0, flip: false }),
+            SelItem::FacePlane(_, _, p) => Some(*p),
+            SelItem::ConstructionPlane(uid) => self.model.planes.iter().find(|p| p.uid == *uid).map(|p| p.plane),
+            _ => None,
+        }
     }
 
     pub fn body_visible(&self, id: BodyId) -> bool {

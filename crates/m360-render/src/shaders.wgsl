@@ -9,6 +9,8 @@ struct Globals {
     bg_bottom: vec4<f32>,
     light0: vec4<f32>,     // key light direction (towards light)
     light1: vec4<f32>,     // fill light direction
+    clip: vec4<f32>,       // section plane: keep dot(n, p) <= d (xyz = n, w = d)
+    clip_on: vec4<f32>,    // x = 1 when a section plane is active
 };
 
 struct Draw {
@@ -80,14 +82,25 @@ fn is_selected(face: i32) -> bool {
     return false;
 }
 
+fn clipped(p: vec3<f32>) -> bool {
+    return g.clip_on.x > 0.5 && dot(g.clip.xyz, p) > g.clip.w;
+}
+
 @fragment
 fn fs_mesh(i: MeshOut) -> @location(0) vec4<f32> {
+    if (clipped(i.wpos)) {
+        discard;
+    }
     var n = normalize(i.nrm);
     var v = normalize(g.eye.xyz - i.wpos);
     if (g.eye.w > 0.5) {
         v = -g.view_dir.xyz;
     }
     if (dot(n, v) < 0.0) {
+        if (g.clip_on.x > 0.5) {
+            // Inside of a sectioned body: draw it as a flat section cap.
+            return vec4(0.93, 0.47, 0.13, 1.0);
+        }
         n = -n;
     }
 
@@ -126,6 +139,7 @@ struct LineIn {
 struct LineOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) color: vec4<f32>,
+    @location(1) wpos: vec3<f32>,
 };
 
 fn clip_near(p: vec4<f32>, q: vec4<f32>) -> vec4<f32> {
@@ -154,6 +168,7 @@ fn vs_line(@builtin(vertex_index) vi: u32, l: LineIn) -> LineOut {
     if (ca.z < 0.0 && cb.z < 0.0) {
         o.clip = vec4(2.0, 2.0, 2.0, 1.0);
         o.color = vec4(0.0);
+        o.wpos = l.a;
         return o;
     }
     let ca2 = clip_near(ca, cb);
@@ -187,12 +202,13 @@ fn vs_line(@builtin(vertex_index) vi: u32, l: LineIn) -> LineOut {
     clip.z = max(clip.z, 0.0);
     o.clip = clip;
     o.color = l.color * d.edge_color;
+    o.wpos = select(l.a, l.b, t > 0.5);
     return o;
 }
 
 @fragment
 fn fs_line(i: LineOut) -> @location(0) vec4<f32> {
-    if (i.color.a <= 0.001) {
+    if (i.color.a <= 0.001 || clipped(i.wpos)) {
         discard;
     }
     return i.color;

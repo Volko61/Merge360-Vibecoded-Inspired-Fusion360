@@ -40,12 +40,44 @@ pub struct PlaneGeom {
     pub plane: PlaneRef,
 }
 
+/// A cosmetic thread (drawn as a helix on its face).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ThreadGeom {
+    pub uid: u64,
+    pub body: BodyId,
+    pub origin: glam::DVec3,
+    pub axis: glam::DVec3,
+    pub radius: f64,
+    pub length: f64,
+    pub pitch: f64,
+    pub internal: bool,
+}
+
+impl ThreadGeom {
+    /// Helix polyline on the face (slightly off the surface so it stays visible).
+    pub fn helix(&self) -> Vec<glam::DVec3> {
+        let u = self.axis.any_orthonormal_vector();
+        let v = self.axis.cross(u);
+        let r = self.radius * if self.internal { 0.995 } else { 1.005 };
+        let turns = self.length / self.pitch.max(1e-3);
+        let n = ((turns * 32.0).ceil() as usize).clamp(2, 20_000);
+        (0..=n)
+            .map(|i| {
+                let t = i as f64 / n as f64;
+                let a = turns * std::f64::consts::TAU * t;
+                self.origin + self.axis * (self.length * t) + (u * a.cos() + v * a.sin()) * r
+            })
+            .collect()
+    }
+}
+
 /// Result of regenerating a document.
 #[derive(Clone, Default)]
 pub struct Model {
     pub bodies: Vec<Body>,
     pub sketches: Vec<SketchGeom>,
     pub planes: Vec<PlaneGeom>,
+    pub threads: Vec<ThreadGeom>,
     /// Feature uid -> error message (shown in red on the timeline).
     pub errors: HashMap<u64, String>,
 }
@@ -662,6 +694,26 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             }
             let tool = m360_kernel::sweep::loft(&secs).map_err(|e| e.to_string())?;
             apply_op(model, f.uid, tool, *op, participants)
+        }
+        FeatureKind::Thread { body, origin, axis, radius, face_length, length, pitch, internal, .. } => {
+            if model.body(*body).is_none() {
+                return Err("the threaded body no longer exists".into());
+            }
+            if pitch.is_nan() || *pitch <= 1e-3 {
+                return Err("the pitch must be greater than zero".into());
+            }
+            let length = if *length > 1e-6 { length.min(*face_length) } else { *face_length };
+            model.threads.push(ThreadGeom {
+                uid: f.uid,
+                body: *body,
+                origin: (*origin).into(),
+                axis: glam::DVec3::from(*axis).normalize(),
+                radius: *radius,
+                length,
+                pitch: *pitch,
+                internal: *internal,
+            });
+            Ok(())
         }
         FeatureKind::Shell { body, open_points, thickness } => {
             let b = model.body(*body).ok_or("the shelled body no longer exists")?;

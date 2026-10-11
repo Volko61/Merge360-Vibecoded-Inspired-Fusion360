@@ -191,6 +191,19 @@ pub enum FeatureKind {
         inner_diameter: f64,
         torus_diameter: f64,
     },
+    /// Cosmetic thread on a cylindrical face (axis from `origin` along
+    /// `axis`; `length` 0 = full face length).
+    Thread {
+        body: BodyId,
+        origin: [f64; 3],
+        axis: [f64; 3],
+        radius: f64,
+        face_length: f64,
+        length: f64,
+        pitch: f64,
+        internal: bool,
+        designation: String,
+    },
     /// Helical coil around the plane normal through `center`.
     Coil {
         plane: PlaneRef,
@@ -545,6 +558,7 @@ impl FeatureKind {
             FeatureKind::SplitBody { .. } => "SplitBody",
             FeatureKind::Scale { .. } => "Scale",
             FeatureKind::Shell { .. } => "Shell",
+            FeatureKind::Thread { .. } => "Thread",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }
@@ -595,6 +609,7 @@ impl FeatureKind {
             Pipe { diameter, wall, .. } => vec![("Section Size", false, diameter), ("Thickness", false, wall)],
             Fillet { size, chamfer, .. } => vec![(if *chamfer { "Distance" } else { "Radius" }, false, size)],
             Shell { thickness, .. } => vec![("Thickness", false, thickness)],
+            Thread { pitch, length, .. } => vec![("Pitch", false, pitch), ("Length", false, length)],
             Move { translate, angle_deg, .. } => {
                 let [x, y, z] = translate;
                 vec![("X Distance", false, x), ("Y Distance", false, y), ("Z Distance", false, z), ("Angle", true, angle_deg)]

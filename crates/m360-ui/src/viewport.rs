@@ -938,6 +938,18 @@ impl Merge360App {
                     }
                 }
             }
+            Some(Command::Thread { body, cyl, size, pitch, .. }) => {
+                if let Some(SelItem::Face(b, f)) = hover {
+                    if let Some(c) = tab.model.body(b).and_then(|bd| bd.mesh.face_cylinder(f)) {
+                        *body = Some(b);
+                        *cyl = Some(c);
+                        *size = crate::state::iso_for(c.radius, c.internal);
+                        *pitch = crate::state::ISO_THREADS[*size].2;
+                    } else {
+                        self.toast(crate::app::ToastKind::Info, "Select a cylindrical face.");
+                    }
+                }
+            }
             Some(Command::Shell { body, faces, .. }) => {
                 if let Some(SelItem::Face(b, f)) = hover {
                     if *body != Some(b) {
@@ -1379,6 +1391,26 @@ impl Merge360App {
                     let ext = cam.distance;
                     let (p, d) = (p.as_vec3(), d.as_vec3());
                     scene.lines.push(LineInst::new(p - d * ext, p + d * ext, srgb(0.05, 0.4, 0.95, 0.9), 1.8));
+                }
+            }
+        }
+
+        // Cosmetic threads (and the Thread command preview).
+        {
+            let mut helices: Vec<(m360_core::model::ThreadGeom, bool)> =
+                tab.model.threads.iter().filter(|t| tab.body_visible(t.body)).map(|t| (t.clone(), false)).collect();
+            if let Some(Command::Thread { body: Some(b), cyl: Some(c), pitch, full_length, length, .. }) = &tab.command {
+                let len = if *full_length { c.length } else { length.min(c.length) };
+                helices.push((
+                    m360_core::model::ThreadGeom { uid: 0, body: *b, origin: c.origin, axis: c.axis, radius: c.radius, length: len, pitch: *pitch, internal: c.internal },
+                    true,
+                ));
+            }
+            for (t, preview) in helices {
+                let color = if preview { srgb(0.05, 0.4, 0.95, 1.0) } else { srgb(0.2, 0.2, 0.22, 0.9) };
+                let pts = t.helix();
+                for w in pts.windows(2) {
+                    scene.lines.push(LineInst::new(w[0].as_vec3(), w[1].as_vec3(), color, 1.0));
                 }
             }
         }

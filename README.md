@@ -52,7 +52,8 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   sections, tapered), Rectangular & Circular Pattern, Mirror —
   all with live preview and drag manipulators.
 * **Modify:** Fillet and Chamfer (straight edges between planar faces, incl. face loops),
-  Shell (prismatic bodies, open faces), Combine (join / cut / intersect), Split Body, Scale,
+  Shell (prismatic bodies, open faces), Thread (cosmetic, ISO metric sizes
+  auto-detected from the face), Combine (join / cut / intersect), Split Body, Scale,
   Move/Copy, Press Pull (edges → fillet, profiles → extrude), Delete, Appearance,
   Change Parameters, Compute All.
 * **Construct:** Offset Plane, Plane at Angle, Midplane, Plane Through Three Points. Sketches,
@@ -72,7 +73,7 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
 * Fully parametric: every feature is re-editable from the timeline (double-click), roll back with
   the marker, suppress features; undo/redo for everything.
 
-Tools that are not implemented yet (draft, thread, the Animation / Simulation /
+Tools that are not implemented yet (draft, modeled threads, the Animation / Simulation /
 Manufacture / Generative Design workspaces, …) are present
 in the UI and report “not available yet”. Kernel limitations (truck): fillets meeting three at a
 corner, shells of non-prismatic bodies and booleans of exactly coplanar faces may fail; such

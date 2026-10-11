@@ -200,6 +200,11 @@ impl Merge360App {
                     (Some(Command::Extrude { symmetric, .. }), "symmetric") => *symmetric = v == "true",
                     (Some(Command::Extrude { taper, .. }), "taper") => *taper = num.unwrap_or(*taper),
                     (Some(Command::RefPlane { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
+                    (Some(Command::Thread { pitch, .. }), "pitch") => *pitch = num.unwrap_or(*pitch),
+                    (Some(Command::Thread { full_length, length, .. }), "length") => {
+                        *full_length = false;
+                        *length = num.unwrap_or(*length);
+                    }
                     (Some(Command::Extrude { op, .. }), "op") => {
                         *op = match v.as_str() {
                             "cut" => ExtrudeOp::Cut,
@@ -505,6 +510,23 @@ impl Merge360App {
                 }
                 tab.selection.clear();
                 tab.command = Some(Command::Shell { body, faces, thickness: 2.0, editing: None });
+            }
+            "thread" => {
+                let picked = tab.selection.iter().find_map(|s| match s {
+                    SelItem::Face(b, f) => tab.model.body(*b).and_then(|bd| bd.mesh.face_cylinder(*f)).map(|c| (*b, c)),
+                    _ => None,
+                });
+                tab.selection.clear();
+                let size = picked.map_or(8, |(_, c)| crate::state::iso_for(c.radius, c.internal));
+                tab.command = Some(Command::Thread {
+                    body: picked.map(|p| p.0),
+                    cyl: picked.map(|p| p.1),
+                    size,
+                    pitch: crate::state::ISO_THREADS[size].2,
+                    full_length: true,
+                    length: 10.0,
+                    editing: None,
+                });
             }
             "split_body" => {
                 let body = sel_bodies.first().copied();
@@ -819,6 +841,21 @@ impl Merge360App {
                 Command::Pipe { path_sketch: Some(path_sketch), path, diameter, wall: if wall > 0.0 { wall } else { 1.0 }, hollow: wall > 0.0, op, editing }
             }
             FeatureKind::Loft { sections, op, .. } => Command::Loft { sections, op, editing },
+            FeatureKind::Thread { body, origin, axis, radius, face_length, length, pitch, internal, designation } => {
+                let size = crate::state::ISO_THREADS
+                    .iter()
+                    .position(|t| t.0 == designation)
+                    .unwrap_or_else(|| crate::state::iso_for(radius, internal));
+                Command::Thread {
+                    body: Some(body),
+                    cyl: Some(m360_kernel::Cylinder { origin: origin.into(), axis: axis.into(), radius, length: face_length, internal }),
+                    size,
+                    pitch,
+                    full_length: length <= 1e-6,
+                    length: if length > 1e-6 { length } else { face_length },
+                    editing,
+                }
+            }
             FeatureKind::Shell { body, open_points, thickness } => {
                 // Map stored points back to faces of the (rolled back) body.
                 let faces = tab

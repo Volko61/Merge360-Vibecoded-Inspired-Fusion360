@@ -128,6 +128,70 @@ impl BodyMesh {
     }
 
     /// Area-weighted centroid of a face.
+    /// Fit a cylinder to a face: `None` unless the face is (part of) a
+    /// cylinder. Uses the vertex normals, which are radial on a cylinder.
+    pub fn face_cylinder(&self, face: u32) -> Option<Cylinder> {
+        use glam::DVec3;
+        let mut pts: Vec<(DVec3, DVec3)> = Vec::new();
+        for (i, f) in self.face_ids.iter().enumerate() {
+            if *f == face {
+                pts.push((Vec3::from(self.positions[i]).as_dvec3(), Vec3::from(self.normals[i]).as_dvec3().normalize_or_zero()));
+            }
+        }
+        if pts.len() < 6 {
+            return None;
+        }
+        // Axis: the direction perpendicular to all normals (largest cross product).
+        let n0 = pts[0].1;
+        let other = pts.iter().map(|p| p.1).max_by(|a, b| n0.cross(*a).length().total_cmp(&n0.cross(*b).length()))?;
+        let axis = n0.cross(other);
+        if axis.length() < 0.05 {
+            return None; // planar face
+        }
+        let axis = axis.normalize();
+        if pts.iter().any(|(_, n)| n.dot(axis).abs() > 0.02) {
+            return None; // not a cylinder (cone, sphere, ...)
+        }
+        // Circle through the projections: least squares (Kasa) in the plane ⟂ axis.
+        let u = axis.any_orthonormal_vector();
+        let v = axis.cross(u);
+        let (mut a, mut b_) = ([[0.0f64; 3]; 3], [0.0f64; 3]);
+        for (p, _) in &pts {
+            let (x, y) = (p.dot(u), p.dot(v));
+            let row = [x, y, 1.0];
+            let rhs = x * x + y * y;
+            for r in 0..3 {
+                for c in 0..3 {
+                    a[r][c] += row[r] * row[c];
+                }
+                b_[r] += row[r] * rhs;
+            }
+        }
+        let sol = solve3(a, b_)?;
+        let (cx, cy) = (sol[0] / 2.0, sol[1] / 2.0);
+        let radius = (sol[2] + cx * cx + cy * cy).sqrt();
+        if !radius.is_finite() || radius < 1e-6 {
+            return None;
+        }
+        let center = u * cx + v * cy;
+        let tol = radius * 0.01 + 1e-3;
+        let mut internal_votes = 0;
+        let (mut z0, mut z1) = (f64::MAX, f64::MIN);
+        for (p, n) in &pts {
+            let z = p.dot(axis);
+            let radial = *p - axis * z - center;
+            if (radial.length() - radius).abs() > tol {
+                return None;
+            }
+            if radial.dot(*n) < 0.0 {
+                internal_votes += 1;
+            }
+            z0 = z0.min(z);
+            z1 = z1.max(z);
+        }
+        Some(Cylinder { origin: center + axis * z0, axis, radius, length: z1 - z0, internal: internal_votes * 2 > pts.len() })
+    }
+
     pub fn face_centroid(&self, face: u32) -> Option<Vec3> {
         let mut c = Vec3::ZERO;
         let mut w = 0.0;
@@ -362,4 +426,57 @@ fn tessellate_impl(solid: &Solid, tol: f64, smooth_cos: f32) -> BodyMesh {
         out.bbox_max = Vec3::ZERO;
     }
     out
+}
+
+/// A cylindrical face: axis from `origin` along `axis` for `length`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Cylinder {
+    pub origin: glam::DVec3,
+    pub axis: glam::DVec3,
+    pub radius: f64,
+    pub length: f64,
+    /// The face looks towards the axis (a hole).
+    pub internal: bool,
+}
+
+/// Solve a 3x3 linear system (Cramer's rule).
+fn solve3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
+    let det = |m: [[f64; 3]; 3]| {
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    };
+    let d = det(a);
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let mut out = [0.0; 3];
+    for (k, o) in out.iter_mut().enumerate() {
+        let mut m = a;
+        for r in 0..3 {
+            m[r][k] = b[r];
+        }
+        *o = det(m) / d;
+    }
+    Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::primitives::{make_box, make_cylinder};
+    use crate::Frame;
+    use glam::DVec3;
+
+    #[test]
+    fn cylinder_fit() {
+        let f = Frame::new(DVec3::new(5.0, 0.0, 0.0), DVec3::Y, DVec3::Z);
+        let m = crate::tessellate(&make_cylinder(&f, 10.0, 20.0).unwrap());
+        let cyls: Vec<_> = (0..m.face_count).filter_map(|i| m.face_cylinder(i)).collect();
+        assert!(!cyls.is_empty());
+        let c = cyls[0];
+        assert!((c.radius - 5.0).abs() < 0.05, "{c:?}");
+        assert!((c.length - 20.0).abs() < 0.05, "{c:?}");
+        assert!(c.axis.dot(DVec3::X).abs() > 0.999 && !c.internal);
+        let b = crate::tessellate(&make_box(&f, 5.0, 5.0, 5.0).unwrap());
+        assert!((0..b.face_count).all(|i| b.face_cylinder(i).is_none()));
+    }
 }

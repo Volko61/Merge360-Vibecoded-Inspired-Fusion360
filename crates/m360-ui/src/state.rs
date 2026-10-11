@@ -418,6 +418,16 @@ pub enum Command {
         distance: f64,
         editing: Option<EditCtx>,
     },
+    Thread {
+        body: Option<BodyId>,
+        cyl: Option<m360_kernel::Cylinder>,
+        /// Index into [`ISO_THREADS`].
+        size: usize,
+        pitch: f64,
+        full_length: bool,
+        length: f64,
+        editing: Option<EditCtx>,
+    },
     /// Plane at Angle / Midplane / Plane Through Three Points.
     RefPlane {
         method: RefPlaneMethod,
@@ -494,6 +504,7 @@ impl Command {
             Command::Loft { .. } => "LOFT",
             Command::SplitBody { .. } => "SPLIT BODY",
             Command::Shell { .. } => "SHELL",
+            Command::Thread { .. } => "THREAD",
             Command::Scale { .. } => "SCALE",
             Command::Section { .. } => "SECTION ANALYSIS",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
@@ -526,10 +537,43 @@ impl Command {
             | Command::SplitBody { editing, .. }
             | Command::Scale { editing, .. }
             | Command::Shell { editing, .. }
+            | Command::Thread { editing, .. }
             | Command::Joint { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
+}
+
+/// ISO metric coarse threads: (designation, nominal diameter, pitch).
+pub const ISO_THREADS: &[(&str, f64, f64)] = &[
+    ("M1.6x0.35", 1.6, 0.35),
+    ("M2x0.4", 2.0, 0.4),
+    ("M2.5x0.45", 2.5, 0.45),
+    ("M3x0.5", 3.0, 0.5),
+    ("M4x0.7", 4.0, 0.7),
+    ("M5x0.8", 5.0, 0.8),
+    ("M6x1", 6.0, 1.0),
+    ("M8x1.25", 8.0, 1.25),
+    ("M10x1.5", 10.0, 1.5),
+    ("M12x1.75", 12.0, 1.75),
+    ("M14x2", 14.0, 2.0),
+    ("M16x2", 16.0, 2.0),
+    ("M20x2.5", 20.0, 2.5),
+    ("M24x3", 24.0, 3.0),
+    ("M30x3.5", 30.0, 3.5),
+    ("M36x4", 36.0, 4.0),
+    ("M42x4.5", 42.0, 4.5),
+    ("M48x5", 48.0, 5.0),
+    ("M56x5.5", 56.0, 5.5),
+    ("M64x6", 64.0, 6.0),
+];
+
+/// The ISO size that best fits a cylindrical face (a hole is matched by
+/// its minor diameter).
+pub fn iso_for(radius: f64, internal: bool) -> usize {
+    let d = 2.0 * radius;
+    let fit = |&(_, nom, p): &(&str, f64, f64)| if internal { nom - 1.0825 * p } else { nom };
+    (0..ISO_THREADS.len()).min_by(|a, b| (fit(&ISO_THREADS[*a]) - d).abs().total_cmp(&(fit(&ISO_THREADS[*b]) - d).abs())).unwrap_or(0)
 }
 
 /// How a reference plane is built.

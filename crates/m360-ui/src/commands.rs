@@ -516,6 +516,62 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Thread { body, cyl, size, pitch, full_length, length, .. } => {
+                use crate::state::ISO_THREADS;
+                let ok = body.is_some() && cyl.is_some() && *pitch > 1e-3;
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Faces");
+                    let t = match cyl {
+                        Some(c) => format!("1 selected ({})", if c.internal { "internal" } else { "external" }),
+                        None => "Select".into(),
+                    };
+                    if selection_field(ui, cyl.is_none(), &t).clicked() {
+                        *cyl = None;
+                        *body = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Thread Type");
+                    ui.label("ISO Metric profile");
+                    ui.end_row();
+                    row_label(ui, "Size");
+                    let before = *size;
+                    egui::ComboBox::from_id_salt("thread_size").selected_text(ISO_THREADS[*size].0).show_ui(ui, |ui| {
+                        for (i, t) in ISO_THREADS.iter().enumerate() {
+                            ui.selectable_value(size, i, t.0);
+                        }
+                    });
+                    if *size != before {
+                        *pitch = ISO_THREADS[*size].2;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Pitch");
+                    length_field(ui, "thread_pitch", pitch, units);
+                    ui.end_row();
+                    row_label(ui, "Full Length");
+                    ui.checkbox(full_length, "");
+                    ui.end_row();
+                    if !*full_length {
+                        row_label(ui, "Length");
+                        length_field(ui, "thread_len", length, units);
+                        ui.end_row();
+                    }
+                    row_label(ui, "Modeled");
+                    ui.add_enabled(false, egui::Checkbox::new(&mut false, "")).on_disabled_hover_text("Cosmetic threads only for now");
+                    ui.end_row();
+                    if let Some(c) = cyl {
+                        let nominal = ISO_THREADS[*size].1;
+                        let face_d = 2.0 * c.radius;
+                        let expect = if c.internal { nominal - 1.0825 * ISO_THREADS[*size].2 } else { nominal };
+                        if (face_d - expect).abs() > 0.5 {
+                            ui.colored_label(theme::ERROR, "⚠");
+                            ui.colored_label(theme::ERROR, format!("Face ⌀ {} does not match {}", units.format(face_d), ISO_THREADS[*size].0));
+                            ui.end_row();
+                        }
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Shell { body, faces, thickness, .. } => {
                 let ok = body.is_some() && preview_err.is_none();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
@@ -1085,6 +1141,22 @@ impl Merge360App {
             Command::Loft { sections, op, editing } => {
                 let participants = self.overlapping_bodies(op);
                 self.commit_feature(FeatureKind::Loft { sections, op, participants }, editing);
+            }
+            Command::Thread { body: Some(body), cyl: Some(c), size, pitch, full_length, length, editing } => {
+                self.commit_feature(
+                    FeatureKind::Thread {
+                        body,
+                        origin: c.origin.into(),
+                        axis: c.axis.into(),
+                        radius: c.radius,
+                        face_length: c.length,
+                        length: if full_length { 0.0 } else { length },
+                        pitch,
+                        internal: c.internal,
+                        designation: crate::state::ISO_THREADS[size].0.to_string(),
+                    },
+                    editing,
+                );
             }
             Command::Shell { body: Some(body), faces, thickness, editing } => {
                 let pts = self.tabs[self.active].model.body(body).map(|b| crate::state::face_points(&b.mesh, &faces)).unwrap_or_default();

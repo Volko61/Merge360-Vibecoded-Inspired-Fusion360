@@ -460,6 +460,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "sphere",
     "torus",
     "coil",
+    "thread",
     "combine",
     "revolve",
     "hole",

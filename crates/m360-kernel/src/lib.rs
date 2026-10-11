@@ -14,7 +14,7 @@ pub mod sweep;
 pub mod fillet;
 pub mod hole;
 
-pub use mesh::{tessellate, tessellate_smooth, BodyMesh, EdgeInfo, SMOOTH_COS};
+pub use mesh::{tessellate, tessellate_smooth, BodyMesh, Cylinder, EdgeInfo, SMOOTH_COS};
 pub use primitives::Frame;
 
 /// A B-rep solid produced by the kernel.

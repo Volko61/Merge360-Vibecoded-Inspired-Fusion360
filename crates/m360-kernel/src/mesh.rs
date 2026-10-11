@@ -504,7 +504,7 @@ pub fn mesh_overlap(a: &BodyMesh, b: &BodyMesh) -> Option<(f64, BodyMesh)> {
             // Off-center samples avoid hitting mesh edges exactly.
             let x = lo.x + (i as f32 + 0.5 + 0.0137) * dx;
             let y = lo.y + (j as f32 + 0.5 - 0.0071) * dy;
-            let intervals = |zs: Vec<f32>| -> Vec<(f32, f32)> { zs.chunks_exact(2).map(|c| (c[0], c[1])).collect() };
+            let intervals = |zs: Vec<f32>| -> Vec<(f32, f32)> { zs.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect() };
             let (ia, ib) = (intervals(z_crossings(&ta, x, y)), intervals(z_crossings(&tb, x, y)));
             for (a0, a1) in &ia {
                 for (b0, b1) in &ib {

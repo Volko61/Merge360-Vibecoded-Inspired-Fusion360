@@ -226,14 +226,16 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
-            Command::Extrude { sketch, profiles, distance, symmetric, taper, op, .. } => {
-                let ok = sketch.is_some() && !profiles.is_empty() && preview_err.is_none();
+            Command::Extrude { sketch, profiles, distance, symmetric, taper, op, faces, .. } => {
+                let ok = ((sketch.is_some() && !profiles.is_empty()) || !faces.is_empty()) && preview_err.is_none();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
                     row_label(ui, "Profiles");
                     ui.horizontal(|ui| {
-                        let text = if profiles.is_empty() { "Select".to_string() } else { format!("{} selected", profiles.len()) };
+                        let n = profiles.len() + faces.len();
+                        let text = if n == 0 { "Select".to_string() } else { format!("{n} selected") };
                         if selection_field(ui, true, &text).clicked() {
                             profiles.clear();
+                            faces.clear();
                         }
                         if let Some(sk) = *sketch {
                             if ui.button("All").on_hover_text("Select all solid profiles of this sketch (e.g. text)").clicked() {
@@ -264,9 +266,14 @@ impl Merge360App {
                         }
                     });
                     ui.end_row();
-                    row_label(ui, "Taper Angle");
-                    angle_field(ui, "ex_taper", taper);
-                    ui.end_row();
+                    if faces.is_empty() {
+                        row_label(ui, "Taper Angle");
+                        angle_field(ui, "ex_taper", taper);
+                        ui.end_row();
+                    } else if matches!(op, ExtrudeOp::Join | ExtrudeOp::Cut) {
+                        // From a face: outwards adds material, inwards removes it.
+                        *op = if *distance < 0.0 { ExtrudeOp::Cut } else { ExtrudeOp::Join };
+                    }
                     row_label(ui, "Operation");
                     egui::ComboBox::from_id_salt("ex_op").selected_text(op.label()).show_ui(ui, |ui| {
                         for o in ExtrudeOp::ALL {
@@ -1129,14 +1136,22 @@ impl Merge360App {
     fn commit_command(&mut self, cmd: Command) {
         match cmd {
             Command::Primitive { kind, editing, .. } => self.commit_feature(kind, editing),
-            Command::Extrude { sketch: Some(sketch), profiles, distance, symmetric, taper, op, editing } => {
-                let participants = self.overlapping_bodies(op);
+            Command::Extrude { sketch, profiles, distance, symmetric, taper, op, faces, editing } if sketch.is_some() || !faces.is_empty() => {
+                let mut participants = self.overlapping_bodies(op);
+                for (fr, _) in &faces {
+                    if op != ExtrudeOp::NewBody && !participants.contains(&fr.body) {
+                        participants.insert(0, fr.body);
+                    }
+                }
                 if matches!(op, ExtrudeOp::Cut | ExtrudeOp::Intersect) && participants.is_empty() {
                     self.toast(crate::app::ToastKind::Warning, "No bodies intersect the extrusion; nothing to cut.");
                 }
                 let new = editing.is_none();
-                self.commit_feature(FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, participants, taper }, editing);
-                if new {
+                let faces: Vec<m360_core::FaceRef> = faces.into_iter().map(|f| f.0).collect();
+                let from_sketch = faces.is_empty();
+                let sketch = sketch.unwrap_or(0);
+                self.commit_feature(FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, participants, taper, faces }, editing);
+                if new && from_sketch {
                     // Fusion hides a sketch once a feature consumes it.
                     self.tab().doc.sketch_visible.insert(sketch, false);
                 }

@@ -335,6 +335,8 @@ pub enum Command {
         symmetric: bool,
         taper: f64,
         op: ExtrudeOp,
+        /// Planar body faces to extrude (with their mesh face index).
+        faces: Vec<(m360_core::FaceRef, u32)>,
         editing: Option<EditCtx>,
     },
     Combine {
@@ -710,6 +712,15 @@ pub struct Preview {
     pub error: Option<String>,
 }
 
+/// Reference to a planar face (a point inside one of its triangles and its
+/// outward normal), or `None` for curved faces.
+pub fn face_ref(mesh: &BodyMesh, body: BodyId, face: u32) -> Option<m360_core::FaceRef> {
+    let n = mesh.planar_normal(face)?;
+    let (t, _) = mesh.triangles().find(|(_, f)| *f == face)?;
+    let c = (t[0] + t[1] + t[2]) / 3.0;
+    Some(m360_core::FaceRef { body, point: c.as_dvec3().to_array(), normal: n.as_dvec3().to_array() })
+}
+
 /// Joint origin of a mesh face: centroid and outward normal.
 pub fn face_joint_geo(mesh: &BodyMesh, face: u32) -> Option<m360_core::JointGeo> {
     let c = mesh.face_centroid(face)?;
@@ -936,6 +947,28 @@ impl DocTab {
                     return;
                 }
                 (key, build_primitive(kind).map(|o| o.unwrap()))
+            }
+            Command::Extrude { faces, distance, symmetric, .. } if !faces.is_empty() => {
+                let key = format!("faces{faces:?}{distance}{symmetric}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let (z0, z1) = profile::extent(*distance, *symmetric);
+                let mut shells = Vec::new();
+                let mut err = None;
+                for (fr, f) in faces {
+                    match self.model.body(fr.body) {
+                        Some(b) => match m360_kernel::ops::extrude_face(&b.solid, *f as usize, DVec3::from(fr.normal), z0, z1) {
+                            Ok(s) => shells.extend(s.into_boundaries()),
+                            Err(e) => err = Some(e.to_string()),
+                        },
+                        None => err = Some("the body no longer exists".into()),
+                    }
+                }
+                (key, match err {
+                    Some(e) => Err(e),
+                    None => Ok(m360_kernel::Solid::new(shells)),
+                })
             }
             Command::Extrude { sketch: Some(sk), profiles, distance, symmetric, taper, .. } if !profiles.is_empty() => {
                 let key = format!("{sk}{profiles:?}{distance}{symmetric}{taper}");

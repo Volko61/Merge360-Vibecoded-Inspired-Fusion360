@@ -183,6 +183,9 @@ mod tests {
         assert!((crate::tessellate(&t).volume() - 510.0).abs() < 1.0);
         let up = super::push_pull_face(&b, top as usize, glam::DVec3::Z, 5.0).unwrap();
         assert!((crate::tessellate(&up).volume() - 1500.0).abs() < 1.0);
+        // Edges between the old and new (coplanar) side faces are hidden.
+        let um = crate::tessellate(&up);
+        assert!(!um.edges.iter().any(|e| e.iter().all(|p| (p[2] - 10.0).abs() < 1e-6)), "seam at the old top is visible");
         let down = super::push_pull_face(&b, top as usize, glam::DVec3::Z, -4.0).unwrap();
         assert!((crate::tessellate(&down).volume() - 600.0).abs() < 1.0);
         // The result is a valid solid for later booleans.

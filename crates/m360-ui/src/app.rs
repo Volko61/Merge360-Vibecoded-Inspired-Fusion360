@@ -419,13 +419,23 @@ impl Merge360App {
             "extrude" => {
                 let mut sketch = None;
                 let mut profiles = Vec::new();
+                let mut faces = Vec::new();
                 for s in &tab.selection {
-                    if let SelItem::Profile(sk, i) = s {
-                        if sketch.is_none() || sketch == Some(*sk) {
+                    match s {
+                        SelItem::Profile(sk, i) if sketch.is_none() || sketch == Some(*sk) => {
                             sketch = Some(*sk);
                             profiles.push(*i);
                         }
+                        SelItem::Face(b, f) | SelItem::FacePlane(b, f, _) if sketch.is_none() => {
+                            if let Some(fr) = tab.model.body(*b).and_then(|bd| crate::state::face_ref(&bd.mesh, *b, *f)) {
+                                faces.push((fr, *f));
+                            }
+                        }
+                        _ => {}
                     }
+                }
+                if sketch.is_some() {
+                    faces.clear();
                 }
                 tab.selection.clear();
                 tab.command = Some(Command::Extrude {
@@ -435,6 +445,7 @@ impl Merge360App {
                     symmetric: false,
                     taper: 0.0,
                     op: ExtrudeOp::NewBody,
+                    faces,
                     editing: None,
                 });
                 self.auto_extrude_op();
@@ -661,7 +672,7 @@ impl Merge360App {
                 tab.command = Some(Command::Fillet { body, edges, size: if id == "fillet" { 2.0 } else { 1.0 }, chamfer: id == "chamfer", editing: None });
             }
             "press_pull" => {
-                // Fusion's Press Pull: fillet on edges, extrude on profiles.
+                // Fusion's Press Pull: fillet on edges, extrude on profiles and faces.
                 let on_edges = tab.selection.iter().any(|s| matches!(s, SelItem::Edge(..)));
                 self.run_tool(if on_edges { "fillet" } else { "extrude" });
             }
@@ -721,8 +732,17 @@ impl Merge360App {
     pub fn auto_extrude_op(&mut self) {
         let tab = self.tab();
         let has_bodies = !tab.model.bodies.is_empty();
-        if let Some(Command::Extrude { op, sketch: Some(_), editing: None, .. }) = &mut tab.command {
-            *op = if has_bodies { ExtrudeOp::Join } else { ExtrudeOp::NewBody };
+        match &mut tab.command {
+            // From a body face: add material outwards, remove it inwards.
+            Some(Command::Extrude { op, faces, distance, editing: None, .. }) if !faces.is_empty() => {
+                if matches!(op, ExtrudeOp::Join | ExtrudeOp::Cut | ExtrudeOp::NewBody) {
+                    *op = if *distance < 0.0 { ExtrudeOp::Cut } else { ExtrudeOp::Join };
+                }
+            }
+            Some(Command::Extrude { op, sketch: Some(_), editing: None, .. }) => {
+                *op = if has_bodies { ExtrudeOp::Join } else { ExtrudeOp::NewBody };
+            }
+            _ => {}
         }
     }
 
@@ -830,8 +850,17 @@ impl Merge360App {
             FeatureKind::Box { .. } | FeatureKind::Cylinder { .. } | FeatureKind::Sphere { .. } | FeatureKind::Torus { .. } | FeatureKind::Coil { .. } => {
                 Command::Primitive { kind, plane_chosen: true, editing }
             }
-            FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, taper, .. } => {
-                Command::Extrude { sketch: Some(sketch), profiles, distance, symmetric, taper, op, editing }
+            FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, taper, faces, .. } => {
+                let faces: Vec<_> = faces
+                    .into_iter()
+                    .filter_map(|fr| {
+                        let b = tab.model.body(fr.body)?;
+                        let f = m360_core::model::find_face(&b.mesh, fr.point.into(), fr.normal.into())?;
+                        Some((fr, f))
+                    })
+                    .collect();
+                let sketch = if faces.is_empty() { Some(sketch) } else { None };
+                Command::Extrude { sketch, profiles, distance, symmetric, taper, op, faces, editing }
             }
             FeatureKind::Combine { target, tools, op, keep_tools } => Command::Combine {
                 target: Some(target),

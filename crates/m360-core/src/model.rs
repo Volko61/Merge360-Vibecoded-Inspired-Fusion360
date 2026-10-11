@@ -292,6 +292,41 @@ pub fn extrude_tool(
     extrude_tool_range(plane, entities, profiles, z0, z1, taper)
 }
 
+/// A planar body face resolved for this regeneration.
+struct FaceSrc {
+    body: BodyId,
+    face: usize,
+    normal: glam::DVec3,
+    plane: PlaneRef,
+}
+
+/// Find the face of `fr.body` that is planar with normal `fr.normal` and
+/// contains `fr.point`.
+fn resolve_face(model: &Model, fr: &crate::feature::FaceRef) -> Result<FaceSrc, String> {
+    let body = model.body(fr.body).ok_or("the extruded face's body no longer exists")?;
+    let (p, n) = (glam::DVec3::from(fr.point), glam::DVec3::from(fr.normal).normalize());
+    let face = find_face(&body.mesh, p, n).ok_or("the extruded face no longer exists")?;
+    let plane = PlaneRef::from_point_normal(p, n).ok_or("invalid face")?;
+    Ok(FaceSrc { body: fr.body, face: face as usize, normal: n, plane })
+}
+
+/// The planar face of a mesh with outward normal `n` that contains `p`.
+pub fn find_face(m: &BodyMesh, p: glam::DVec3, n: glam::DVec3) -> Option<u32> {
+    let on = |t: &[glam::Vec3; 3]| {
+        let (a, b, c) = (t[0].as_dvec3(), t[1].as_dvec3(), t[2].as_dvec3());
+        if (p - a).dot(n).abs() > 1e-2 {
+            return false;
+        }
+        let s = |u: glam::DVec3, v: glam::DVec3| (v - u).cross(p - u).dot(n);
+        let (s1, s2, s3) = (s(a, b), s(b, c), s(c, a));
+        let tol = -1e-6 * (b - a).length_squared().max(1.0);
+        (s1 >= tol && s2 >= tol && s3 >= tol) || (s1 <= -tol && s2 <= -tol && s3 <= -tol)
+    };
+    (0..m.face_count)
+        .filter(|f| m.planar_normal(*f).is_some_and(|fnorm| fnorm.as_dvec3().dot(n) > 0.999))
+        .find(|f| m.triangles().any(|(t, ff)| ff == *f && on(&t)))
+}
+
 /// Extent of a body along the plane normal, measured from the plane.
 fn normal_extent(body: &Body, plane: &PlaneRef) -> (f64, f64) {
     let f = plane.frame([0.0, 0.0]);
@@ -614,16 +649,53 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             });
             Ok(())
         }
-        FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, participants, taper } => {
-            let sk = model
-                .sketches
-                .iter()
-                .find(|s| s.uid == *sketch)
-                .ok_or("the sketch used by this feature no longer exists")?;
-            let (plane, entities) = (sk.plane, sk.entities.clone());
-            let tool = extrude_tool(&plane, &entities, profiles, *distance, *symmetric, *taper)?;
-            let live: Vec<BodyId> =
-                participants.iter().copied().filter(|id| model.body(*id).is_some()).collect();
+        FeatureKind::Extrude { sketch, profiles, distance, symmetric, op, participants, taper, faces } => {
+            let (z0, z1) = profile::extent(*distance, *symmetric);
+            // Source geometry: planar body faces, or sketch profiles.
+            let face_src = faces.iter().map(|fr| resolve_face(model, fr)).collect::<Result<Vec<_>, String>>()?;
+            if !face_src.is_empty() && taper.abs() > 1e-9 {
+                return Err("a taper angle is only available when extruding sketch profiles".into());
+            }
+            let (plane, entities) = match face_src.first() {
+                Some(src) => (src.plane, Vec::new()),
+                None => {
+                    let sk = model
+                        .sketches
+                        .iter()
+                        .find(|s| s.uid == *sketch)
+                        .ok_or("the sketch used by this feature no longer exists")?;
+                    (sk.plane, sk.entities.clone())
+                }
+            };
+            let make = |model: &Model, a: f64, b: f64| -> Result<Solid, String> {
+                if face_src.is_empty() {
+                    return extrude_tool_range(&plane, &entities, profiles, a, b, *taper);
+                }
+                let mut shells = Vec::new();
+                for src in &face_src {
+                    let body = model.body(src.body).ok_or("the extruded face's body no longer exists")?;
+                    let s = ops::extrude_face(&body.solid, src.face, src.normal, a, b).map_err(|e| e.to_string())?;
+                    shells.extend(s.into_boundaries());
+                }
+                Ok(Solid::new(shells))
+            };
+            // A single face moved along its normal can be built without a
+            // boolean (its sides are coplanar with the body's faces).
+            let push_pull = |model: &Model, id: BodyId, d: f64| -> Option<Solid> {
+                match face_src.as_slice() {
+                    [src] if src.body == id && !*symmetric => {
+                        ops::push_pull_face(&model.body(id)?.solid, src.face, src.normal, d).ok()
+                    }
+                    _ => None,
+                }
+            };
+            let tool = make(model, z0, z1)?;
+            let mut live: Vec<BodyId> = participants.iter().copied().filter(|id| model.body(*id).is_some()).collect();
+            if let Some(src) = face_src.first() {
+                // The face's own body is the one to join to / cut first.
+                live.retain(|id| *id != src.body);
+                live.insert(0, src.body);
+            }
             // Curves approximated by many short lines (e.g. text): hide facet edges.
             let cos = if faceted_profiles(&entities, profiles) { 0.97 } else { SMOOTH_COS };
             match op {
@@ -634,8 +706,10 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                     let t = model.body(target).unwrap();
                     // truck cannot fuse bodies that only touch along coplanar
                     // faces; keep both shells in one body in that case.
-                    let joined = ops::boolean(&t.solid, std::slice::from_ref(&tool), BooleanOp::Join)
-                        .unwrap_or_else(|_| {
+                    let joined = push_pull(model, target, *distance)
+                        .filter(|_| *distance > 0.0)
+                        .or_else(|| ops::boolean(&t.solid, std::slice::from_ref(&tool), BooleanOp::Join).ok())
+                        .unwrap_or_else(|| {
                             let mut shells = t.solid.boundaries().clone();
                             shells.extend(tool.into_boundaries());
                             Solid::new(shells)
@@ -647,7 +721,6 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                         return Err("no bodies to cut/intersect".into());
                     }
                     let bop = if *op == ExtrudeOp::Cut { BooleanOp::Cut } else { BooleanOp::Intersect };
-                    let (z0, z1) = profile::extent(*distance, *symmetric);
                     for id in live {
                         let t = model.body(id).unwrap();
                         // Overshoot tool ends that lie outside the body so the
@@ -657,12 +730,12 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                         let pad = 1.0 + 0.05 * (z1 - z0);
                         let t0 = if lo >= z0 - eps { z0 - pad } else { z0 };
                         let t1 = if hi <= z1 + eps { z1 + pad } else { z1 };
-                        let tool = if bop == BooleanOp::Cut {
-                            extrude_tool_range(&plane, &entities, profiles, t0, t1, *taper)?
-                        } else {
-                            tool.clone()
+                        let tool = if bop == BooleanOp::Cut { make(model, t0, t1)? } else { tool.clone() };
+                        let pushed = if bop == BooleanOp::Cut && *distance < 0.0 { push_pull(model, id, *distance) } else { None };
+                        let res = match pushed {
+                            Some(r) => r,
+                            None => ops::boolean(&t.solid, &[tool], bop).map_err(|e| e.to_string())?,
                         };
-                        let res = ops::boolean(&t.solid, &[tool], bop).map_err(|e| e.to_string())?;
                         replace(model, rebuilt(model, id, res, f.uid));
                     }
                 }

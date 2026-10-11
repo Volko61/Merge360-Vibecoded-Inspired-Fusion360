@@ -45,7 +45,8 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   symmetry constraints; center-to-center slot; trim, offset, sketch fillet; mirror (linked by
   symmetry constraints), circular / rectangular pattern, move, scale; sketch text (font
   outlines, extrudable).
-* **Create:** Extrude (new body / join / cut / intersect, one side or symmetric, taper angle,
+* **Create:** Extrude of sketch profiles or planar body faces (push/pull; new body / join / cut /
+  intersect, one side or symmetric, taper angle,
   profiles with holes), Revolve (around X/Y/Z or a sketch line), Sweep and Pipe (along connected lines/arcs,
   hollow pipes), Loft, Hole (simple / counterbore / countersink, distance or through all,
   multiple points), Box, Cylinder, Sphere, Torus, Coil (circular / square / triangular

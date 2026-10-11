@@ -291,6 +291,7 @@ mod tests {
         // Profile 0 is the circle, profile 1 the rectangle with a hole.
         let base = d.add_feature(FeatureKind::Extrude {
             taper: 0.0,
+            faces: Vec::new(),
             sketch: sk,
             profiles: vec![0, 1],
             distance: 5.0,
@@ -300,6 +301,7 @@ mod tests {
         });
         d.add_feature(FeatureKind::Extrude {
             taper: 0.0,
+            faces: Vec::new(),
             sketch: sk,
             profiles: vec![0],
             distance: 5.0,
@@ -346,6 +348,7 @@ mod tests {
         });
         d.add_feature(FeatureKind::Extrude {
             taper: 0.0,
+            faces: Vec::new(),
             sketch: slot,
             profiles: vec![0],
             distance: 5.0,

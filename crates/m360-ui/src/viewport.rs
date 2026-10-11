@@ -497,6 +497,14 @@ impl Merge360App {
                     _ => {}
                 }
             }
+            Some(Command::Extrude { faces, distance, symmetric, .. }) if !faces.is_empty() => {
+                let (fr, _) = faces[0];
+                let n = DVec3::from(fr.normal);
+                let d = if *symmetric { distance.abs() } else { *distance };
+                let top = (DVec3::from(fr.point) + n * d).as_vec3();
+                let dir = n.as_vec3() * if d < 0.0 { -1.0 } else { 1.0 };
+                out.push(Manip { origin: top, dir, color: [0.18, 0.66, 0.31], slot: 0 });
+            }
             Some(Command::Extrude { sketch: Some(sk), profiles, distance, symmetric, .. }) if !profiles.is_empty() => {
                 if let Some((plane, ents)) = tab.sketch_entities(*sk) {
                     let regions = m360_core::sketch::profiles(&ents);
@@ -582,12 +590,16 @@ impl Merge360App {
                 }
                 _ => {}
             },
-            Some(Command::Extrude { distance, symmetric, .. }) => {
+            Some(Command::Extrude { distance, symmetric, faces, op, editing, .. }) => {
                 if *symmetric {
                     *distance = (distance.abs() + delta).max(0.01);
                 } else {
                     let sign = if *distance < 0.0 { -1.0 } else { 1.0 };
                     *distance += delta * sign;
+                }
+                // Dragging a face through itself switches Join <-> Cut.
+                if !faces.is_empty() && editing.is_none() && matches!(op, ExtrudeOp::Join | ExtrudeOp::Cut) {
+                    *op = if *distance < 0.0 { ExtrudeOp::Cut } else { ExtrudeOp::Join };
                 }
             }
             Some(Command::Move { translate, .. }) => translate[slot] += delta,
@@ -1095,8 +1107,25 @@ impl Merge360App {
                 }
                 _ => {}
             },
-            Some(Command::Extrude { sketch, profiles, .. }) => {
+            Some(Command::Extrude { sketch, profiles, faces, .. }) => {
+                if let Some(SelItem::Face(b, f)) = hover {
+                    match tab.model.body(b).and_then(|bd| crate::state::face_ref(&bd.mesh, b, f)) {
+                        Some(fr) => {
+                            *sketch = None;
+                            profiles.clear();
+                            if let Some(k) = faces.iter().position(|x| x.0.body == b && x.1 == f) {
+                                faces.remove(k);
+                            } else {
+                                faces.push((fr, f));
+                            }
+                            self.auto_extrude_op();
+                        }
+                        None => self.toast(crate::app::ToastKind::Info, "Only planar faces can be extruded."),
+                    }
+                    return;
+                }
                 if let Some(SelItem::Profile(uid, i)) = hover {
+                    faces.clear();
                     if *sketch != Some(uid) {
                         *sketch = Some(uid);
                         profiles.clear();
@@ -1834,7 +1863,7 @@ impl Merge360App {
             Some(Command::Hole { .. }) => Some("Click on a planar face to place holes"),
             Some(Command::Joint { b: None, .. }) => Some("Select a face on the component to move"),
             Some(Command::Joint { a: None, .. }) => Some("Select the face to join it to"),
-            Some(Command::Extrude { profiles, .. }) if profiles.is_empty() => Some("Select a sketch profile"),
+            Some(Command::Extrude { profiles, faces, .. }) if profiles.is_empty() && faces.is_empty() => Some("Select a sketch profile or a planar face"),
             _ => tab.sketch.as_ref().and_then(|s| s.tool.prompt(s.pending.len())),
         };
         if let (Some(text), Some(p)) = (prompt, ui.input(|i| i.pointer.hover_pos()).filter(|p| self.canvas_rect.contains(*p))) {

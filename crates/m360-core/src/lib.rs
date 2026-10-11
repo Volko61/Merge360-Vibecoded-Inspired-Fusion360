@@ -12,7 +12,7 @@ pub mod text;
 pub mod units;
 
 pub use document::{BodyMeta, ComponentDef, Document, NamedView};
-pub use feature::{Axis, BasePlane, CoilPosition, CoilSectionType, ExtrudeOp, Feature, FeatureKind, HoleType, JointGeo, JointMotion, PatternKind, PlaneRef, RevolveAxis, SketchEntity};
+pub use feature::{Axis, BasePlane, CoilPosition, CoilSectionType, ExtrudeOp, FaceRef, Feature, FeatureKind, HoleType, JointGeo, JointMotion, PatternKind, PlaneRef, RevolveAxis, SketchEntity};
 pub use history::History;
 pub use m360_kernel::ops::BooleanOp;
 pub use model::{Body, BodyId, Model, Regenerator};

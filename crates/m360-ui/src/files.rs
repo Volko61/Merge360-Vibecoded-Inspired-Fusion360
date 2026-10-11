@@ -15,6 +15,7 @@ pub enum FileMode {
     ExportStl,
     ExportStep,
     ImportStl,
+    ImportDxf,
 }
 
 impl FileMode {
@@ -25,6 +26,7 @@ impl FileMode {
             FileMode::ExportStl => "Export STL",
             FileMode::ExportStep => "Export STEP",
             FileMode::ImportStl => "Insert Mesh",
+            FileMode::ImportDxf => "Insert DXF",
         }
     }
     fn ext(self) -> &'static str {
@@ -32,6 +34,7 @@ impl FileMode {
             FileMode::Open | FileMode::Save => "m360",
             FileMode::ExportStl | FileMode::ImportStl => "stl",
             FileMode::ExportStep => "step",
+            FileMode::ImportDxf => "dxf",
         }
     }
 }
@@ -126,6 +129,28 @@ impl Merge360App {
         }
     }
 
+    /// Insert ▸ Insert DXF: 2D geometry into a new sketch on the selected
+    /// plane (the ground plane by default).
+    pub(crate) fn import_dxf(&mut self, path: &Path) {
+        let text = match std::fs::read(path) {
+            Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+            Err(e) => return self.toast(crate::app::ToastKind::Error, format!("Could not read {}: {e}", path.display())),
+        };
+        match m360_core::dxf::read_dxf(&text) {
+            Ok(entities) => {
+                let n = entities.len();
+                let plane = self.dxf_plane.take().unwrap_or(m360_core::PlaneRef::XZ);
+                let tab = self.tab();
+                tab.edit("Insert DXF", |d| {
+                    d.add_feature(m360_core::FeatureKind::Sketch { plane, entities, constraints: Vec::new() });
+                });
+                tab.fit_pending = true;
+                self.toast(crate::app::ToastKind::Info, format!("Inserted {n} sketch curves"));
+            }
+            Err(e) => self.toast(crate::app::ToastKind::Error, format!("Not a usable DXF file: {e}")),
+        }
+    }
+
     pub(crate) fn file_dialog_ui(&mut self, ctx: &egui::Context) {
         let Some(dlg) = &mut self.file_dialog else { return };
         let mut open = true;
@@ -211,7 +236,7 @@ impl Merge360App {
                         }
                         let label = match dlg.mode {
                             FileMode::Open => "Open",
-                            FileMode::ImportStl => "Insert",
+                            FileMode::ImportStl | FileMode::ImportDxf => "Insert",
                             _ => "Save",
                         };
                         if (theme::primary_button(ui, label).clicked() || enter) && !dlg.name.trim().is_empty() {
@@ -240,6 +265,12 @@ impl Merge360App {
                     if p.exists() {
                         self.file_dialog = None;
                         self.import_stl(&p);
+                    }
+                }
+                FileMode::ImportDxf => {
+                    if p.exists() {
+                        self.file_dialog = None;
+                        self.import_dxf(&p);
                     }
                 }
                 _ => {

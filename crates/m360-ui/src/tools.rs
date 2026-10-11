@@ -475,6 +475,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "as_built_joint",
     "new_component",
     "insert_mesh",
+    "insert_dxf",
     "sweep",
     "pipe",
     "loft",

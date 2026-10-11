@@ -68,6 +68,8 @@ pub struct Merge360App {
     pub last_tool: Option<&'static str>,
     pub actions: Vec<Action>,
     pub file_dialog: Option<FileDialog>,
+    /// Plane chosen for Insert DXF (selected when the tool started).
+    pub dxf_plane: Option<PlaneRef>,
     pub canvas_rect: egui::Rect,
     pub canvas_time: f64,
     pub canvas: crate::viewport::CanvasState,
@@ -108,6 +110,7 @@ impl Merge360App {
             last_tool: None,
             actions: Vec::new(),
             file_dialog: None,
+            dxf_plane: None,
             canvas_rect: egui::Rect::NOTHING,
             canvas_time: 0.0,
             canvas: Default::default(),
@@ -537,6 +540,11 @@ impl Merge360App {
             "scale" => {
                 tab.selection.clear();
                 tab.command = Some(Command::Scale { bodies: sel_bodies, point: [0.0; 3], factor: 2.0, editing: None });
+            }
+            "insert_dxf" => {
+                self.dxf_plane = tab.selection.iter().find_map(|s| tab.plane_of(s));
+                let dir = self.default_dir();
+                self.file_dialog = Some(FileDialog::new(FileMode::ImportDxf, dir, ""));
             }
             "insert_mesh" => {
                 let dir = self.default_dir();
@@ -1093,7 +1101,7 @@ impl Merge360App {
             return;
         }
         let res = match mode {
-            FileMode::ImportStl => return,
+            FileMode::ImportStl | FileMode::ImportDxf => return,
             FileMode::ExportStl => {
                 let meshes: Vec<_> = bodies.iter().map(|b| b.mesh.as_ref()).collect();
                 m360_kernel::io::write_stl(&path.with_extension("stl"), &meshes)

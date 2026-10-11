@@ -272,7 +272,8 @@ impl Merge360App {
         // Bodies
         let bo_id = egui::Id::new(("br_bodies", active));
         let folder_visible = self.tabs[active].doc.bodies_folder_visible;
-        let bodies: Vec<_> = self.tabs[active].model.bodies.iter().map(|b| b.id).collect();
+        let all_bodies: Vec<_> = self.tabs[active].model.bodies.iter().map(|b| b.id).collect();
+        let bodies: Vec<_> = all_bodies.iter().copied().filter(|b| self.tabs[active].doc.body_meta(*b).component.is_none()).collect();
         if !bodies.is_empty() {
             let r = row(ui, bo_id, Row { open_default: true, depth: 1, expandable: true, eye: Some(folder_visible), icon: Icon::Folder, label: "Bodies", selected: false, dim: !folder_visible, error: false });
             if r.toggled_eye {
@@ -281,6 +282,69 @@ impl Merge360App {
             if is_open(ui, bo_id, true) {
                 for id in bodies {
                     self.body_row(ui, bo_id, id, ctrl);
+                }
+            }
+        }
+
+        // Components
+        let comps = self.tabs[active].doc.components.clone();
+        for c in comps {
+            let cid = egui::Id::new(("br_comp", active, c.id));
+            let members: Vec<u64> = all_bodies.iter().copied().filter(|b| self.tabs[active].doc.body_meta(*b).component == Some(c.id)).collect();
+            if let Some((SelItem::Feature(rid), text)) = &mut self.flags.rename {
+                if *rid == c.id {
+                    let r = ui.add(egui::TextEdit::singleline(text).desired_width(200.0));
+                    r.request_focus();
+                    if r.lost_focus() {
+                        let name = text.trim().to_string();
+                        self.flags.rename = None;
+                        if !name.is_empty() {
+                            let id = c.id;
+                            self.tabs[active].edit("Rename Component", |d| {
+                                if let Some(k) = d.components.iter_mut().find(|k| k.id == id) {
+                                    k.name = name;
+                                }
+                            });
+                        }
+                    }
+                    continue;
+                }
+            }
+            let r = row(ui, cid, Row { open_default: true, depth: 1, expandable: true, eye: Some(c.visible), icon: Icon::Component, label: &c.name, selected: false, dim: !c.visible, error: false });
+            if r.toggled_eye {
+                let id = c.id;
+                self.tabs[active].edit("Show/Hide Component", |d| {
+                    if let Some(k) = d.components.iter_mut().find(|k| k.id == id) {
+                        k.visible = !k.visible;
+                    }
+                });
+            } else if r.resp.double_clicked() {
+                self.flags.rename = Some((SelItem::Feature(c.id), c.name.clone()));
+            } else if r.resp.clicked() {
+                self.tabs[active].selection = members.iter().map(|b| SelItem::Body(*b)).collect();
+            }
+            r.resp.context_menu(|ui| {
+                if ui.button("Rename").clicked() {
+                    self.flags.rename = Some((SelItem::Feature(c.id), c.name.clone()));
+                }
+                if ui.button("Joint…").clicked() {
+                    self.actions.push(Action::Tool("joint"));
+                }
+                if ui.button("Dissolve Component").clicked() {
+                    let id = c.id;
+                    self.tabs[active].edit("Dissolve Component", |d| {
+                        d.components.retain(|k| k.id != id);
+                        for m in d.bodies.values_mut() {
+                            if m.component == Some(id) {
+                                m.component = None;
+                            }
+                        }
+                    });
+                }
+            });
+            if is_open(ui, cid, true) {
+                for id in members {
+                    self.body_row(ui, cid, id, ctrl);
                 }
             }
         }
@@ -375,6 +439,9 @@ impl Merge360App {
             if ui.button("Properties").clicked() {
                 self.actions.push(Action::Tool("properties"));
             }
+            if ui.button("Create Components from Bodies").clicked() {
+                self.actions.push(Action::Tool("new_component"));
+            }
             ui.separator();
             if ui.button("Rename").clicked() {
                 self.flags.rename = Some((SelItem::Body(id), meta.name.clone()));
@@ -428,6 +495,7 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Pattern { .. } => Icon::Pattern,
         FeatureKind::Mirror { .. } => Icon::Mirror,
         FeatureKind::ConstructionPlane { .. } => Icon::Plane,
+        FeatureKind::Joint { .. } => Icon::Joint,
         FeatureKind::Sweep { .. } => Icon::Sweep,
         FeatureKind::Pipe { .. } => Icon::Pipe,
         FeatureKind::Loft { .. } => Icon::Loft,

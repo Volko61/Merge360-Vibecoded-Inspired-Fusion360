@@ -613,6 +613,15 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             }
             Ok(())
         }
+        FeatureKind::Joint { moving, a, b, motion } => {
+            let m = crate::feature::JointGeo::mate(a, b, motion);
+            for id in moving {
+                let body = model.body(*id).ok_or("a jointed body no longer exists")?;
+                let s = ops::transform(&body.solid, m);
+                replace(model, rebuilt(model, *id, s, f.uid));
+            }
+            Ok(())
+        }
         FeatureKind::ConstructionPlane { plane } => {
             model.planes.push(PlaneGeom { uid: f.uid, name: f.name.clone(), plane: *plane });
             Ok(())

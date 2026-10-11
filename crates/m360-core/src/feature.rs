@@ -221,6 +221,13 @@ pub enum FeatureKind {
         point: [f64; 3],
         factor: f64,
     },
+    /// Joint: moves `moving` bodies so that face `b` mates with face `a`.
+    Joint {
+        moving: Vec<BodyId>,
+        a: JointGeo,
+        b: JointGeo,
+        motion: JointMotion,
+    },
     /// A construction plane (Construct ▸ Offset Plane).
     ConstructionPlane {
         plane: PlaneRef,
@@ -252,6 +259,51 @@ pub enum FeatureKind {
         /// Bodies a Join/Cut/Intersect acts on.
         participants: Vec<BodyId>,
     },
+}
+
+/// Joint origin: a point on a face and the face's outward normal.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct JointGeo {
+    pub point: [f64; 3],
+    pub normal: [f64; 3],
+}
+
+/// Joint type with its driven value.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum JointMotion {
+    Rigid,
+    /// Rotation about the joint axis (degrees).
+    Revolute { angle_deg: f64 },
+    /// Translation along the joint axis.
+    Slider { offset: f64 },
+}
+
+impl JointMotion {
+    pub fn label(&self) -> &'static str {
+        match self {
+            JointMotion::Rigid => "Rigid",
+            JointMotion::Revolute { .. } => "Revolute",
+            JointMotion::Slider { .. } => "Slider",
+        }
+    }
+}
+
+impl JointGeo {
+    /// Transform that brings `b` onto `a` (normals opposed), then applies the motion.
+    pub fn mate(a: &JointGeo, b: &JointGeo, motion: &JointMotion) -> DMat4 {
+        let (pa, na) = (DVec3::from(a.point), DVec3::from(a.normal).normalize());
+        let (pb, nb) = (DVec3::from(b.point), DVec3::from(b.normal).normalize());
+        let rot = glam::DQuat::from_rotation_arc(nb, -na);
+        let mut m = DMat4::from_translation(pa) * DMat4::from_quat(rot) * DMat4::from_translation(-pb);
+        match *motion {
+            JointMotion::Rigid => {}
+            JointMotion::Revolute { angle_deg } => {
+                m = DMat4::from_translation(pa) * DMat4::from_axis_angle(na, angle_deg.to_radians()) * DMat4::from_translation(-pa) * m;
+            }
+            JointMotion::Slider { offset } => m = DMat4::from_translation(na * offset) * m,
+        }
+        m
+    }
 }
 
 /// Layout of a Pattern feature.
@@ -370,6 +422,7 @@ impl FeatureKind {
             FeatureKind::Pattern { .. } => "RectangularPattern",
             FeatureKind::Mirror { .. } => "Mirror",
             FeatureKind::ConstructionPlane { .. } => "Plane",
+            FeatureKind::Joint { .. } => "Joint",
             FeatureKind::Sweep { .. } => "Sweep",
             FeatureKind::Pipe { .. } => "Pipe",
             FeatureKind::Loft { .. } => "Loft",

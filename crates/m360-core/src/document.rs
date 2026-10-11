@@ -16,6 +16,17 @@ pub struct BodyMeta {
     pub visible: bool,
     /// Appearance color (linear-ish sRGB, 0..1).
     pub color: [f32; 3],
+    /// Owning component (None = root component).
+    #[serde(default)]
+    pub component: Option<u64>,
+}
+
+/// A component (organises bodies; joints move whole components).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ComponentDef {
+    pub id: u64,
+    pub name: String,
+    pub visible: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -43,6 +54,8 @@ pub struct Document {
     pub bodies_folder_visible: bool,
     pub sketches_folder_visible: bool,
     pub named_views: Vec<NamedView>,
+    #[serde(default)]
+    pub components: Vec<ComponentDef>,
 }
 
 impl Default for Document {
@@ -60,6 +73,7 @@ impl Default for Document {
             bodies_folder_visible: true,
             sketches_folder_visible: true,
             named_views: Vec::new(),
+            components: Vec::new(),
         }
     }
 }
@@ -93,7 +107,7 @@ impl Document {
             let n = self.bodies.len() + 1;
             self.bodies.insert(
                 uid,
-                BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR },
+                BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR, component: None },
             );
         }
         if let Some((bodies, mats)) = kind.copy_transforms() {
@@ -101,7 +115,7 @@ impl Document {
                 let n = self.bodies.len() + 1;
                 self.bodies.insert(
                     (uid << 16) | i as u64,
-                    BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR },
+                    BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR, component: None },
                 );
             }
         }
@@ -112,6 +126,28 @@ impl Document {
         self.features.insert(at, crate::Feature { uid, name, suppressed: false, kind });
         self.marker = at + 1;
         uid
+    }
+
+    /// Create a component holding `bodies`; returns its id.
+    pub fn new_component(&mut self, bodies: &[u64]) -> u64 {
+        let id = self.next_uid;
+        self.next_uid += 1;
+        let n = self.components.len() + 1;
+        self.components.push(ComponentDef { id, name: format!("Component{n}"), visible: true });
+        for b in bodies {
+            let mut m = self.body_meta(*b);
+            m.component = Some(id);
+            self.bodies.insert(*b, m);
+        }
+        id
+    }
+
+    /// Bodies that belong to the same component as `body` (or just `body`).
+    pub fn component_bodies(&self, body: u64) -> Vec<u64> {
+        match self.body_meta(body).component {
+            Some(c) => self.bodies.iter().filter(|(_, m)| m.component == Some(c)).map(|(id, _)| *id).collect(),
+            None => vec![body],
+        }
     }
 
     pub fn feature_index(&self, uid: u64) -> Option<usize> {
@@ -140,6 +176,7 @@ impl Document {
             name: format!("Body#{id}"),
             visible: true,
             color: BODY_COLOR,
+            component: None,
         })
     }
 
@@ -399,6 +436,28 @@ mod tests {
         assert!((m.bodies[0].mesh.volume() - pipe).abs() / pipe < 0.02, "{} vs {pipe}", m.bodies[0].mesh.volume());
         let sweep = 16.0 * len;
         assert!((m.bodies[1].mesh.volume() - sweep).abs() / sweep < 0.02, "{}", m.bodies[1].mesh.volume());
+    }
+
+    #[test]
+    fn joint_mates_faces() {
+        use crate::{JointGeo, JointMotion};
+        let mut d = Document::default();
+        let a = d.add_feature(FeatureKind::Box { plane: PlaneRef::XZ, center: [0.0, 0.0], length: 20.0, width: 20.0, height: 10.0 });
+        let b = d.add_feature(FeatureKind::Box { plane: PlaneRef::XZ, center: [50.0, 0.0], length: 10.0, width: 10.0, height: 10.0 });
+        d.new_component(&[b]);
+        // Mate b's bottom face (y=0, normal -Y) onto a's top face (y=10, normal +Y).
+        d.add_feature(FeatureKind::Joint {
+            moving: d.component_bodies(b),
+            a: JointGeo { point: [0.0, 10.0, 0.0], normal: [0.0, 1.0, 0.0] },
+            b: JointGeo { point: [50.0, 0.0, 0.0], normal: [0.0, -1.0, 0.0] },
+            motion: JointMotion::Slider { offset: 2.0 },
+        });
+        let m = Regenerator::default().regenerate(&d);
+        assert!(m.errors.is_empty(), "{:?}", m.errors);
+        let mb = &m.body(b).unwrap().mesh;
+        assert!((mb.bbox_min.y - 12.0).abs() < 1e-3, "{:?}", mb.bbox_min);
+        assert!(mb.bbox_min.x.abs() - 5.0 < 1e-3);
+        let _ = a;
     }
 
     #[test]

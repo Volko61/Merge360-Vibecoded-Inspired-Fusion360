@@ -899,6 +899,18 @@ impl Merge360App {
                     }
                 }
             }
+            Some(Command::Joint { b, a, .. }) => {
+                if let Some(SelItem::Face(body, f)) = hover {
+                    let geo = tab.model.body(body).and_then(|bd| crate::state::face_joint_geo(&bd.mesh, f));
+                    if let Some(geo) = geo {
+                        if b.is_none() {
+                            *b = Some((tab.doc.component_bodies(body), geo));
+                        } else if b.as_ref().is_some_and(|(bs, _)| !bs.contains(&body)) {
+                            *a = Some(geo);
+                        }
+                    }
+                }
+            }
             Some(Command::Shell { body, faces, .. }) => {
                 if let Some(SelItem::Face(b, f)) = hover {
                     if *body != Some(b) {
@@ -1193,6 +1205,7 @@ impl Merge360App {
             Some(Command::Combine { target, tools, .. }) => (*target, tools.clone(), Vec::new(), false),
             Some(Command::Move { bodies, copy, .. }) => (None, Vec::new(), bodies.clone(), !*copy),
             Some(Command::Pattern { bodies, .. }) | Some(Command::Mirror { bodies, .. }) => (None, Vec::new(), bodies.clone(), false),
+            Some(Command::Joint { b: Some((bodies, _)), .. }) => (None, Vec::new(), bodies.clone(), true),
             _ => (None, Vec::new(), Vec::new(), false),
         };
         let pick_bodies = self.pick_mode() == PickMode::Bodies;
@@ -1340,7 +1353,7 @@ impl Merge360App {
                     Some(Command::Revolve { op: ExtrudeOp::Join, .. }) => (srgb(0.55, 0.75, 0.95, 0.7), true),
                     Some(Command::Extrude { op: ExtrudeOp::Intersect, .. }) => (srgb(0.95, 0.6, 0.15, 0.45), true),
                     Some(Command::Extrude { op: ExtrudeOp::Join, .. }) => (srgb(0.55, 0.75, 0.95, 0.7), true),
-                    Some(Command::Move { .. }) | Some(Command::Pattern { .. }) | Some(Command::Mirror { .. }) => (srgb(0.62, 0.78, 0.95, 1.0), true),
+                    Some(Command::Move { .. }) | Some(Command::Pattern { .. }) | Some(Command::Mirror { .. }) | Some(Command::Joint { .. }) => (srgb(0.62, 0.78, 0.95, 1.0), true),
                     _ => (srgb(0.72, 0.74, 0.77, 1.0), true),
                 };
                 let mut d = BodyDraw::new(Arc::clone(mesh), color);
@@ -1696,6 +1709,8 @@ impl Merge360App {
             Some(Command::Primitive { plane_chosen: false, .. }) => Some("Select a plane or planar face"),
             Some(Command::SketchPlane) => Some("Select a plane or planar face to sketch on"),
             Some(Command::Hole { .. }) => Some("Click on a planar face to place holes"),
+            Some(Command::Joint { b: None, .. }) => Some("Select a face on the component to move"),
+            Some(Command::Joint { a: None, .. }) => Some("Select the face to join it to"),
             Some(Command::Extrude { profiles, .. }) if profiles.is_empty() => Some("Select a sketch profile"),
             _ => None,
         };

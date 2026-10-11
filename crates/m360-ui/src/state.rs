@@ -333,6 +333,13 @@ pub enum Command {
         factor: f64,
         editing: Option<EditCtx>,
     },
+    Joint {
+        /// Moving side (picked first) and its bodies.
+        b: Option<(Vec<BodyId>, m360_core::JointGeo)>,
+        a: Option<m360_core::JointGeo>,
+        motion: m360_core::JointMotion,
+        editing: Option<EditCtx>,
+    },
     OffsetPlane {
         base: Option<PlaneRef>,
         distance: f64,
@@ -398,6 +405,7 @@ impl Command {
             Command::Pattern { .. } => "RECTANGULAR PATTERN",
             Command::Mirror { .. } => "MIRROR",
             Command::OffsetPlane { .. } => "OFFSET PLANE",
+            Command::Joint { .. } => "JOINT",
             Command::Sweep { .. } => "SWEEP",
             Command::Pipe { .. } => "PIPE",
             Command::Loft { .. } => "LOFT",
@@ -434,7 +442,8 @@ impl Command {
             | Command::Loft { editing, .. }
             | Command::SplitBody { editing, .. }
             | Command::Scale { editing, .. }
-            | Command::Shell { editing, .. } => editing.as_ref(),
+            | Command::Shell { editing, .. }
+            | Command::Joint { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
@@ -451,6 +460,16 @@ pub struct Preview {
     pub key: String,
     pub mesh: Option<Arc<BodyMesh>>,
     pub error: Option<String>,
+}
+
+/// Joint origin of a mesh face: centroid and outward normal.
+pub fn face_joint_geo(mesh: &BodyMesh, face: u32) -> Option<m360_core::JointGeo> {
+    let c = mesh.face_centroid(face)?;
+    let n = mesh.planar_normal(face).or_else(|| {
+        let s: glam::Vec3 = mesh.face_ids.iter().zip(&mesh.normals).filter(|(f, _)| **f == face).map(|(_, n)| glam::Vec3::from(*n)).sum();
+        (s.length_squared() > 1e-12).then(|| s.normalize())
+    })?;
+    Some(m360_core::JointGeo { point: c.as_dvec3().to_array(), normal: n.as_dvec3().to_array() })
 }
 
 /// Representative points (centroids) of mesh faces.
@@ -616,7 +635,9 @@ impl DocTab {
     }
 
     pub fn body_visible(&self, id: BodyId) -> bool {
-        self.doc.bodies_folder_visible && self.doc.body_meta(id).visible
+        let meta = self.doc.body_meta(id);
+        let comp_visible = meta.component.is_none_or(|c| self.doc.components.iter().find(|k| k.id == c).is_none_or(|k| k.visible));
+        self.doc.bodies_folder_visible && meta.visible && comp_visible
     }
 
     pub fn selected_bodies(&self) -> Vec<BodyId> {
@@ -753,8 +774,19 @@ impl DocTab {
                 })();
                 (key, r)
             }
-            Command::Move { .. } | Command::Pattern { .. } | Command::Mirror { .. } => {
+            Command::Move { .. } | Command::Pattern { .. } | Command::Mirror { .. } | Command::Joint { .. } => {
                 let kind = match cmd {
+                    Command::Joint { b: Some((bodies, gb)), a: Some(ga), motion, .. } => {
+                        // Preview the mated position as a transformed copy.
+                        let m = m360_core::JointGeo::mate(ga, gb, motion);
+                        let key = format!("joint{bodies:?}{ga:?}{gb:?}{motion:?}");
+                        if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                            return;
+                        }
+                        let meshes: Vec<BodyMesh> = bodies.iter().filter_map(|id| self.model.body(*id)).map(|b| b.mesh.transformed(m)).collect();
+                        self.preview = (!meshes.is_empty()).then(|| Preview { key, mesh: Some(Arc::new(BodyMesh::merge(&meshes))), error: None });
+                        return;
+                    }
                     Command::Move { bodies, translate, axis, angle_deg, .. } => {
                         // Moves preview as a "copy" of the moved bodies.
                         FeatureKind::Move { bodies: bodies.clone(), translate: *translate, axis: *axis, angle_deg: *angle_deg, copy: true }

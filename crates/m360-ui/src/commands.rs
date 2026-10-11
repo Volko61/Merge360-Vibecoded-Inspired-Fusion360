@@ -526,6 +526,48 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Joint { b, a, motion, .. } => {
+                let ok = b.is_some() && a.is_some();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Component 1");
+                    let t = b.as_ref().map_or("Select face".to_string(), |(bs, _)| format!("{} bodies", bs.len()));
+                    if selection_field(ui, b.is_none(), &t).clicked() {
+                        *b = None;
+                        *a = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Component 2");
+                    let t = if a.is_some() { "1 face".to_string() } else { "Select face".to_string() };
+                    if selection_field(ui, b.is_some() && a.is_none(), &t).clicked() {
+                        *a = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Motion");
+                    egui::ComboBox::from_id_salt("joint_motion").selected_text(motion.label()).show_ui(ui, |ui| {
+                        for m in [m360_core::JointMotion::Rigid, m360_core::JointMotion::Revolute { angle_deg: 0.0 }, m360_core::JointMotion::Slider { offset: 0.0 }] {
+                            if ui.selectable_label(motion.label() == m.label(), m.label()).clicked() {
+                                *motion = m;
+                            }
+                        }
+                    });
+                    ui.end_row();
+                    match motion {
+                        m360_core::JointMotion::Rigid => {}
+                        m360_core::JointMotion::Revolute { angle_deg } => {
+                            row_label(ui, "Angle");
+                            angle_field(ui, "joint_angle", angle_deg);
+                            ui.end_row();
+                        }
+                        m360_core::JointMotion::Slider { offset } => {
+                            row_label(ui, "Distance");
+                            length_field(ui, "joint_offset", offset, units);
+                            ui.end_row();
+                        }
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::OffsetPlane { base, distance, .. } => {
                 let ok = base.is_some();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
@@ -959,6 +1001,9 @@ impl Merge360App {
             Command::Scale { bodies, point, factor, editing } => {
                 self.commit_feature(FeatureKind::Scale { bodies, point, factor }, editing);
             }
+            Command::Joint { b: Some((moving, b)), a: Some(a), motion, editing } => {
+                self.commit_feature(FeatureKind::Joint { moving, a, b, motion }, editing);
+            }
             Command::OffsetPlane { base: Some(base), distance, editing } => {
                 let plane = m360_core::PlaneRef { offset: base.offset + if base.flip { -distance } else { distance }, ..base };
                 self.commit_feature(FeatureKind::ConstructionPlane { plane }, editing);
@@ -1150,6 +1195,15 @@ impl Merge360App {
                         }
                         FeatureKind::ConstructionPlane { plane } => row(ui, "Offset", &mut plane.offset, "po"),
                         FeatureKind::Pipe { diameter, .. } => row(ui, "Section Size", diameter, "pd"),
+                        FeatureKind::Joint { motion: m360_core::JointMotion::Slider { offset }, .. } => row(ui, "Slider Distance", offset, "jo"),
+                        FeatureKind::Joint { motion: m360_core::JointMotion::Revolute { angle_deg }, .. } => {
+                            ui.label(&f.name);
+                            ui.label("Revolute Angle");
+                            if angle_field(ui, (f.uid, "ja"), angle_deg) {
+                                changed = true;
+                            }
+                            ui.end_row();
+                        }
                         FeatureKind::Shell { thickness, .. } => row(ui, "Thickness", thickness, "st"),
                         FeatureKind::Hole { diameter, depth, .. } => {
                             row(ui, "Diameter", diameter, "hd");

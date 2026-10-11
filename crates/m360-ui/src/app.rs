@@ -218,6 +218,8 @@ impl Merge360App {
                     (Some(Command::Move { translate, .. }), "z") => translate[2] = num.unwrap_or(0.0),
                     (Some(Command::Move { copy, .. }), "copy") => *copy = v == "true",
                     (Some(Command::Fillet { size, .. }), "size") => *size = num.unwrap_or(*size),
+                    (Some(Command::Joint { motion, .. }), "revolute") => *motion = m360_core::JointMotion::Revolute { angle_deg: num.unwrap_or(0.0) },
+                    (Some(Command::Joint { motion, .. }), "slider") => *motion = m360_core::JointMotion::Slider { offset: num.unwrap_or(0.0) },
                     (Some(Command::Revolve { angle_deg, .. }), "angle") => *angle_deg = num.unwrap_or(*angle_deg),
                     (Some(Command::Pattern { pattern: m360_core::PatternKind::Rectangular { count1, .. }, .. }), "count") => *count1 = num.unwrap_or(1.0) as u32,
                     (Some(Command::Pattern { pattern: m360_core::PatternKind::Rectangular { spacing1, .. }, .. }), "spacing") => *spacing1 = num.unwrap_or(*spacing1),
@@ -463,6 +465,18 @@ impl Merge360App {
             "scale" => {
                 tab.selection.clear();
                 tab.command = Some(Command::Scale { bodies: sel_bodies, point: [0.0; 3], factor: 2.0, editing: None });
+            }
+            "joint" | "as_built_joint" => {
+                tab.selection.clear();
+                tab.command = Some(Command::Joint { b: None, a: None, motion: m360_core::JointMotion::Rigid, editing: None });
+            }
+            "new_component" => {
+                let n = tab.doc.components.len() + 1;
+                tab.edit("New Component", |d| {
+                    d.new_component(&sel_bodies);
+                });
+                tab.selection.clear();
+                self.toast(ToastKind::Info, format!("Component{n} created"));
             }
             "offset_plane" => {
                 let base = tab.selection.iter().find_map(|s| tab.plane_of(s));
@@ -751,6 +765,7 @@ impl Merge360App {
             }
             FeatureKind::SplitBody { body, plane } => Command::SplitBody { body: Some(body), plane: Some(plane), picking_plane: false, editing },
             FeatureKind::Scale { bodies, point, factor } => Command::Scale { bodies, point, factor, editing },
+            FeatureKind::Joint { moving, a, b, motion } => Command::Joint { b: Some((moving, b)), a: Some(a), motion, editing },
             FeatureKind::ConstructionPlane { plane } => Command::OffsetPlane { base: Some(PlaneRef { offset: 0.0, ..plane }), distance: if plane.flip { -plane.offset } else { plane.offset }, editing },
             FeatureKind::Mirror { bodies, plane } => Command::Mirror { bodies, plane: Some(plane), picking_plane: false, editing },
             FeatureKind::Hole { plane, points, diameter, depth, through_all, kind, .. } => {

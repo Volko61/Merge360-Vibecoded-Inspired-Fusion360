@@ -22,7 +22,7 @@ impl Raw {
 fn raw_entities(text: &str) -> Vec<Raw> {
     let lines: Vec<&str> = text.lines().collect();
     let mut pairs = Vec::with_capacity(lines.len() / 2);
-    for c in lines.chunks_exact(2) {
+    for c in lines.as_chunks::<2>().0 {
         if let Ok(code) = c[0].trim().parse::<i32>() {
             pairs.push((code, c[1].trim().to_string()));
         }

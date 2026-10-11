@@ -365,6 +365,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cavalier_contours"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85e06038a969c5e4d93565f12b044814d3b1a48d50c4ef868d588e79956fea51"
+dependencies = [
+ "ahash",
+ "num-traits",
+ "smallvec",
+ "static_aabb2d_index",
+]
+
+[[package]]
 name = "cc"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1562,6 +1574,7 @@ dependencies = [
 name = "m360-core"
 version = "0.1.0"
 dependencies = [
+ "cavalier_contours",
  "epaint_default_fonts",
  "glam",
  "m360-kernel",
@@ -2905,6 +2918,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9571ea910ebd84c86af4b3ed27f9dbdc6ad06f17c5f96146b2b671e2976744f"
 dependencies = [
  "bitflags 2.13.2",
+]
+
+[[package]]
+name = "static_aabb2d_index"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a753368e4dd146a347d0ea692f0f8a37df18df7eee5659d36dd75eb287c6454"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]

@@ -736,7 +736,7 @@ impl Merge360App {
                         let expect = if c.internal { nominal - 1.0825 * ISO_THREADS[*size].2 } else { nominal };
                         if (face_d - expect).abs() > 0.5 {
                             ui.colored_label(theme::ERROR, tr("⚠"));
-                            ui.colored_label(theme::ERROR, format!("Face ⌀ {} does not match {}", units.format(face_d), ISO_THREADS[*size].0));
+                            ui.colored_label(theme::ERROR, format!("Face Ø {} does not match {}", units.format(face_d), ISO_THREADS[*size].0));
                             ui.end_row();
                         }
                     }
@@ -1083,7 +1083,7 @@ impl Merge360App {
                     match kind {
                         m360_core::HoleType::Simple => {}
                         m360_core::HoleType::Counterbore { diameter, depth } => {
-                            row_label(ui, "Counterbore ⌀");
+                            row_label(ui, "Counterbore Ø");
                             length_field(ui, "cb_d", diameter, units);
                             ui.end_row();
                             row_label(ui, "Counterbore Depth");
@@ -1091,7 +1091,7 @@ impl Merge360App {
                             ui.end_row();
                         }
                         m360_core::HoleType::Countersink { diameter, angle_deg } => {
-                            row_label(ui, "Countersink ⌀");
+                            row_label(ui, "Countersink Ø");
                             length_field(ui, "cs_d", diameter, units);
                             ui.end_row();
                             row_label(ui, "Countersink Angle");

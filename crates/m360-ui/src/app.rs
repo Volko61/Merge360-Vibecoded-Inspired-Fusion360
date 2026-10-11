@@ -83,6 +83,7 @@ pub struct Merge360App {
     pub untitled_counter: usize,
     pub prefs: crate::prefs::Preferences,
     pub prefs_ui: PrefsUi,
+    pub cam: crate::cam_ws::CamUi,
     pub last_autosave: f64,
 }
 
@@ -136,6 +137,7 @@ impl Merge360App {
             untitled_counter: 1,
             prefs: crate::prefs::Preferences::load(),
             prefs_ui: PrefsUi::default(),
+            cam: Default::default(),
             last_autosave: 0.0,
         };
         cc.egui_ctx.set_zoom_factor(app.prefs.ui_scale);
@@ -272,6 +274,7 @@ impl Merge360App {
                     (Some(Command::SurfaceExtrude { distance, .. }), "distance") => *distance = num.unwrap_or(*distance),
                     (Some(Command::SurfaceRevolve { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
                     (Some(Command::Draft { fixed_top, .. }), "fixed_top") => *fixed_top = v == "true",
+                    (_, "cam_sim") => self.cam.sim = num.unwrap_or(0.0) as f32,
                     (Some(Command::Thread { pitch, .. }), "pitch") => *pitch = num.unwrap_or(*pitch),
                     (Some(Command::Thread { full_length, length, .. }), "length") => {
                         *full_length = false;
@@ -817,6 +820,7 @@ impl Merge360App {
             "change_parameters" => tab.command = Some(Command::Parameters),
             "doc_settings" => tab.command = Some(Command::DocSettings),
             "preferences" => self.prefs_ui.open = true,
+            id if id.starts_with("cam_") => self.cam_action(id),
             "properties" => tab.command = Some(Command::Properties),
             "compute_all" => {
                 tab.regen.clear();
@@ -1657,7 +1661,7 @@ impl eframe::App for Merge360App {
         }
         self.dev_hooks(&ctx);
         // Keep animating while the camera transitions or toasts are visible.
-        if self.tabs[self.active].anim.is_some() || !self.toasts.is_empty() {
+        if self.tabs[self.active].anim.is_some() || !self.toasts.is_empty() || self.cam.playing {
             ctx.request_repaint();
         }
     }

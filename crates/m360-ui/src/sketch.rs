@@ -86,7 +86,7 @@ pub fn rubber_band_label(s: &SketchSession, cursor: [f64; 2], units: Units) -> O
             units.format(2.0 * (cursor[0] - first[0]).abs()),
             units.format(2.0 * (cursor[1] - first[1]).abs())
         ),
-        SketchTool::Circle => format!("⌀ {}", units.format(2.0 * dist(first, cursor))),
+        SketchTool::Circle => format!("Ø {}", units.format(2.0 * dist(first, cursor))),
         SketchTool::Arc if s.pending.len() == 1 => units.format(dist(first, cursor)),
         SketchTool::Arc => match m360_kernel::profile::circumcircle(first, cursor, s.pending[1]) {
             Some((_, r)) => format!("R {}", units.format(r)),

@@ -73,6 +73,10 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
 * **DRAWING workspace:** A3 sheet with title block, Front / Top / Right / Isometric views in
   third-angle layout with hidden-line removal (dashed), true silhouettes of curved faces,
   automatic standard scale, overall dimensions, SVG export.
+* **MANUFACTURE workspace:** milling setups (stock around the model, WCS on the stock top), Face,
+  2D Contour (inside/outside), 2D Pocket (with islands), Drill (peck) operations from sketch
+  geometry, tool/feeds/stepdown settings, toolpath display, simulation and G-code post
+  processing (`.nc`, generic Fanuc/GRBL dialect).
 * **RENDER workspace:** presentation view (environments, soft ground shadow, optional edges) and
   high-resolution image rendering to PNG (HD to 4K).
 * **Preferences** (user menu ▸ Preferences, saved in `~/.config/merge360/preferences.ron`):
@@ -86,7 +90,7 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   the marker, suppress features; undo/redo for everything.
 
 Tools that are not implemented yet (modeled threads, the Animation / Simulation /
-Manufacture / Generative Design workspaces, …) are present
+Generative Design workspaces, …) are present
 in the UI and report “not available yet”. Kernel limitations (truck): fillets meeting three at a
 corner, shells of non-prismatic bodies and booleans of exactly coplanar faces may fail; such
 features turn red in the timeline with an explanation.

@@ -27,6 +27,7 @@ ttf-parser = "0.25"
 epaint_default_fonts = "0.36"
 image = { version = "0.25", default-features = false, features = ["png"] }
 env_logger = "0.11"
+cavalier_contours = "0.9"
 
 [profile.dev]
 opt-level = 1

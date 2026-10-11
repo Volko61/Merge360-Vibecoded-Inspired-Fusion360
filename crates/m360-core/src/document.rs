@@ -61,6 +61,9 @@ pub struct Document {
     pub components: Vec<ComponentDef>,
     #[serde(default)]
     pub params: Vec<crate::expr::UserParam>,
+    /// Manufacture workspace setups.
+    #[serde(default)]
+    pub cam: Vec<crate::cam::CamSetup>,
 }
 
 impl Default for Document {
@@ -80,6 +83,7 @@ impl Default for Document {
             named_views: Vec::new(),
             components: Vec::new(),
             params: Vec::new(),
+            cam: Vec::new(),
         }
     }
 }

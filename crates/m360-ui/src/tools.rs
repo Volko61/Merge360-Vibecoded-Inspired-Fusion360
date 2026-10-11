@@ -439,6 +439,7 @@ pub const SKETCH_TAB: Tab = Tab {
 
 pub const WS_DESIGN: usize = 0;
 pub const WS_RENDER: usize = 2;
+pub const WS_MANUFACTURE: usize = 5;
 pub const WS_DRAWING: usize = 6;
 
 pub const WORKSPACES: &[(&str, bool)] = &[
@@ -447,7 +448,7 @@ pub const WORKSPACES: &[(&str, bool)] = &[
     ("RENDER", true),
     ("ANIMATION", false),
     ("SIMULATION", false),
-    ("MANUFACTURE", false),
+    ("MANUFACTURE", true),
     ("DRAWING", true),
 ];
 
@@ -461,6 +462,13 @@ pub const IMPLEMENTED: &[&str] = &[
     "torus",
     "coil",
     "draft",
+    "cam_setup",
+    "cam_face",
+    "cam_contour",
+    "cam_pocket",
+    "cam_drill",
+    "cam_simulate",
+    "cam_post",
     "srf_extrude",
     "srf_revolve",
     "patch",
@@ -583,11 +591,23 @@ pub fn all_tools(sketch: bool) -> Vec<Tool> {
     out
 }
 
+/// MANUFACTURE workspace actions (also reachable from the toolbox).
+pub const CAM_TOOLS: &[Tool] = &[
+    t("cam_setup", "New Setup", Generic),
+    t("cam_face", "Face", Generic),
+    t("cam_contour", "2D Contour", Generic),
+    t("cam_pocket", "2D Pocket", Generic),
+    t("cam_drill", "Drill", Hole),
+    t("cam_simulate", "Simulate", Generic),
+    t("cam_post", "Post Process", Generic),
+];
+
 pub fn find(id: &str) -> Option<Tool> {
     std::iter::once(&SKETCH_TAB)
         .chain(DESIGN_TABS.iter())
         .flat_map(|t| t.panels.iter())
         .flat_map(|p| p.tools.iter())
+        .chain(CAM_TOOLS.iter())
         .find(|t| t.id == id)
         .copied()
 }

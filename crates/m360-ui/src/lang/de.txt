@@ -101,11 +101,11 @@ Cosmetic threads only for now	Vorerst nur kosmetische Gewinde
 Could not read back the rendered image.	Das gerenderte Bild konnte nicht gelesen werden.
 Counterbore	Senkung
 Counterbore Depth	Senkungstiefe
-Counterbore ⌀	⌀ der Senkung
+Counterbore Ø	Ø der Senkung
 Counterclockwise	Gegen den Uhrzeigersinn
 Countersink	Kegelsenkung
 Countersink Angle	Senkwinkel
-Countersink ⌀	⌀ der Kegelsenkung
+Countersink Ø	Ø der Kegelsenkung
 Create / finish sketch	Skizze erstellen / beenden
 Create Base Feature	Basiselement erstellen
 Create Components from Bodies	Komponenten aus Körpern erstellen
@@ -638,3 +638,33 @@ Boundary Edges	Begrenzungskanten
 Stitch Surfaces	Zu vernähende Flächen
 Tolerance	Toleranz
 Select bodies first.	Wählen Sie zuerst Körper.
+New Setup	Neue Einrichtung
+MILLING	FRÄSEN
+Face	Planen
+2D Contour	2D-Kontur
+2D Pocket	2D-Tasche
+Drill	Bohren
+ACTIONS	AKTIONEN
+Toolpaths	Werkzeugwege
+Simulate	Simulieren
+Post Process	Postprozessor
+Create a sketch with the geometry to machine first.	Erstellen Sie zuerst eine Skizze mit der zu bearbeitenden Geometrie.
+Create a setup and operations first.	Erstellen Sie zuerst eine Einrichtung und Operationen.
+G-code saved to	G-Code gespeichert in
+CAM BROWSER	CAM-BROWSER
+Add a setup or an operation from the toolbar.	Fügen Sie über die Werkzeugleiste eine Einrichtung oder Operation hinzu.
+Setup	Einrichtung
+Stock side offset	Seitliches Rohteilaufmaß
+Stock top offset	Oberes Rohteilaufmaß
+Name	Name
+Tool	Werkzeug
+Spindle speed	Spindeldrehzahl
+Cutting feed	Schnittvorschub
+Plunge feed	Eintauchvorschub
+Maximum stepdown	Maximale Zustellung
+Clearance height	Sicherheitshöhe
+Stepover	Seitliche Zustellung
+click profiles in the view	Profile in der Ansicht anklicken
+Side	Seite
+Pecking depth	Entspantiefe
+Toolpath	Werkzeugweg

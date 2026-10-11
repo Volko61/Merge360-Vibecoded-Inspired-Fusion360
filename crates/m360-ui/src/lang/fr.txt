@@ -101,11 +101,11 @@ Cosmetic threads only for now	Filetages cosmétiques uniquement pour l'instant
 Could not read back the rendered image.	Impossible de relire l'image rendue.
 Counterbore	Lamage
 Counterbore Depth	Profondeur du lamage
-Counterbore ⌀	⌀ du lamage
+Counterbore Ø	Ø du lamage
 Counterclockwise	Sens antihoraire
 Countersink	Fraisure
 Countersink Angle	Angle de fraisure
-Countersink ⌀	⌀ de fraisure
+Countersink Ø	Ø de fraisure
 Create / finish sketch	Créer / terminer l'esquisse
 Create Base Feature	Créer une fonction de base
 Create Components from Bodies	Créer des composants à partir des corps
@@ -638,3 +638,33 @@ Boundary Edges	Arêtes de contour
 Stitch Surfaces	Surfaces à coudre
 Tolerance	Tolérance
 Select bodies first.	Sélectionnez d'abord des corps.
+New Setup	Nouvelle configuration
+MILLING	FRAISAGE
+Face	Surfaçage
+2D Contour	Contour 2D
+2D Pocket	Poche 2D
+Drill	Perçage
+ACTIONS	ACTIONS
+Toolpaths	Parcours d'outil
+Simulate	Simuler
+Post Process	Post-traitement
+Create a sketch with the geometry to machine first.	Créez d'abord une esquisse avec la géométrie à usiner.
+Create a setup and operations first.	Créez d'abord une configuration et des opérations.
+G-code saved to	G-code enregistré dans
+CAM BROWSER	NAVIGATEUR FAO
+Add a setup or an operation from the toolbar.	Ajoutez une configuration ou une opération depuis la barre d'outils.
+Setup	Configuration
+Stock side offset	Surépaisseur latérale du brut
+Stock top offset	Surépaisseur supérieure du brut
+Name	Nom
+Tool	Outil
+Spindle speed	Vitesse de broche
+Cutting feed	Avance de coupe
+Plunge feed	Avance de plongée
+Maximum stepdown	Passe maximale
+Clearance height	Hauteur de dégagement
+Stepover	Pas latéral
+click profiles in the view	cliquez sur les profils dans la vue
+Side	Côté
+Pecking depth	Profondeur de débourrage
+Toolpath	Parcours

@@ -3,6 +3,7 @@
 mod app;
 mod app_bar;
 mod browser;
+mod cam_ws;
 mod commands;
 mod drawing;
 mod files;

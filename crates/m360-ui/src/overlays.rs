@@ -47,7 +47,11 @@ fn point_in_convex(p: Pos2, poly: &[Pos2]) -> bool {
 
 impl Merge360App {
     pub(crate) fn overlays(&mut self, ctx: &egui::Context) {
-        self.browser(ctx);
+        if self.flags.workspace == crate::tools::WS_MANUFACTURE {
+            self.cam_browser(ctx);
+        } else {
+            self.browser(ctx);
+        }
         if self.prefs.show_view_cube {
             self.view_cube(ctx);
         }

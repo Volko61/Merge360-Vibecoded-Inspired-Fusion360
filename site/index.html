@@ -1,38 +1,123 @@
 <!doctype html>
 <html lang="en">
-<script>document.documentElement.classList.add("js")</script>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Merge360 — Offline parametric CAD</title>
 <meta name="description" content="Merge360 is a free, open-source parametric 3D CAD application written in Rust. Fusion 360–style workflow, fully offline, no subscription.">
-<meta name="theme-color" content="#07080b">
 <meta property="og:title" content="Merge360 — Offline parametric CAD">
 <meta property="og:description" content="Parametric 3D CAD written in Rust. Fusion-style workflow. No cloud. No subscription.">
-<meta property="og:image" content="assets/screenshot.png">
+<meta property="og:image" content="assets/og.jpg">
+<meta name="color-scheme" content="dark light">
+<script>
+  // Apply a saved theme before first paint; otherwise follow the system.
+  try { const t = localStorage.getItem("m360-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  document.documentElement.classList.add("js");
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307080b'/%3E%3Cpath d='M6 24 L11 8 H15 L16 15 L21 8 H25 L20 24 H16 L18.5 16 L14 22 L12.5 16 L10 24Z' fill='%23e8212e'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* ---------- theme tokens ---------- */
+/* Light: Las Vegas dust in daylight. Dark: night city, amber haze, cyan neon. */
 :root {
+  --bg: #efe7da;
+  --bg-2: #e7dccb;
+  --line: rgba(120, 60, 10, .16);
+  --line-strong: rgba(120, 60, 10, .34);
+  --text: #1a140e;
+  --text-2: #3f362c;
+  --muted: #6a5f52;
+  --dim: #9a8b78;
+  --amber: #d4600e;
+  --amber-hot: #e2470f;
+  --on-amber: #1a0b00;
+  --cyan: #0b7a90;
+  --red: #c8141f;
+  --nav-bg: rgba(239, 231, 218, .82);
+  --card-bg: rgba(246, 240, 230, .78);
+  --haze-1: rgba(255, 120, 40, .38);
+  --haze-2: rgba(255, 170, 80, .30);
+  --haze-3: rgba(11, 122, 144, .10);
+  --hero-base: linear-gradient(180deg, #f1dcc3 0%, var(--bg) 100%);
+  --grain-blend: multiply;
+  --grain-opacity: .5;
+  --shot-shadow: 0 30px 50px rgba(120, 50, 0, .22);
+  /* hologram + rain colors as r,g,b */
+  --holo-line: 11, 110, 130;
+  --holo-hot: 212, 96, 14;
+  --holo-grid: 160, 80, 20;
+  --rain-a: 90, 60, 30;
+  --rain-b: 140, 80, 30;
+}
+:root[data-theme="dark"] {
   --bg: #07080b;
-  --bg-2: #0d0f14;
-  --panel: rgba(18, 20, 27, .72);
+  --bg-2: #0d0a08;
   --line: rgba(255, 170, 90, .14);
   --line-strong: rgba(255, 170, 90, .32);
   --text: #ece6da;
+  --text-2: #c8c2b6;
   --muted: #8d8f96;
   --dim: #5b5e66;
   --amber: #ff9d3d;
   --amber-hot: #ff6b1a;
+  --on-amber: #140900;
   --cyan: #46e3ff;
   --red: #e8212e;
+  --nav-bg: rgba(7, 8, 11, .78);
+  --card-bg: rgba(7, 8, 11, .7);
+  --haze-1: rgba(255, 107, 26, .28);
+  --haze-2: rgba(255, 157, 61, .16);
+  --haze-3: rgba(70, 227, 255, .07);
+  --hero-base: linear-gradient(180deg, #0a0807 0%, var(--bg) 100%);
+  --grain-blend: screen;
+  --grain-opacity: 1;
+  --shot-shadow: 0 30px 60px rgba(255, 107, 26, .25);
+  --holo-line: 150, 236, 255;
+  --holo-hot: 255, 190, 120;
+  --holo-grid: 255, 157, 61;
+  --rain-a: 170, 200, 220;
+  --rain-b: 255, 190, 140;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #07080b;
+    --bg-2: #0d0a08;
+    --line: rgba(255, 170, 90, .14);
+    --line-strong: rgba(255, 170, 90, .32);
+    --text: #ece6da;
+    --text-2: #c8c2b6;
+    --muted: #8d8f96;
+    --dim: #5b5e66;
+    --amber: #ff9d3d;
+    --amber-hot: #ff6b1a;
+    --on-amber: #140900;
+    --cyan: #46e3ff;
+    --red: #e8212e;
+    --nav-bg: rgba(7, 8, 11, .78);
+    --card-bg: rgba(7, 8, 11, .7);
+    --haze-1: rgba(255, 107, 26, .28);
+    --haze-2: rgba(255, 157, 61, .16);
+    --haze-3: rgba(70, 227, 255, .07);
+    --hero-base: linear-gradient(180deg, #0a0807 0%, var(--bg) 100%);
+    --grain-blend: screen;
+    --grain-opacity: 1;
+    --shot-shadow: 0 30px 60px rgba(255, 107, 26, .25);
+    --holo-line: 150, 236, 255;
+    --holo-hot: 255, 190, 120;
+    --holo-grid: 255, 157, 61;
+    --rain-a: 170, 200, 220;
+    --rain-b: 255, 190, 140;
+  }
+}
+:root {
   --display: "Chakra Petch", system-ui, sans-serif;
   --body: "Inter Tight", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
   --wrap: 1200px;
 }
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
@@ -42,20 +127,23 @@ body {
   font: 400 17px/1.6 var(--body);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  transition: background-color .4s, color .4s;
 }
 a { color: inherit; text-decoration: none; }
 img { max-width: 100%; display: block; }
-::selection { background: var(--amber); color: #120800; }
+button { font: inherit; color: inherit; }
+::selection { background: var(--amber); color: var(--on-amber); }
 
-/* film grain + scanlines over everything */
+/* film grain + scanlines */
 body::after {
   content: "";
   position: fixed; inset: 0;
   pointer-events: none; z-index: 100;
+  opacity: var(--grain-opacity);
   background:
-    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg, rgba(128,128,128,.03) 0 1px, transparent 1px 3px),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.055'/%3E%3C/svg%3E");
-  mix-blend-mode: screen;
+  mix-blend-mode: var(--grain-blend);
 }
 
 .wrap { width: min(var(--wrap), 100% - 32px); margin-inline: auto; }
@@ -72,24 +160,20 @@ body::after {
 .nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 50;
   border-bottom: 1px solid transparent;
-  transition: background .3s, border-color .3s, backdrop-filter .3s;
+  transition: background .3s, border-color .3s;
 }
-.nav.scrolled {
-  background: rgba(7, 8, 11, .78);
-  backdrop-filter: blur(14px) saturate(140%);
-  border-color: var(--line);
-}
+.nav.scrolled { background: var(--nav-bg); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); border-color: var(--line); }
 .nav .wrap { display: flex; align-items: center; gap: 32px; height: 68px; }
 .logo {
   font: italic 700 26px/1 var(--display);
   letter-spacing: .02em;
   color: var(--red);
   transform: skewX(-8deg);
-  text-shadow: 0 0 18px rgba(232, 33, 46, .45);
+  text-shadow: 0 0 18px rgba(232, 33, 46, .35);
   white-space: nowrap;
 }
 .logo span { color: var(--text); text-shadow: none; }
-.nav-links { display: flex; gap: 26px; margin-right: auto; }
+.nav-links { display: flex; gap: 26px; }
 .nav-links a {
   font: 500 13px/1 var(--mono);
   letter-spacing: .12em; text-transform: uppercase;
@@ -98,30 +182,35 @@ body::after {
 }
 .nav-links a:hover { color: var(--text); }
 .nav-cta { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+.theme-btn {
+  width: 38px; height: 38px; display: grid; place-items: center;
+  background: transparent; border: 1px solid var(--line-strong); cursor: pointer;
+  transition: border-color .2s, color .2s;
+}
+.theme-btn:hover { border-color: var(--amber); color: var(--amber); }
+.theme-btn svg { width: 17px; height: 17px; }
+.theme-btn .sun { display: none; }
+.is-dark .theme-btn .sun { display: block; }
+.is-dark .theme-btn .moon { display: none; }
 
 /* ---------- buttons ---------- */
 .btn {
-  --c: var(--amber);
   position: relative;
   display: inline-flex; align-items: center; gap: 10px;
   padding: 14px 22px;
   font: 600 14px/1 var(--display);
   letter-spacing: .14em; text-transform: uppercase;
-  color: #140900;
-  background: var(--c);
+  color: var(--on-amber);
+  background: var(--amber);
+  border: 0; cursor: pointer;
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
   transition: filter .2s, transform .2s;
   white-space: nowrap;
 }
-.btn:hover { filter: brightness(1.12) drop-shadow(0 0 18px rgba(255, 157, 61, .55)); transform: translateY(-1px); }
-.btn.ghost {
-  color: var(--text);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line-strong);
-  clip-path: none;
-}
+.btn:hover { filter: brightness(1.1) drop-shadow(0 0 18px rgba(255, 140, 50, .5)); transform: translateY(-1px); }
+.btn.ghost { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); clip-path: none; }
 .btn.ghost:hover { box-shadow: inset 0 0 0 1px var(--amber); filter: none; }
-.btn.sm { padding: 10px 16px; font-size: 12px; }
+.btn.sm { padding: 11px 16px; font-size: 12px; }
 .btn svg { width: 16px; height: 16px; flex: none; }
 
 /* ---------- hero ---------- */
@@ -136,21 +225,20 @@ body::after {
 .hero-bg {
   position: absolute; inset: 0; z-index: -2;
   background:
-    radial-gradient(70% 60% at 78% 55%, rgba(255, 107, 26, .28), transparent 70%),
-    radial-gradient(50% 45% at 85% 20%, rgba(255, 157, 61, .16), transparent 70%),
-    radial-gradient(60% 50% at 10% 100%, rgba(70, 227, 255, .07), transparent 70%),
-    linear-gradient(180deg, #0a0807 0%, var(--bg) 100%);
+    radial-gradient(70% 60% at 78% 55%, var(--haze-1), transparent 70%),
+    radial-gradient(50% 45% at 85% 20%, var(--haze-2), transparent 70%),
+    radial-gradient(60% 50% at 10% 100%, var(--haze-3), transparent 70%),
+    var(--hero-base);
 }
 #rain, #holo { position: absolute; inset: 0; width: 100%; height: 100%; }
 #rain { z-index: -1; opacity: .55; }
-#holo { z-index: -1; }
 .hero::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 180px; z-index: -1;
   background: linear-gradient(transparent, var(--bg));
 }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; align-items: center; }
 .hero h1 {
-  margin: 22px 0 22px;
+  margin: 22px 0;
   font: 700 clamp(46px, 7.2vw, 96px)/.95 var(--display);
   letter-spacing: -.01em;
   text-transform: uppercase;
@@ -160,31 +248,21 @@ body::after {
   color: transparent;
   background: linear-gradient(95deg, var(--amber) 0%, var(--amber-hot) 55%, var(--red) 100%);
   -webkit-background-clip: text; background-clip: text;
-  filter: drop-shadow(0 0 28px rgba(255, 107, 26, .35));
+  filter: drop-shadow(0 0 28px rgba(255, 107, 26, .3));
 }
-.hero p.lede { max-width: 520px; font-size: 19px; color: #c8c2b6; margin: 0 0 34px; }
+.hero p.lede { max-width: 520px; font-size: 19px; color: var(--text-2); margin: 0 0 34px; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
 .platforms { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 400 12px/1.4 var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
 .platforms b { color: var(--text); font-weight: 500; }
 .platforms i { font-style: normal; color: var(--dim); }
 
-.hud {
-  position: relative;
-  aspect-ratio: 1 / 1;
-  max-height: 600px;
-  justify-self: end; width: 100%;
-  pointer-events: none;
-}
+.hud { position: relative; aspect-ratio: 1 / 1; max-height: 600px; justify-self: end; width: 100%; pointer-events: none; }
 .hud .corner { position: absolute; width: 22px; height: 22px; border: 1px solid var(--amber); opacity: .7; }
 .hud .tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
 .hud .tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
 .hud .bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
 .hud .br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
-.hud .readout {
-  position: absolute;
-  font: 400 11px/1.7 var(--mono); letter-spacing: .12em; text-transform: uppercase;
-  color: var(--muted);
-}
+.hud .readout { position: absolute; font: 400 11px/1.7 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .hud .readout b { color: var(--cyan); font-weight: 500; }
 .hud .r1 { top: 16px; left: 18px; }
 .hud .r2 { bottom: 16px; right: 18px; text-align: right; }
@@ -193,16 +271,16 @@ body::after {
   writing-mode: vertical-rl;
   font: 500 15px/1 var(--body); letter-spacing: .4em;
   color: var(--red); opacity: .8;
-  text-shadow: 0 0 12px rgba(232, 33, 46, .6);
+  text-shadow: 0 0 12px rgba(232, 33, 46, .45);
 }
 
 /* ---------- marquee ---------- */
 .marquee {
   border-block: 1px solid var(--line);
-  background: linear-gradient(90deg, rgba(255,107,26,.06), transparent 30%, transparent 70%, rgba(70,227,255,.05));
   overflow: hidden;
   padding: 18px 0;
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }
 .marquee-track { display: flex; width: max-content; animation: slide 60s linear infinite; }
 .marquee span {
@@ -218,61 +296,107 @@ body::after {
 /* ---------- sections ---------- */
 section { position: relative; }
 .section { padding: 130px 0; }
-.sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: end; margin-bottom: 60px; }
+.sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: end; margin-bottom: 56px; }
 .sec-head h2 {
   margin: 18px 0 0;
   font: 700 clamp(36px, 5vw, 64px)/1 var(--display);
   text-transform: uppercase;
-  letter-spacing: -.005em;
 }
 .sec-head h2 em { font-style: normal; color: var(--amber); }
 .sec-head p { margin: 0; color: var(--muted); max-width: 480px; justify-self: end; }
 
-/* ---------- footage ---------- */
-.footage { padding: 110px 0 40px; }
+/* ---------- screenshot frame ---------- */
 .screen {
   position: relative;
-  padding: 10px;
-  background: linear-gradient(160deg, rgba(255,157,61,.35), rgba(255,157,61,.04) 40%, rgba(70,227,255,.18));
-  clip-path: polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px);
-  box-shadow: 0 40px 120px -30px rgba(255, 107, 26, .45);
+  padding: 8px;
+  background: linear-gradient(160deg, rgba(255,140,50,.5), rgba(255,140,50,.08) 40%, rgba(40,180,210,.3));
+  clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
 }
-.screen-inner { position: relative; overflow: hidden; clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px); }
-.screen-inner img { width: 100%; filter: saturate(.9) contrast(1.03); }
-.screen-inner::before {
-  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(255,140,40,.12), transparent 30%, transparent 70%, rgba(7,8,11,.35)),
-    repeating-linear-gradient(0deg, rgba(0,0,0,.06) 0 1px, transparent 1px 3px);
+.shadowed { filter: drop-shadow(var(--shot-shadow)); }
+.screen-inner {
+  position: relative; overflow: hidden;
+  aspect-ratio: 16 / 10;
+  background: #c9ccd2;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+.screen-inner img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  transform: scale(var(--z, 1)); transform-origin: var(--o, 50% 50%);
 }
 .screen-inner::after {
-  content: ""; position: absolute; left: 0; right: 0; height: 120px; z-index: 2; pointer-events: none;
-  background: linear-gradient(180deg, transparent, rgba(70,227,255,.10), transparent);
-  animation: sweep 6s ease-in-out infinite;
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.035) 0 1px, transparent 1px 3px);
 }
-@keyframes sweep { 0% { top: -120px; } 60%, 100% { top: 100%; } }
-.screen-caption {
+.zoomable { cursor: zoom-in; }
+.zoom-hint {
+  position: absolute; right: 14px; bottom: 14px; z-index: 3;
+  font: 500 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+  color: #ece6da; background: rgba(7,8,11,.75); padding: 7px 9px;
+  opacity: 0; transition: opacity .25s;
+}
+.zoomable:hover .zoom-hint { opacity: 1; }
+
+/* ---------- 01 product tour ---------- */
+.tour { padding: 110px 0 60px; }
+.tour-tabs {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  border: 1px solid var(--line); border-bottom: 0;
+  margin-bottom: 18px;
+}
+.tour-tab {
+  position: relative;
+  background: transparent; border: 0; border-right: 1px solid var(--line);
+  padding: 16px 16px 18px; text-align: left; cursor: pointer;
+  transition: background .25s;
+}
+.tour-tab:last-child { border-right: 0; }
+.tour-tab .n { display: block; font: 500 11px/1 var(--mono); letter-spacing: .14em; color: var(--dim); margin-bottom: 10px; }
+.tour-tab .t { display: block; font: 700 15px/1.1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); transition: color .25s; }
+.tour-tab::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--line); }
+.tour-tab .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--amber); z-index: 1; box-shadow: 0 0 10px var(--amber); }
+.tour-tab:hover { background: rgba(255,140,50,.06); }
+.tour-tab[aria-selected="true"] { background: rgba(255,140,50,.09); }
+.tour-tab[aria-selected="true"] .t { color: var(--text); }
+.tour-tab[aria-selected="true"] .n { color: var(--amber); }
+.tour-tab[aria-selected="true"] .bar { width: 100%; }
+.tour-tab.playing .bar { animation: fill var(--dur, 6s) linear forwards; }
+@keyframes fill { from { width: 0; } to { width: 100%; } }
+.tour .screen-inner img { opacity: 0; transition: opacity .5s ease; }
+.tour .screen-inner img.on { opacity: 1; }
+.tour-caption {
   display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   margin-top: 18px;
-  font: 400 12px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+  font: 400 12px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
 }
-.screen-caption .rec::before {
+.tour-caption .rec::before {
   content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%;
   background: var(--red); box-shadow: 0 0 10px var(--red);
   animation: blink 1.6s steps(2) infinite;
 }
+.tour-caption #tourText { color: var(--text-2); text-transform: none; letter-spacing: .02em; font-size: 13px; }
 @keyframes blink { 50% { opacity: .2; } }
 
-/* ---------- feature cards ---------- */
+/* ---------- 02 highlight rows ---------- */
+.rows { display: grid; gap: 110px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 64px; align-items: center; }
+.row:nth-child(even) .row-text { order: 2; }
+.row-text .k { font: 500 12px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--cyan); }
+.row-text h3 { margin: 16px 0; font: 700 clamp(30px, 3.4vw, 44px)/1.02 var(--display); text-transform: uppercase; }
+.row-text p { margin: 0 0 22px; color: var(--muted); }
+.row-text ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.row-text li { display: flex; gap: 12px; align-items: baseline; color: var(--text-2); font-size: 15px; }
+.row-text li::before { content: ""; flex: none; width: 7px; height: 7px; transform: rotate(45deg) translateY(-2px); border: 1px solid var(--amber); }
+.row .screen-inner { aspect-ratio: 16 / 10; }
+
+/* ---------- 03 feature cards ---------- */
 .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .card {
   position: relative;
   background: var(--bg);
   padding: 30px 26px 34px;
-  min-height: 300px;
+  min-height: 290px;
   display: flex; flex-direction: column;
   overflow: hidden;
-  transition: background .35s;
 }
 .card::before {
   content: ""; position: absolute; inset: 0; opacity: 0; transition: opacity .35s;
@@ -281,26 +405,26 @@ section { position: relative; }
 .card:hover::before { opacity: 1; }
 .card:hover .num { color: var(--amber); }
 .card > * { position: relative; }
-.card .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+.card .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 36px; }
 .card .num { font: 500 13px/1 var(--mono); color: var(--dim); letter-spacing: .1em; transition: color .3s; }
-.card .tag { font: 400 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--cyan); border: 1px solid rgba(70,227,255,.3); padding: 5px 7px; }
+.card .tag { font: 400 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--cyan); border: 1px solid currentColor; padding: 5px 7px; opacity: .85; }
 .card svg.ico { width: 34px; height: 34px; stroke: var(--amber); fill: none; stroke-width: 1.4; margin-bottom: 22px; }
-.card h3 { margin: 0 0 12px; font: 700 21px/1.15 var(--display); text-transform: uppercase; letter-spacing: .02em; }
+.card h3 { margin: 0 0 12px; font: 700 20px/1.15 var(--display); text-transform: uppercase; letter-spacing: .02em; }
 .card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
-.card.cta {
-  background: linear-gradient(150deg, rgba(255,107,26,.22), rgba(232,33,46,.12) 60%, var(--bg));
-  justify-content: flex-end;
-}
+.card.cta { background: linear-gradient(150deg, rgba(255,107,26,.22), rgba(232,33,46,.10) 60%, var(--bg)); justify-content: flex-end; }
 .card.cta h3 { font-size: 28px; }
 .card.cta .arrow { font: 400 44px/1 var(--display); color: var(--amber); margin-bottom: auto; transition: transform .3s; }
 .card.cta:hover .arrow { transform: translate(6px, -6px); }
 
-/* ---------- workflow / timeline ---------- */
-.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; position: relative; }
+/* ---------- 04 workflow ---------- */
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin-bottom: 80px; }
+.duo figure { margin: 0; }
+.duo figcaption { margin-top: 14px; font: 400 12px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.duo figcaption b { color: var(--amber); font-weight: 500; margin-right: 8px; }
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: relative; }
 .flow::before {
   content: ""; position: absolute; top: 27px; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, var(--amber), var(--cyan));
-  opacity: .45;
+  background: linear-gradient(90deg, var(--amber), var(--cyan)); opacity: .45;
 }
 .step { padding-right: 24px; }
 .step .node {
@@ -310,92 +434,88 @@ section { position: relative; }
   margin: 0 0 26px 8px; position: relative;
   transform: rotate(45deg);
 }
-.step .node b { transform: rotate(-45deg); font-weight: 700; }
+.step .node b { transform: rotate(-45deg); }
 .step h4 { margin: 0 0 8px; font: 700 18px/1.2 var(--display); text-transform: uppercase; letter-spacing: .04em; }
 .step p { margin: 0; color: var(--muted); font-size: 15px; }
-.step kbd {
+kbd {
   font: 500 11px/1 var(--mono); color: var(--text);
   border: 1px solid var(--line-strong); padding: 3px 6px; margin-right: 4px;
-  background: rgba(255,157,61,.06);
+  background: rgba(255,140,50,.08);
 }
 
-/* ---------- ownership ---------- */
-.own { background: linear-gradient(180deg, var(--bg), #0b0806 50%, var(--bg)); }
+/* ---------- 05 ownership ---------- */
+.own { background: linear-gradient(180deg, var(--bg), var(--bg-2) 50%, var(--bg)); }
 .own-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .own-item { border-top: 1px solid var(--line-strong); padding-top: 26px; }
-.own-item .letter {
-  font: 700 64px/1 var(--display);
-  color: transparent; -webkit-text-stroke: 1px var(--amber);
-  margin-bottom: 18px; opacity: .85;
-}
+.own-item .letter { font: 700 64px/1 var(--display); color: transparent; -webkit-text-stroke: 1px var(--amber); margin-bottom: 18px; }
 .own-item h3 { margin: 0 0 10px; font: 700 24px/1.15 var(--display); text-transform: uppercase; }
 .own-item p { margin: 0; color: var(--muted); }
 .own-item code { font: 400 14px var(--mono); color: var(--cyan); }
 
-/* ---------- specs ---------- */
+/* ---------- 06 specs ---------- */
 .specs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 60px; align-items: start; }
 .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .stat { background: var(--bg); padding: 28px 24px; }
-.stat .v { font: 700 clamp(38px, 4.4vw, 56px)/1 var(--display); color: var(--text); }
+.stat .v { font: 700 clamp(38px, 4.4vw, 56px)/1 var(--display); }
 .stat .v small { font-size: .45em; color: var(--amber); margin-left: 4px; }
 .stat .k { margin-top: 10px; font: 400 12px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.term {
-  background: #050607;
-  border: 1px solid var(--line);
-  font: 400 13.5px/1.75 var(--mono);
-  overflow: hidden;
-}
-.term .bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--dim); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.term { background: #08090c; border: 1px solid var(--line); font: 400 13.5px/1.75 var(--mono); overflow: hidden; color: #b9b4aa; }
+.term .bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid rgba(255,170,90,.14); color: #5b5e66; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
 .term .bar i { width: 9px; height: 9px; border-radius: 50%; background: #2a2c31; }
-.term .bar i:first-child { background: var(--red); }
-.term pre { margin: 0; padding: 20px 20px 24px; overflow-x: auto; color: #b9b4aa; }
-.term .c { color: var(--dim); }
-.term .p { color: var(--amber); }
-.term .k { color: var(--cyan); }
+.term .bar i:first-child { background: #e8212e; }
+.term pre { margin: 0; padding: 20px 20px 24px; overflow-x: auto; }
+.term .c { color: #6b6e76; }
+.term .p { color: #ff9d3d; }
+.term .k { color: #46e3ff; }
 
-/* ---------- final cta ---------- */
-.final {
-  position: relative; text-align: center;
-  padding: 160px 0 150px;
-  overflow: hidden; isolation: isolate;
-}
+/* ---------- download ---------- */
+.final { position: relative; padding: 150px 0 140px; overflow: hidden; isolation: isolate; }
 .final::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
   background:
-    radial-gradient(45% 55% at 50% 100%, rgba(255,107,26,.38), transparent 70%),
-    radial-gradient(30% 30% at 50% 100%, rgba(232,33,46,.35), transparent 70%);
+    radial-gradient(45% 55% at 50% 100%, var(--haze-1), transparent 70%),
+    radial-gradient(30% 30% at 50% 100%, rgba(232,33,46,.22), transparent 70%);
 }
 .final .horizon {
   position: absolute; left: -10%; right: -10%; bottom: 0; height: 46%; z-index: -1;
   background:
-    repeating-linear-gradient(90deg, rgba(255,157,61,.22) 0 1px, transparent 1px 70px),
-    repeating-linear-gradient(0deg, rgba(255,157,61,.22) 0 1px, transparent 1px 34px);
+    repeating-linear-gradient(90deg, var(--line-strong) 0 1px, transparent 1px 70px),
+    repeating-linear-gradient(0deg, var(--line-strong) 0 1px, transparent 1px 34px);
   transform: perspective(500px) rotateX(62deg);
   transform-origin: bottom;
   mask-image: linear-gradient(transparent, #000 70%);
+  -webkit-mask-image: linear-gradient(transparent, #000 70%);
 }
-.final h2 {
-  margin: 20px 0 18px;
-  font: 700 clamp(52px, 9vw, 128px)/.9 var(--display);
-  text-transform: uppercase;
-}
-.final h2 span { color: var(--amber); text-shadow: 0 0 40px rgba(255,107,26,.5); }
-.final p { color: #c8c2b6; margin: 0 auto 36px; max-width: 520px; }
-.dl-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; max-width: 880px; margin: 0 auto 26px; }
+.final-head { text-align: center; }
+.final h2 { margin: 20px 0 18px; font: 700 clamp(52px, 9vw, 128px)/.9 var(--display); text-transform: uppercase; }
+.final h2 span { color: var(--amber); text-shadow: 0 0 40px rgba(255,107,26,.4); }
+.final-head p { color: var(--text-2); margin: 0 auto 48px; max-width: 540px; }
+.dl-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; max-width: 920px; margin: 0 auto 22px; }
 .dl {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-  padding: 18px 18px 16px;
-  background: rgba(7,8,11,.7); backdrop-filter: blur(8px);
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 26px 26px 24px;
+  background: var(--card-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--line-strong);
-  text-align: left;
-  transition: border-color .2s, background .2s, transform .2s;
+  transition: border-color .2s, box-shadow .2s;
 }
-.dl:hover { border-color: var(--amber); background: rgba(255,107,26,.1); transform: translateY(-2px); }
-.dl .os { font: 700 17px/1 var(--display); text-transform: uppercase; letter-spacing: .06em; }
-.dl .arch { font: 400 11px/1 var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
-.dl.match { border-color: var(--amber); box-shadow: 0 0 30px -6px rgba(255,107,26,.6); }
-.dl.match .os::after { content: "● this device"; margin-left: 10px; font: 400 10px/1 var(--mono); letter-spacing: .12em; color: var(--amber); vertical-align: middle; }
-.small-note { font: 400 12px/1.5 var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.dl.match { border-color: var(--amber); box-shadow: 0 0 40px -10px rgba(255,107,26,.55); }
+.dl-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dl .os { font: 700 24px/1 var(--display); text-transform: uppercase; letter-spacing: .04em; }
+.dl .badge { font: 500 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--amber); display: none; }
+.dl.match .badge { display: inline; }
+.dl .note { margin: 0; color: var(--muted); font-size: 15px; }
+.dl-files { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dl-file {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--line);
+  transition: border-color .2s, background .2s;
+}
+.dl-file:hover { border-color: var(--amber); background: rgba(255,140,50,.08); }
+.dl-file b { font: 700 15px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.dl-file span { font: 400 11px/1.3 var(--mono); letter-spacing: .08em; color: var(--muted); }
+.dl-file.match { border-color: var(--amber); background: rgba(255,140,50,.10); }
+.small-note { text-align: center; font: 400 12px/1.6 var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
 .small-note a { color: var(--text); border-bottom: 1px solid var(--line-strong); }
 
 /* ---------- footer ---------- */
@@ -412,6 +532,13 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   font: 400 12px/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
 }
 
+/* ---------- lightbox ---------- */
+.lightbox { border: 0; padding: 0; background: transparent; max-width: min(1440px, 96vw); width: 100%; }
+.lightbox::backdrop { background: rgba(5, 6, 8, .88); backdrop-filter: blur(4px); }
+.lightbox img { width: 100%; height: auto; max-height: 86vh; object-fit: contain; box-shadow: 0 30px 120px rgba(0,0,0,.6); }
+.lightbox .lb-cap { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 14px; font: 400 12px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #b9b4aa; }
+.lightbox button { background: none; border: 1px solid rgba(255,170,90,.35); color: #ece6da; padding: 7px 12px; font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; cursor: pointer; }
+
 /* ---------- reveal ---------- */
 .js .reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s ease, transform .8s ease; }
 .js .reveal.in { opacity: 1; transform: none; }
@@ -422,7 +549,11 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 40px; }
   .flow::before { display: none; }
   .specs { grid-template-columns: minmax(0, 1fr); }
-  .dl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tour-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tour-tab:nth-child(3) { border-right: 0; }
+  .tour-tab:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+  .row { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .row:nth-child(even) .row-text { order: 0; }
 }
 @media (max-width: 860px) {
   .nav-links { display: none; }
@@ -432,23 +563,32 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   .sec-head { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .sec-head p { justify-self: start; }
   .own-grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .duo { grid-template-columns: minmax(0, 1fr); }
+  .dl-grid { grid-template-columns: minmax(0, 1fr); }
   .foot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .foot > div:first-child { grid-column: 1 / -1; }
   .section { padding: 96px 0; }
+  .rows { gap: 80px; }
 }
 @media (max-width: 560px) {
   body { font-size: 16px; }
   .nav .wrap { gap: 12px; }
   .nav-cta .ghost { display: none; }
   .logo { font-size: 22px; }
-  .cards, .flow, .dl-grid { grid-template-columns: minmax(0, 1fr); }
+  .cards, .flow { grid-template-columns: minmax(0, 1fr); }
   .card { min-height: 0; }
   .hud { height: 280px; }
   .hud .readout { display: none; }
   .hero-actions .btn { flex: 1 1 100%; justify-content: center; }
+  .tour-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tour-tab { border-bottom: 1px solid var(--line); padding: 12px 12px 14px; }
+  .tour-tab:nth-child(3) { border-right: 1px solid var(--line); }
+  .tour-tab:nth-child(even) { border-right: 0; }
+  .tour-tab:nth-child(n+5) { border-bottom: 0; }
+  .dl-files { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .marquee-track, .screen-inner::after, .screen-caption .rec::before { animation: none; }
+  .marquee-track, .tour-caption .rec::before { animation: none; }
   .js .reveal { opacity: 1; transform: none; transition: none; }
   html { scroll-behavior: auto; }
 }
@@ -460,12 +600,16 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   <div class="wrap">
     <a href="#" class="logo" aria-label="Merge360 home">MERGE<span>360</span></a>
     <div class="nav-links">
+      <a href="#tour">Tour</a>
       <a href="#features">Features</a>
       <a href="#workflow">Workflow</a>
       <a href="#ownership">Open source</a>
-      <a href="#download">Download</a>
     </div>
     <div class="nav-cta">
+      <button class="theme-btn" id="themeBtn" type="button" aria-label="Toggle light and dark theme">
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></svg>
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
       <a class="btn ghost sm" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360" target="_blank" rel="noopener">
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         GitHub
@@ -488,7 +632,7 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
           Download free
         </a>
-        <a class="btn ghost" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360" target="_blank" rel="noopener">View source</a>
+        <a class="btn ghost" href="#tour">Take the tour</a>
       </div>
       <div class="platforms">
         <span><b>Windows</b> <i>x64 · ARM64</i></span>
@@ -508,77 +652,194 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
 
 <div class="marquee" aria-hidden="true">
   <div class="marquee-track">
-    <span>Extrude</span><span>Revolve</span><span>Sweep</span><span>Loft</span><span>Fillet</span><span>Chamfer</span><span>Shell</span><span>Hole</span><span>Coil</span><span>Constraint solver</span><span>Timeline</span><span>Joints</span><span>Section analysis</span><span>STEP export</span><span>DXF import</span><span>Drawings</span><span>4K render</span>
-    <span>Extrude</span><span>Revolve</span><span>Sweep</span><span>Loft</span><span>Fillet</span><span>Chamfer</span><span>Shell</span><span>Hole</span><span>Coil</span><span>Constraint solver</span><span>Timeline</span><span>Joints</span><span>Section analysis</span><span>STEP export</span><span>DXF import</span><span>Drawings</span><span>4K render</span>
+    <span>Extrude</span><span>Revolve</span><span>Sweep</span><span>Loft</span><span>Fillet</span><span>Chamfer</span><span>Shell</span><span>Draft</span><span>Hole</span><span>Coil</span><span>Constraint solver</span><span>Timeline</span><span>Joints</span><span>Section analysis</span><span>STEP export</span><span>DXF import</span><span>Drawings</span><span>4K render</span>
+    <span>Extrude</span><span>Revolve</span><span>Sweep</span><span>Loft</span><span>Fillet</span><span>Chamfer</span><span>Shell</span><span>Draft</span><span>Hole</span><span>Coil</span><span>Constraint solver</span><span>Timeline</span><span>Joints</span><span>Section analysis</span><span>STEP export</span><span>DXF import</span><span>Drawings</span><span>4K render</span>
   </div>
 </div>
 
-<section class="footage">
+<!-- 01 · Product tour -->
+<section class="tour" id="tour">
   <div class="wrap">
-    <div class="screen reveal">
-      <div class="screen-inner">
-        <img src="assets/screenshot.png" alt="The Merge360 interface: toolbar, browser tree, ViewCube and a sample bracket part in the 3D canvas, with the feature timeline at the bottom." width="1440" height="900" loading="lazy">
+    <div class="sec-head reveal">
+      <div>
+        <div class="label">01 <span class="slash">/</span> Tour</div>
+        <h2>See it <em>running.</em></h2>
       </div>
+      <p>Every frame below is a real capture of Merge360, not a mockup. Pick a workspace or let the tour play.</p>
     </div>
-    <div class="screen-caption">
-      <span class="rec">Real footage. Captured in Merge360.</span>
-      <span>Sample bracket · Design workspace</span>
+
+    <div class="reveal">
+      <div class="tour-tabs" role="tablist" aria-label="Product tour">
+        <button class="tour-tab" role="tab" aria-selected="true"><span class="n">01</span><span class="t">Design</span><i class="bar"></i></button>
+        <button class="tour-tab" role="tab" aria-selected="false"><span class="n">02</span><span class="t">Sketch</span><i class="bar"></i></button>
+        <button class="tour-tab" role="tab" aria-selected="false"><span class="n">03</span><span class="t">Extrude</span><i class="bar"></i></button>
+        <button class="tour-tab" role="tab" aria-selected="false"><span class="n">04</span><span class="t">Section</span><i class="bar"></i></button>
+        <button class="tour-tab" role="tab" aria-selected="false"><span class="n">05</span><span class="t">Drawing</span><i class="bar"></i></button>
+        <button class="tour-tab" role="tab" aria-selected="false"><span class="n">06</span><span class="t">Render</span><i class="bar"></i></button>
+      </div>
+      <div class="screen shadowed">
+        <div class="screen-inner zoomable" id="tourScreen" role="tabpanel">
+          <img class="on" src="assets/shots/design.webp" width="1440" height="900" alt="Design workspace with the sample bracket, browser tree, ViewCube and feature timeline." data-cap="Design workspace: browser, ViewCube, timeline and the full Fusion-style toolbar.">
+          <img src="assets/shots/sketch.webp" width="1440" height="900" loading="lazy" alt="Sketch mode: the sketch palette, constraint tools and closed profiles highlighted for extrusion." data-cap="Sketch mode: the solver keeps every profile closed and ready to extrude.">
+          <img src="assets/shots/extrude.webp" width="1440" height="900" loading="lazy" alt="Extrude dialog with a live blue preview and a drag arrow on the top face of the bracket." data-cap="Extrude: pick a face, drag the arrow, watch the preview. Join is chosen for you.">
+          <img src="assets/shots/section.webp" width="1440" height="900" loading="lazy" alt="Section analysis cutting the bracket along the XY plane with orange section caps." data-cap="Section analysis: cut through every body with capped faces.">
+          <img src="assets/shots/drawing.webp" width="1440" height="900" loading="lazy" alt="Drawing workspace with an A3 sheet: top, front, right and isometric views with dimensions and a title block." data-cap="Drawing workspace: four views, hidden lines, dimensions and a title block on an A3 sheet.">
+          <img src="assets/shots/render.webp" width="1440" height="900" loading="lazy" alt="Render workspace showing the bracket on a soft ground shadow with render settings." data-cap="Render workspace: environments, soft ground shadow, PNG export up to 4K.">
+          <span class="zoom-hint">Click to enlarge</span>
+        </div>
+      </div>
+      <div class="tour-caption">
+        <span class="rec">Real footage. Captured in Merge360</span>
+        <span id="tourText">Design workspace: browser, ViewCube, timeline and the full Fusion-style toolbar.</span>
+      </div>
     </div>
   </div>
 </section>
 
+<!-- 02 · Highlights -->
 <section class="section" id="features">
   <div class="wrap">
     <div class="sec-head reveal">
       <div>
-        <div class="label">01 <span class="slash">/</span> Toolset</div>
-        <h2>Real tools for <em>real parts.</em></h2>
+        <div class="label">02 <span class="slash">/</span> Highlights</div>
+        <h2>What's <em>inside.</em></h2>
       </div>
       <p>Every feature is parametric and stays editable. Double-click it in the timeline, change a number and the model rebuilds.</p>
     </div>
 
+    <div class="rows">
+      <div class="row">
+        <div class="row-text reveal">
+          <div class="k">Sketch · Constrain</div>
+          <h3>Sketches that hold their shape.</h3>
+          <p>Draw on any plane or planar face. A built-in solver keeps the geometry where you put it, and closed regions turn into profiles you can extrude.</p>
+          <ul>
+            <li>Lines, arcs, splines, ellipses, slots, polygons and text</li>
+            <li>Dimensions plus coincident, tangent, symmetry and nine more constraints</li>
+            <li>Trim, extend, offset, fillet, mirror and patterns</li>
+          </ul>
+        </div>
+        <div class="screen shadowed reveal">
+          <div class="screen-inner zoomable" style="--z:1.8;--o:52% 54%">
+            <img src="assets/shots/sketch.webp" width="1440" height="900" loading="lazy" alt="Sketch mode with four circles and a rectangle forming closed profiles on the top face." data-cap="Sketch mode: closed profiles ready to extrude">
+            <span class="zoom-hint">Click to enlarge</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-text reveal">
+          <div class="k">Create · Push-pull</div>
+          <h3>Live preview, real solids.</h3>
+          <p>Pick a profile or a face, then drag the arrow or type a value. You see the result before you commit, and join, cut or new body is picked from context.</p>
+          <ul>
+            <li>Extrude with taper, revolve, sweep, pipe, loft and coil</li>
+            <li>Holes with counterbore and countersink, threads, patterns and mirror</li>
+            <li>Fillet, chamfer, shell, draft, split and combine</li>
+          </ul>
+        </div>
+        <div class="screen shadowed reveal">
+          <div class="screen-inner zoomable" style="--z:1.3;--o:95% 45%">
+            <img src="assets/shots/extrude.webp" width="1440" height="900" loading="lazy" alt="Extrude dialog set to 25 mm join, with the preview shown in blue on the bracket." data-cap="Extrude: live preview and drag manipulator">
+            <span class="zoom-hint">Click to enlarge</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-text reveal">
+          <div class="k">Inspect</div>
+          <h3>Look inside the part.</h3>
+          <p>Cut a section through every body with capped faces. Measure lengths, areas and volumes, check interference, and get mass and center of mass from real material densities.</p>
+          <ul>
+            <li>Section analysis on any plane or face</li>
+            <li>Measure, interference and center of mass</li>
+            <li>A library of 19 physical materials</li>
+          </ul>
+        </div>
+        <div class="screen shadowed reveal">
+          <div class="screen-inner zoomable" style="--z:1.3;--o:92% 48%">
+            <img src="assets/shots/section.webp" width="1440" height="900" loading="lazy" alt="Section analysis: bracket, torus and sphere cut along the XY plane with orange caps." data-cap="Section analysis with capped faces">
+            <span class="zoom-hint">Click to enlarge</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-text reveal">
+          <div class="k">Document</div>
+          <h3>From model to paper.</h3>
+          <p>The Drawing workspace lays out front, top, right and isometric views in third-angle projection. Hidden lines are dashed, and scale, dimensions and the title block are filled in for you.</p>
+          <ul>
+            <li>A3 sheet with an automatic standard scale</li>
+            <li>True silhouettes of curved faces</li>
+            <li>SVG export for plotting or a CAM workflow</li>
+          </ul>
+        </div>
+        <div class="screen shadowed reveal">
+          <div class="screen-inner zoomable" style="--z:1.25;--o:50% 52%">
+            <img src="assets/shots/drawing.webp" width="1440" height="900" loading="lazy" alt="A3 drawing sheet with top, front, right and isometric views of the bracket." data-cap="Drawing workspace: A3 sheet, four views">
+            <span class="zoom-hint">Click to enlarge</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 · Toolset -->
+<section class="section" style="padding-top:20px">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="label">03 <span class="slash">/</span> Toolset</div>
+        <h2>Real tools for <em>real parts.</em></h2>
+      </div>
+      <p>Beyond the highlights, the full toolset covers assemblies, construction geometry, parameters and file exchange.</p>
+    </div>
+
     <div class="cards">
       <article class="card reveal">
-        <div class="top"><span class="num">01</span><span class="tag">Sketch</span></div>
-        <svg class="ico" viewBox="0 0 34 34"><rect x="4" y="9" width="18" height="14"/><circle cx="24" cy="21" r="7"/><path d="M4 30h26M4 28v4M30 28v4"/></svg>
-        <h3>Parametric sketches</h3>
-        <p>Lines, arcs, splines, slots and text, held in place by a built-in constraint solver with dimensions, tangency, symmetry and more.</p>
-      </article>
-      <article class="card reveal">
-        <div class="top"><span class="num">02</span><span class="tag">Create</span></div>
-        <svg class="ico" viewBox="0 0 34 34"><path d="M5 24l12 6 12-6V12L17 6 5 12z"/><path d="M5 12l12 6 12-6M17 18v12"/></svg>
-        <h3>Solid modeling</h3>
-        <p>Extrude with taper, revolve, sweep, pipe, loft, hole, coil, patterns and mirror. Every one has live preview and drag handles.</p>
-      </article>
-      <article class="card reveal">
-        <div class="top"><span class="num">03</span><span class="tag">Modify</span></div>
-        <svg class="ico" viewBox="0 0 34 34"><path d="M5 29V13a8 8 0 018-8h16"/><path d="M11 29V15a4 4 0 014-4h14"/></svg>
-        <h3>Fillet, shell, combine</h3>
-        <p>Fillet, chamfer, shell, split, combine and press-pull. Apply materials and the app computes mass and center of mass.</p>
-      </article>
-      <article class="card reveal">
-        <div class="top"><span class="num">04</span><span class="tag">History</span></div>
+        <div class="top"><span class="num">01</span><span class="tag">History</span></div>
         <svg class="ico" viewBox="0 0 34 34"><path d="M3 17h28"/><rect x="5" y="12" width="6" height="10"/><rect x="14" y="12" width="6" height="10"/><path d="M25 7v20"/><path d="M22 7h6"/></svg>
         <h3>Feature timeline</h3>
-        <p>Drag the marker to roll back, suppress features or reorder your thinking. You get undo and redo for everything.</p>
+        <p>Drag the marker to roll back, suppress features and edit any step. You get undo and redo for everything.</p>
       </article>
       <article class="card reveal">
-        <div class="top"><span class="num">05</span><span class="tag">Assemble</span></div>
+        <div class="top"><span class="num">02</span><span class="tag">Params</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><path d="M6 9h22M6 17h22M6 25h22"/><circle cx="12" cy="9" r="3"/><circle cx="22" cy="17" r="3"/><circle cx="15" cy="25" r="3"/></svg>
+        <h3>User parameters</h3>
+        <p>Name your values and use expressions such as <span class="mono">width * 2 + 5 mm</span> in any feature.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">03</span><span class="tag">Assemble</span></div>
         <svg class="ico" viewBox="0 0 34 34"><circle cx="11" cy="17" r="6"/><circle cx="23" cy="17" r="6"/><path d="M17 4v26"/></svg>
         <h3>Components &amp; joints</h3>
-        <p>Rigid, revolute and slider joints with live motion. Check interference and cut section views with caps.</p>
+        <p>Rigid, revolute and slider joints with live motion. Hide or activate components from the browser.</p>
       </article>
       <article class="card reveal">
-        <div class="top"><span class="num">06</span><span class="tag">Document</span></div>
-        <svg class="ico" viewBox="0 0 34 34"><rect x="4" y="5" width="26" height="24"/><path d="M4 23h26M20 23v6"/><rect x="8" y="9" width="7" height="7"/><rect x="18" y="9" width="7" height="7"/></svg>
-        <h3>Drawings</h3>
-        <p>A3 sheets with front, top, right and isometric views. Hidden lines are dashed, and you get automatic scale and dimensions with SVG export.</p>
+        <div class="top"><span class="num">04</span><span class="tag">Construct</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><path d="M4 22l10-8h16l-10 8z"/><path d="M4 14l10-8h16l-10 8z" opacity=".5"/></svg>
+        <h3>Construction planes</h3>
+        <p>Offset, at an angle, midplane or through three points. Sketch on faces of any orientation.</p>
       </article>
       <article class="card reveal">
-        <div class="top"><span class="num">07</span><span class="tag">Render</span></div>
-        <svg class="ico" viewBox="0 0 34 34"><circle cx="17" cy="15" r="8"/><path d="M5 29c4-3 20-3 24 0"/><path d="M13 11a5 5 0 015-2"/></svg>
-        <h3>Presentation renders</h3>
-        <p>Environments, soft ground shadows and optional edges. Export PNG images at up to 4K.</p>
+        <div class="top"><span class="num">05</span><span class="tag">Insert</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><path d="M17 4v18m0 0l-6-6m6 6l6-6"/><path d="M5 22v8h24v-8"/></svg>
+        <h3>Mesh &amp; DXF import</h3>
+        <p>Bring in STL meshes as bodies that take part in booleans, and DXF drawings as editable sketches.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">06</span><span class="tag">Exchange</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><path d="M5 12h20l-5-5M29 22H9l5 5"/></svg>
+        <h3>STEP &amp; STL export</h3>
+        <p>Send exact B-rep geometry to other CAD tools, or meshes straight to your slicer.</p>
+      </article>
+      <article class="card reveal">
+        <div class="top"><span class="num">07</span><span class="tag">Prefs</span></div>
+        <svg class="ico" viewBox="0 0 34 34"><circle cx="17" cy="17" r="12"/><path d="M5 17h24M17 5c4 4 4 20 0 24M17 5c-4 4-4 20 0 24"/></svg>
+        <h3>Your language</h3>
+        <p>English, Français, Deutsch and Español, plus interface scaling, default units and autosave.</p>
       </article>
       <a class="card cta reveal" href="#download">
         <span class="arrow">↗</span>
@@ -590,30 +851,50 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   </div>
 </section>
 
+<!-- 04 · Workflow -->
 <section class="section" id="workflow" style="padding-top:40px">
   <div class="wrap">
     <div class="sec-head reveal">
       <div>
-        <div class="label">02 <span class="slash">/</span> Muscle memory</div>
+        <div class="label">04 <span class="slash">/</span> Muscle memory</div>
         <h2>Feels like home <em>on day one.</em></h2>
       </div>
       <p>The same layout, marking menu and shortcuts you know. Coming from Blender or SolidWorks? Switch the keymap and the mouse navigation to match.</p>
     </div>
+
+    <div class="duo">
+      <figure class="reveal">
+        <div class="screen shadowed"><div class="screen-inner zoomable" style="--z:1.5;--o:66% 60%">
+          <img src="assets/shots/marking.webp" width="1440" height="900" loading="lazy" alt="Right-click marking menu with Extrude, Fillet, Move/Copy, Create Sketch, Undo and Redo around the cursor." data-cap="Marking menu: right-click anywhere">
+          <span class="zoom-hint">Click to enlarge</span>
+        </div></div>
+        <figcaption><b>Right-click</b> Marking menu, with your most-used commands in a ring</figcaption>
+      </figure>
+      <figure class="reveal">
+        <div class="screen shadowed"><div class="screen-inner zoomable" style="--z:1.7;--o:62% 76%">
+          <img src="assets/shots/toolbox.webp" width="1440" height="900" loading="lazy" alt="The S toolbox search popup listing Fillet, Boundary Fill and Rule Fillet for the query fi." data-cap="Toolbox: press S and type">
+          <span class="zoom-hint">Click to enlarge</span>
+        </div></div>
+        <figcaption><b>S</b> Toolbox: type the name of any tool</figcaption>
+      </figure>
+    </div>
+
     <div class="flow">
       <div class="step reveal"><div class="node"><b>01</b></div><h4>Sketch</h4><p><kbd>L</kbd><kbd>R</kbd><kbd>C</kbd> Draw, then dimension it. The solver keeps the geometry in place.</p></div>
       <div class="step reveal"><div class="node"><b>02</b></div><h4>Extrude</h4><p><kbd>E</kbd> Pick a profile or a face and push or pull. Join and cut are chosen for you.</p></div>
       <div class="step reveal"><div class="node"><b>03</b></div><h4>Refine</h4><p>Right-click for the marking menu. Fillet, shell and pattern.</p></div>
       <div class="step reveal"><div class="node"><b>04</b></div><h4>Find anything</h4><p><kbd>S</kbd> Open the toolbox and type the name of any tool.</p></div>
-      <div class="step reveal"><div class="node"><b>05</b></div><h4>Ship it</h4><p>Export STEP or STL, or make a drawing. The native <code class="mono" style="color:var(--cyan)">.m360</code> file keeps the full history.</p></div>
+      <div class="step reveal"><div class="node"><b>05</b></div><h4>Ship it</h4><p>Export STEP or STL, or make a drawing. The native <span class="mono" style="color:var(--cyan)">.m360</span> file keeps the full history.</p></div>
     </div>
   </div>
 </section>
 
+<!-- 05 · Ownership -->
 <section class="section own" id="ownership">
   <div class="wrap">
     <div class="sec-head reveal">
       <div>
-        <div class="label">03 <span class="slash">/</span> Ownership</div>
+        <div class="label">05 <span class="slash">/</span> Ownership</div>
         <h2>Stop renting <em>your tools.</em></h2>
       </div>
       <p>No license server or forced update. Your files never pass through someone else's computer.</p>
@@ -638,11 +919,12 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   </div>
 </section>
 
+<!-- 06 · Under the hood -->
 <section class="section" id="engine">
   <div class="wrap">
     <div class="sec-head reveal">
       <div>
-        <div class="label">04 <span class="slash">/</span> Under the hood</div>
+        <div class="label">06 <span class="slash">/</span> Under the hood</div>
         <h2>Rust, top <em>to bottom.</em></h2>
       </div>
       <p>A B-rep kernel built on <span class="mono">truck</span>, a GPU renderer on <span class="mono">wgpu</span> and an immediate-mode UI on <span class="mono">egui</span>. It ships as a single native binary.</p>
@@ -651,8 +933,8 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
       <div class="stats reveal">
         <div class="stat"><div class="v">100<small>%</small></div><div class="k">Rust codebase</div></div>
         <div class="stat"><div class="v">0</div><div class="k">Cloud dependencies</div></div>
-        <div class="stat"><div class="v">4</div><div class="k">Native builds · x64 &amp; ARM64</div></div>
-        <div class="stat"><div class="v">4</div><div class="k">Languages · EN FR DE ES</div></div>
+        <div class="stat"><div class="v">4</div><div class="k">Native builds</div></div>
+        <div class="stat"><div class="v">4</div><div class="k">Languages</div></div>
       </div>
       <div class="term reveal">
         <div class="bar"><i></i><i></i><i></i><span style="margin-left:8px">build from source</span></div>
@@ -672,19 +954,34 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   </div>
 </section>
 
+<!-- Download -->
 <section class="final" id="download">
   <div class="horizon"></div>
   <div class="wrap">
-    <div class="label reveal"><span class="slash">//</span> Free forever <span class="slash">·</span> MIT licensed</div>
-    <h2 class="reveal">Start <span>building.</span></h2>
-    <p class="reveal">Grab the build for your machine, unzip it and run it. Releases are built automatically from every tagged version.</p>
-    <div class="dl-grid reveal">
-      <a class="dl" data-os="win" data-arch="x64" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><span class="os">Windows</span><span class="arch">x64 · .zip</span></a>
-      <a class="dl" data-os="win" data-arch="arm" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><span class="os">Windows</span><span class="arch">ARM64 · .zip</span></a>
-      <a class="dl" data-os="linux" data-arch="x64" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><span class="os">Linux</span><span class="arch">x64 · .tar.gz</span></a>
-      <a class="dl" data-os="linux" data-arch="arm" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><span class="os">Linux</span><span class="arch">ARM64 · .tar.gz</span></a>
+    <div class="final-head">
+      <div class="label reveal"><span class="slash">//</span> Free forever <span class="slash">·</span> MIT licensed</div>
+      <h2 class="reveal">Start <span>building.</span></h2>
+      <p class="reveal">Download the archive for your machine, extract it and run <span class="mono">merge360</span>. Every tagged version is built automatically.</p>
     </div>
-    <div class="small-note reveal">On macOS? <a href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360#running">Build from source</a> with one cargo command.</div>
+    <div class="dl-grid reveal">
+      <div class="dl" data-os="win">
+        <div class="dl-top"><span class="os">Windows</span><span class="badge">● Your system</span></div>
+        <p class="note">Windows 10 and 11. A portable .zip: no installer, no admin rights.</p>
+        <div class="dl-files">
+          <a class="dl-file" data-arch="x64" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><b>x64</b><span>Intel · AMD · .zip</span></a>
+          <a class="dl-file" data-arch="arm" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><b>ARM64</b><span>Snapdragon · .zip</span></a>
+        </div>
+      </div>
+      <div class="dl" data-os="linux">
+        <div class="dl-top"><span class="os">Linux</span><span class="badge">● Your system</span></div>
+        <p class="note">glibc 2.35+ (Ubuntu 22.04 and newer). Needs a Vulkan or OpenGL driver.</p>
+        <div class="dl-files">
+          <a class="dl-file" data-arch="x64" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><b>x64</b><span>.tar.gz</span></a>
+          <a class="dl-file" data-arch="arm" href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases/latest"><b>ARM64</b><span>Raspberry Pi 5 · .tar.gz</span></a>
+        </div>
+      </div>
+    </div>
+    <div class="small-note reveal">SHA-256 checksums are on every <a href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases">release</a>. On macOS? <a href="https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360#running">Build from source</a>.</div>
   </div>
 </section>
 
@@ -697,7 +994,7 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
       </div>
       <div>
         <h5>Product</h5>
-        <ul><li><a href="#features">Features</a></li><li><a href="#workflow">Workflow</a></li><li><a href="#download">Download</a></li></ul>
+        <ul><li><a href="#tour">Tour</a></li><li><a href="#features">Features</a></li><li><a href="#workflow">Workflow</a></li><li><a href="#download">Download</a></li></ul>
       </div>
       <div>
         <h5>Project</h5>
@@ -722,71 +1019,127 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   </div>
 </footer>
 
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot">
+  <img alt="">
+  <div class="lb-cap"><span></span><button type="button">Close · Esc</button></div>
+</dialog>
+
 <script>
 (() => {
+  const root = document.documentElement;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const sysDark = matchMedia("(prefers-color-scheme: dark)");
 
-  // nav background on scroll
+  // ---------- theme ----------
+  const isDark = () => root.dataset.theme ? root.dataset.theme === "dark" : sysDark.matches;
+  const colors = {};
+  function readColors() {
+    const cs = getComputedStyle(root);
+    for (const k of ["holo-line", "holo-hot", "holo-grid", "rain-a", "rain-b"]) colors[k] = cs.getPropertyValue("--" + k).trim();
+    root.classList.toggle("is-dark", isDark());
+  }
+  document.getElementById("themeBtn").addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    root.dataset.theme = next;
+    try { localStorage.setItem("m360-theme", next); } catch (e) {}
+    readColors(); if (reduce) frame(0);
+  });
+  sysDark.addEventListener("change", () => { readColors(); if (reduce) frame(0); });
+  readColors();
+
+  // ---------- nav ----------
   const nav = document.getElementById("nav");
   const onScroll = () => nav.classList.toggle("scrolled", scrollY > 20);
   addEventListener("scroll", onScroll, { passive: true }); onScroll();
 
-  // reveal on scroll
+  // ---------- reveal ----------
   const io = new IntersectionObserver(es => es.forEach(e => {
     if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
   }), { threshold: .12 });
-  document.querySelectorAll(".reveal").forEach((el, i) => {
-    el.style.transitionDelay = (i % 4) * 70 + "ms";
-    io.observe(el);
-  });
+  document.querySelectorAll(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 4) * 70 + "ms"; io.observe(el); });
 
-  // highlight the download matching this machine
+  // ---------- highlight the download for this machine ----------
   const ua = navigator.userAgent;
   const os = /Windows/i.test(ua) ? "win" : /Linux|X11/i.test(ua) && !/Android/i.test(ua) ? "linux" : null;
   const arm = /arm|aarch64/i.test(ua) || /arm/i.test(navigator.platform || "");
-  if (os) document.querySelector(`.dl[data-os="${os}"][data-arch="${arm ? "arm" : "x64"}"]`)?.classList.add("match");
+  if (os) {
+    const card = document.querySelector(`.dl[data-os="${os}"]`);
+    card?.classList.add("match");
+    card?.querySelector(`.dl-file[data-arch="${arm ? "arm" : "x64"}"]`)?.classList.add("match");
+  }
+
+  // ---------- product tour ----------
+  const tabs = [...document.querySelectorAll(".tour-tab")];
+  const imgs = [...document.querySelectorAll("#tourScreen img")];
+  const tourText = document.getElementById("tourText");
+  const DUR = 6000;
+  let cur = 0, timer = null, auto = !reduce;
+  function stopAuto() { auto = false; clearTimeout(timer); tabs[cur].classList.remove("playing"); }
+  function show(i) {
+    cur = i;
+    tabs.forEach((t, j) => { t.setAttribute("aria-selected", j === i); t.classList.remove("playing"); });
+    imgs.forEach((im, j) => im.classList.toggle("on", j === i));
+    tourText.textContent = imgs[i].dataset.cap;
+    if (auto) {
+      void tabs[i].offsetWidth; // restart the progress animation
+      tabs[i].style.setProperty("--dur", DUR + "ms");
+      tabs[i].classList.add("playing");
+      clearTimeout(timer);
+      timer = setTimeout(() => show((cur + 1) % tabs.length), DUR);
+    }
+  }
+  tabs.forEach((t, i) => t.addEventListener("click", () => { stopAuto(); show(i); }));
+  // autoplay only while the tour is on screen
+  new IntersectionObserver(([e]) => {
+    if (!auto) return;
+    if (e.isIntersecting) show(cur); else { clearTimeout(timer); tabs[cur].classList.remove("playing"); }
+  }, { threshold: .3 }).observe(document.getElementById("tourScreen"));
+
+  // ---------- lightbox ----------
+  const lb = document.getElementById("lightbox"), lbImg = lb.querySelector("img"), lbCap = lb.querySelector(".lb-cap span");
+  document.querySelectorAll(".zoomable").forEach(z => z.addEventListener("click", () => {
+    const im = z.querySelector("img.on") || z.querySelector("img");
+    lbImg.src = im.src; lbImg.alt = im.alt; lbCap.textContent = im.dataset.cap || "";
+    if (z.id === "tourScreen") stopAuto();
+    lb.showModal();
+  }));
+  lb.addEventListener("click", () => lb.close());
 
   // ---------- rain ----------
-  const rain = document.getElementById("rain");
-  const rc = rain.getContext("2d");
+  const rain = document.getElementById("rain"), rc = rain.getContext("2d");
   let drops = [];
-  function sizeRain() {
-    const r = rain.getBoundingClientRect(), d = Math.min(devicePixelRatio, 2);
-    rain.width = r.width * d; rain.height = r.height * d;
-    rc.setTransform(d, 0, 0, d, 0, 0);
-    const n = Math.round(r.width * r.height / 9000);
-    drops = Array.from({ length: n }, () => newDrop(r, true));
-  }
   function newDrop(r, anywhere) {
     const z = Math.random();
     return { x: Math.random() * (r.width + 200), y: anywhere ? Math.random() * r.height : -40, z, len: 10 + z * 26, v: 6 + z * 12 };
   }
+  function sizeRain() {
+    const r = rain.getBoundingClientRect(), d = Math.min(devicePixelRatio, 2);
+    rain.width = r.width * d; rain.height = r.height * d;
+    rc.setTransform(d, 0, 0, d, 0, 0);
+    drops = Array.from({ length: Math.round(r.width * r.height / 9000) }, () => newDrop(r, true));
+  }
 
   // ---------- hologram wireframe of the sample bracket ----------
-  const holo = document.getElementById("holo");
-  const hc = holo.getContext("2d");
-  const segs = []; // [x1,y1,z1,x2,y2,z2]
+  const holo = document.getElementById("holo"), hc = holo.getContext("2d");
+  const segs = [];
   const L = (a, b) => segs.push([...a, ...b]);
   function box(x0, x1, y0, y1, z0, z1) {
-    const p = (i) => [i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0];
+    const p = i => [i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0];
     [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]].forEach(([a, b]) => L(p(a), p(b)));
   }
-  function ring(cx, cy, cz, r, n = 32, axis = "y") {
+  function ring(cx, cy, cz, r, n = 32) {
     for (let i = 0; i < n; i++) {
       const a = i / n * Math.PI * 2, b = (i + 1) / n * Math.PI * 2;
-      const pt = t => axis === "y" ? [cx + r * Math.cos(t), cy, cz + r * Math.sin(t)]
-                                   : [cx + r * Math.cos(t), cy + r * Math.sin(t), cz];
-      L(pt(a), pt(b));
+      L([cx + r * Math.cos(a), cy, cz + r * Math.sin(a)], [cx + r * Math.cos(b), cy, cz + r * Math.sin(b)]);
     }
   }
-  box(-3, 3, 0, .8, -2, 2);                          // base plate
-  box(-.9, .9, .8, 2.2, -.9, .9);                    // boss
-  ring(0, 2.2, 0, .7); ring(0, 3.6, 0, .7);          // cylinder
+  box(-3, 3, 0, .8, -2, 2);                                   // base plate
+  box(-.9, .9, .8, 2.2, -.9, .9);                             // boss
+  ring(0, 2.2, 0, .7); ring(0, 3.6, 0, .7); ring(0, 3.6, 0, .35, 20); // cylinder
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; L([.7 * Math.cos(a), 2.2, .7 * Math.sin(a)], [.7 * Math.cos(a), 3.6, .7 * Math.sin(a)]); }
-  ring(0, 3.6, 0, .35, 20);
   for (const [hx, hz] of [[-2.2, -1.3], [2.2, -1.3], [-2.2, 1.3], [2.2, 1.3]]) { ring(hx, .8, hz, .32, 20); ring(hx, 0, hz, .32, 20); }
   for (let i = 0; i < 4; i++) ring(-3.9, .4 + .28 * Math.sin(i / 4 * Math.PI * 2), 0, 1 + .28 * Math.cos(i / 4 * Math.PI * 2), 32); // torus
-  for (let i = 0; i < 12; i++) {                      // torus tube sections
+  for (let i = 0; i < 12; i++) {                              // torus tube sections
     const a = i / 12 * Math.PI * 2, cx = -3.9 + Math.cos(a), cz = Math.sin(a);
     for (let j = 0; j < 10; j++) {
       const t0 = j / 10 * Math.PI * 2, t1 = (j + 1) / 10 * Math.PI * 2;
@@ -796,7 +1149,6 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   }
   const grid = [];
   for (let i = -6; i <= 6; i++) { grid.push([i, -.02, -6, i, -.02, 6]); grid.push([-6, -.02, i, 6, -.02, i]); }
-
   function sizeHolo() {
     const r = holo.getBoundingClientRect(), d = Math.min(devicePixelRatio, 2);
     holo.width = r.width * d; holo.height = r.height * d;
@@ -804,22 +1156,27 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
   }
 
   const scanv = document.getElementById("scanv"), yawv = document.getElementById("yawv");
-  let t0 = performance.now();
-  function frame(now) {
-    const t = reduce ? 4 : (now - t0) / 1000;
+  const start = performance.now();
+  let heroVisible = true;
+  new IntersectionObserver(([e]) => {
+    const was = heroVisible; heroVisible = e.isIntersecting;
+    if (!was && heroVisible && !reduce) requestAnimationFrame(frame);
+  }).observe(document.querySelector(".hero"));
 
-    // rain
+  function frame(now) {
+    const t = reduce ? 4 : (now - start) / 1000;
+    const dark = isDark();
+
     const rr = rain.getBoundingClientRect();
     rc.clearRect(0, 0, rr.width, rr.height);
     rc.lineCap = "round";
     for (const d of drops) {
-      rc.strokeStyle = `rgba(${d.z > .7 ? "255,190,140" : "170,200,220"},${.08 + d.z * .22})`;
+      rc.strokeStyle = `rgba(${d.z > .7 ? colors["rain-b"] : colors["rain-a"]},${(dark ? .08 : .05) + d.z * (dark ? .22 : .16)})`;
       rc.lineWidth = .6 + d.z * .8;
       rc.beginPath(); rc.moveTo(d.x, d.y); rc.lineTo(d.x - d.len * .18, d.y + d.len); rc.stroke();
       if (!reduce) { d.y += d.v; d.x -= d.v * .18; if (d.y > rr.height) Object.assign(d, newDrop(rr, false)); }
     }
 
-    // hologram
     const hr = holo.getBoundingClientRect(), W = hr.width, H = hr.height;
     hc.clearRect(0, 0, W, H);
     const yaw = t * .28 + .6, pitch = .42 + Math.sin(t * .3) * .05;
@@ -832,11 +1189,12 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
       return [W / 2 + X / Z * scale, H * .56 - Y / Z * scale, Z];
     };
     const scanY = (Math.sin(t * .7) * .5 + .5) * 4.0 - .1;
+    const line = colors["holo-line"], hot = colors["holo-hot"];
 
     hc.lineWidth = 1;
+    hc.strokeStyle = `rgba(${colors["holo-grid"]},${dark ? .10 : .16})`;
     for (const s of grid) {
       const a = proj(s[0], s[1], s[2]), b = proj(s[3], s[4], s[5]);
-      hc.strokeStyle = "rgba(255,157,61,.10)";
       hc.beginPath(); hc.moveTo(a[0], a[1]); hc.lineTo(b[0], b[1]); hc.stroke();
     }
     for (const pass of [0, 1]) {
@@ -846,23 +1204,22 @@ footer { border-top: 1px solid var(--line); padding: 60px 0 40px; }
         const near = Math.abs((s[1] + s[4]) / 2 - scanY) < .18;
         if (pass === 0) {
           hc.lineWidth = near ? 5 : 3.5;
-          hc.strokeStyle = near ? "rgba(255,120,30,.22)" : `rgba(70,227,255,${.04 + depth * .07})`;
+          hc.strokeStyle = near ? `rgba(${hot},.22)` : `rgba(${line},${.04 + depth * .07})`;
         } else {
           hc.lineWidth = near ? 1.6 : 1;
-          hc.strokeStyle = near ? "rgba(255,190,120,.95)" : `rgba(150,236,255,${.25 + depth * .6})`;
+          hc.strokeStyle = near ? `rgba(${hot},.95)` : `rgba(${line},${.25 + depth * .6})`;
         }
         hc.beginPath(); hc.moveTo(a[0], a[1]); hc.lineTo(b[0], b[1]); hc.stroke();
       }
     }
-    // scan plane outline
     const sq = [[-4.6, -2.6], [3.4, -2.6], [3.4, 2.6], [-4.6, 2.6]].map(([x, z]) => proj(x, scanY, z));
-    hc.fillStyle = "rgba(255,107,26,.06)"; hc.strokeStyle = "rgba(255,157,61,.35)"; hc.lineWidth = 1;
+    hc.fillStyle = `rgba(${hot},.07)`; hc.strokeStyle = `rgba(${hot},.4)`; hc.lineWidth = 1;
     hc.beginPath(); sq.forEach((p, i) => i ? hc.lineTo(p[0], p[1]) : hc.moveTo(p[0], p[1])); hc.closePath(); hc.fill(); hc.stroke();
 
     scanv.textContent = (scanY * 10).toFixed(1).padStart(5, "0");
     yawv.textContent = String(Math.round((yaw * 180 / Math.PI) % 360)).padStart(3, "0");
 
-    if (!reduce) requestAnimationFrame(frame);
+    if (!reduce && heroVisible) requestAnimationFrame(frame);
   }
 
   function resize() { sizeRain(); sizeHolo(); if (reduce) frame(0); }

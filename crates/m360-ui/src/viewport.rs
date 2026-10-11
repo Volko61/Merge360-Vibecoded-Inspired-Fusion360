@@ -171,6 +171,9 @@ enum PickMode {
 impl Merge360App {
     fn pick_mode(&self) -> PickMode {
         let tab = &self.tabs[self.active];
+        if self.flags.workspace == crate::tools::WS_MANUFACTURE && tab.sketch.is_none() {
+            return if self.cam.op.is_some() { PickMode::Profiles } else { PickMode::Default };
+        }
         if let Some(s) = &tab.sketch {
             // Project picks body edges and faces instead of sketch geometry.
             return if s.tool == SketchTool::Project { PickMode::Edges } else { PickMode::Sketch };
@@ -659,7 +662,11 @@ impl Merge360App {
         self.tab().update_preview();
 
         // Render.
-        let scene = self.build_scene(ui.ctx().pixels_per_point());
+        let mut scene = self.build_scene(ui.ctx().pixels_per_point());
+        if self.flags.workspace == crate::tools::WS_MANUFACTURE {
+            let t = self.canvas_time;
+            self.cam_scene_lines(&mut scene.lines, t);
+        }
         let ppp = ui.ctx().pixels_per_point();
         let size = [(rect.width() * ppp).round() as u32, (rect.height() * ppp).round() as u32];
         if let Some((w, h)) = self.render_settings.capture.take() {
@@ -878,6 +885,13 @@ impl Merge360App {
     }
 
     fn canvas_click(&mut self, hover: Option<SelItem>, additive: bool) {
+        if self.flags.workspace == crate::tools::WS_MANUFACTURE && self.tabs[self.active].sketch.is_none() {
+            if let Some(SelItem::Profile(uid, i)) = hover {
+                if self.cam_pick_profile(uid, i) {
+                    return;
+                }
+            }
+        }
         // Sketch drawing consumes clicks.
         if self.tabs[self.active].sketch.as_ref().is_some_and(|s| s.tool != SketchTool::Select) {
             self.sketch_click(hover);
@@ -1428,6 +1442,10 @@ impl Merge360App {
             if matches!(&tab.command, Some(Command::Interference { results: Some(r), .. }) if !r.is_empty()) {
                 d.color[3] = 0.3;
             }
+            // CAM: see the toolpaths through the part.
+            if self.flags.workspace == crate::tools::WS_MANUFACTURE && self.cam.show_paths && !tab.doc.cam.is_empty() {
+                d.color[3] = 0.35;
+            }
             let blue = srgb(0.1, 0.5, 1.0, 1.0);
             if Some(b.id) == combine_target {
                 d.highlight = [blue[0], blue[1], blue[2], 0.32];
@@ -1692,6 +1710,7 @@ impl Merge360App {
         }
         scene.section = tab.section.filter(|s| s.visible).map(|s| s.clip());
 
+
         // Planar face hover while picking planes.
         if let Some(SelItem::FacePlane(..)) = tab.hover {
             // Face highlight already handled by hover_face.
@@ -1865,7 +1884,7 @@ impl Merge360App {
                         let stroke = egui::Stroke::new(1.0, Color32::from_rgb(40, 40, 46));
                         let dir = (se - sc).normalized();
                         painter.arrow(se + dir * 22.0, -dir * 22.0, stroke);
-                        (format!("⌀{:.2}", units.from_mm(*value)), se + dir * 30.0, true)
+                        (format!("Ø{:.2}", units.from_mm(*value)), se + dir * 30.0, true)
                     }
                     other => {
                         let Some(&e) = other.entities().first() else { continue };

@@ -211,6 +211,13 @@ impl Merge360App {
                                 });
                                 return;
                             }
+                            if self.flags.workspace == tools::WS_MANUFACTURE {
+                                ui.vertical(|ui| {
+                                    ui.add_space(18.0);
+                                    self.manufacture_toolbar(ui);
+                                });
+                                return;
+                            }
                             if self.flags.workspace == tools::WS_RENDER {
                                 ui.vertical(|ui| {
                                     ui.add_space(18.0);

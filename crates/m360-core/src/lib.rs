@@ -3,6 +3,7 @@
 pub mod dxf;
 pub mod document;
 pub mod expr;
+pub mod cam;
 pub mod feature;
 pub mod materials;
 pub mod history;

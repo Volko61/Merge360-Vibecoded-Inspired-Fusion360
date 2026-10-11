@@ -101,11 +101,11 @@ Cosmetic threads only for now	Por ahora solo roscas cosméticas
 Could not read back the rendered image.	No se pudo leer la imagen renderizada.
 Counterbore	Avellanado cilíndrico
 Counterbore Depth	Profundidad del avellanado
-Counterbore ⌀	⌀ del avellanado
+Counterbore Ø	Ø del avellanado
 Counterclockwise	En sentido antihorario
 Countersink	Avellanado cónico
 Countersink Angle	Ángulo de avellanado
-Countersink ⌀	⌀ del avellanado cónico
+Countersink Ø	Ø del avellanado cónico
 Create / finish sketch	Crear / terminar boceto
 Create Base Feature	Crear operación base
 Create Components from Bodies	Crear componentes a partir de cuerpos
@@ -638,3 +638,33 @@ Boundary Edges	Aristas de contorno
 Stitch Surfaces	Superficies que coser
 Tolerance	Tolerancia
 Select bodies first.	Seleccione primero los cuerpos.
+New Setup	Nueva configuración
+MILLING	FRESADO
+Face	Planeado
+2D Contour	Contorno 2D
+2D Pocket	Cajeado 2D
+Drill	Taladrado
+ACTIONS	ACCIONES
+Toolpaths	Trayectorias
+Simulate	Simular
+Post Process	Posprocesar
+Create a sketch with the geometry to machine first.	Cree primero un boceto con la geometría que mecanizar.
+Create a setup and operations first.	Cree primero una configuración y operaciones.
+G-code saved to	Código G guardado en
+CAM BROWSER	NAVEGADOR CAM
+Add a setup or an operation from the toolbar.	Añada una configuración u operación desde la barra de herramientas.
+Setup	Configuración
+Stock side offset	Sobrante lateral del bruto
+Stock top offset	Sobrante superior del bruto
+Name	Nombre
+Tool	Herramienta
+Spindle speed	Velocidad del husillo
+Cutting feed	Avance de corte
+Plunge feed	Avance de penetración
+Maximum stepdown	Paso descendente máximo
+Clearance height	Altura de seguridad
+Stepover	Paso lateral
+click profiles in the view	haga clic en los perfiles en la vista
+Side	Lado
+Pecking depth	Profundidad de picoteo
+Toolpath	Trayectoria

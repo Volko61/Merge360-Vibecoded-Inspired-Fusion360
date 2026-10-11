@@ -10,3 +10,4 @@ serde.workspace = true
 ron.workspace = true
 ttf-parser.workspace = true
 epaint_default_fonts.workspace = true
+cavalier_contours.workspace = true

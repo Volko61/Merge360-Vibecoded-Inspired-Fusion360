@@ -172,8 +172,8 @@ impl Loop2 {
                 };
                 let normal = |d: [f64; 2]| [s * d[1], -s * d[0]];
                 let mut out = Vec::with_capacity(n);
-                for i in 0..n {
-                    let v = segs[i].end;
+                for (i, seg) in segs.iter().enumerate() {
+                    let v = seg.end;
                     let (n1, n2) = (normal(tangent(i, v)), normal(tangent((i + 1) % n, v)));
                     let bis = [n1[0] + n2[0], n1[1] + n2[1]];
                     let bl = bis[0].hypot(bis[1]);
@@ -182,7 +182,7 @@ impl Loop2 {
                     }
                     let k = t / (bl / 2.0).max(0.2);
                     let end = [v[0] + bis[0] / bl * k, v[1] + bis[1] / bl * k];
-                    let transit = segs[i].transit.map(|m| {
+                    let transit = seg.transit.map(|m| {
                         let nm = normal(tangent(i, m));
                         [m[0] + nm[0] * t, m[1] + nm[1] * t]
                     });

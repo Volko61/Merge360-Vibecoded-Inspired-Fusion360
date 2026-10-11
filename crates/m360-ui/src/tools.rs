@@ -466,6 +466,7 @@ pub const IMPLEMENTED: &[&str] = &[
     "pipe",
     "loft",
     "split_body",
+    "shell",
     "scale",
     "section_analysis",
     "sk_arc",

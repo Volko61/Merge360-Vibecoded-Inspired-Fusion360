@@ -297,6 +297,13 @@ pub enum Command {
         op: ExtrudeOp,
         editing: Option<EditCtx>,
     },
+    Shell {
+        body: Option<BodyId>,
+        /// Faces to remove (left open).
+        faces: Vec<u32>,
+        thickness: f64,
+        editing: Option<EditCtx>,
+    },
     SplitBody {
         body: Option<BodyId>,
         plane: Option<PlaneRef>,
@@ -378,6 +385,7 @@ impl Command {
             Command::Pipe { .. } => "PIPE",
             Command::Loft { .. } => "LOFT",
             Command::SplitBody { .. } => "SPLIT BODY",
+            Command::Shell { .. } => "SHELL",
             Command::Scale { .. } => "SCALE",
             Command::Section { .. } => "SECTION ANALYSIS",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
@@ -408,7 +416,8 @@ impl Command {
             | Command::Pipe { editing, .. }
             | Command::Loft { editing, .. }
             | Command::SplitBody { editing, .. }
-            | Command::Scale { editing, .. } => editing.as_ref(),
+            | Command::Scale { editing, .. }
+            | Command::Shell { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
@@ -425,6 +434,11 @@ pub struct Preview {
     pub key: String,
     pub mesh: Option<Arc<BodyMesh>>,
     pub error: Option<String>,
+}
+
+/// Representative points (centroids) of mesh faces.
+pub fn face_points(mesh: &BodyMesh, faces: &[u32]) -> Vec<[f64; 3]> {
+    faces.iter().filter_map(|f| mesh.face_centroid(*f)).map(|c| c.as_dvec3().to_array()).collect()
 }
 
 /// End points of mesh edges (as stored by Fillet features).
@@ -687,6 +701,24 @@ impl DocTab {
                 let r = m360_core::model::path_segments(&self.model, *ps, path)
                     .and_then(|segs| m360_core::model::pipe_tool(&segs, *diameter, if *hollow { *wall } else { 0.0 }));
                 (key, r)
+            }
+            Command::Shell { body: Some(b), faces, thickness, .. } => {
+                let key = format!("shell{b}{faces:?}{thickness}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let Some(body) = self.model.body(*b) else {
+                    self.preview = None;
+                    return;
+                };
+                let pts = face_points(&body.mesh, faces);
+                let open = m360_core::model::shell_open_caps(&body.mesh, &pts);
+                let r = m360_kernel::shell::shell(&body.solid, &body.mesh, *thickness, open).map_err(|e| e.to_string());
+                self.preview = Some(match r {
+                    Ok(s) => Preview { key, mesh: Some(Arc::new(m360_kernel::tessellate_smooth(&s, 0.985))), error: None },
+                    Err(e) => Preview { key, mesh: None, error: Some(e) },
+                });
+                return;
             }
             Command::Loft { sections, .. } if sections.len() >= 2 => {
                 let key = format!("loft{sections:?}");

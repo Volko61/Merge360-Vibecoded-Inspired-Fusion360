@@ -433,6 +433,7 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Loft { .. } => Icon::Loft,
         FeatureKind::SplitBody { .. } => Icon::Section,
         FeatureKind::Scale { .. } => Icon::Generic,
+        FeatureKind::Shell { .. } => Icon::Shell,
         FeatureKind::Fillet { chamfer: true, .. } => Icon::Chamfer,
         FeatureKind::Fillet { .. } => Icon::Fillet,
     }

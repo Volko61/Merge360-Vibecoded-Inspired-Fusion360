@@ -428,6 +428,22 @@ impl Merge360App {
                 tab.selection.clear();
                 tab.command = Some(Command::Loft { sections, op: ExtrudeOp::NewBody, editing: None });
             }
+            "shell" => {
+                let mut body = None;
+                let mut faces = Vec::new();
+                for sitem in &tab.selection {
+                    match sitem {
+                        SelItem::Face(b, f) if body.is_none() || body == Some(*b) => {
+                            body = Some(*b);
+                            faces.push(*f);
+                        }
+                        SelItem::Body(b) if body.is_none() => body = Some(*b),
+                        _ => {}
+                    }
+                }
+                tab.selection.clear();
+                tab.command = Some(Command::Shell { body, faces, thickness: 2.0, editing: None });
+            }
             "split_body" => {
                 let body = sel_bodies.first().copied();
                 tab.selection.clear();
@@ -708,6 +724,21 @@ impl Merge360App {
                 Command::Pipe { path_sketch: Some(path_sketch), path, diameter, wall: if wall > 0.0 { wall } else { 1.0 }, hollow: wall > 0.0, op, editing }
             }
             FeatureKind::Loft { sections, op, .. } => Command::Loft { sections, op, editing },
+            FeatureKind::Shell { body, open_points, thickness } => {
+                // Map stored points back to faces of the (rolled back) body.
+                let faces = tab
+                    .model
+                    .body(body)
+                    .map(|b| {
+                        (0..b.mesh.face_count)
+                            .filter(|f| {
+                                b.mesh.face_centroid(*f).is_some_and(|c| open_points.iter().any(|p| (c.as_dvec3() - glam::DVec3::from(*p)).length() < 1e-3))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Command::Shell { body: Some(body), faces, thickness, editing }
+            }
             FeatureKind::SplitBody { body, plane } => Command::SplitBody { body: Some(body), plane: Some(plane), picking_plane: false, editing },
             FeatureKind::Scale { bodies, point, factor } => Command::Scale { bodies, point, factor, editing },
             FeatureKind::ConstructionPlane { plane } => Command::OffsetPlane { base: Some(PlaneRef { offset: 0.0, ..plane }), distance: if plane.flip { -plane.offset } else { plane.offset }, editing },

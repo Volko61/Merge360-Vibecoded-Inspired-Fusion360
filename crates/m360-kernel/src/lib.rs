@@ -8,6 +8,7 @@ pub mod mesh;
 pub mod ops;
 pub mod primitives;
 pub mod profile;
+pub mod shell;
 pub mod sweep;
 pub mod fillet;
 pub mod hole;

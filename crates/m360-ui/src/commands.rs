@@ -457,6 +457,35 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Shell { body, faces, thickness, .. } => {
+                let ok = body.is_some() && preview_err.is_none();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Faces/Body");
+                    let t = match (body.is_some(), faces.len()) {
+                        (false, _) => "Select".to_string(),
+                        (true, 0) => "1 Body (closed)".to_string(),
+                        (true, n) => format!("{n} Faces removed"),
+                    };
+                    if selection_field(ui, true, &t).clicked() {
+                        faces.clear();
+                        *body = None;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Inside Thickness");
+                    length_field(ui, "shell_t", thickness, units);
+                    ui.end_row();
+                    row_label(ui, "Direction");
+                    ui.label("Inside");
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::SplitBody { body, plane, picking_plane, .. } => {
                 let ok = body.is_some() && plane.is_some();
                 let bname = body.map_or("Select".to_string(), |b| self.tabs[self.active].doc.body_meta(b).name);
@@ -920,6 +949,10 @@ impl Merge360App {
                 let participants = self.overlapping_bodies(op);
                 self.commit_feature(FeatureKind::Loft { sections, op, participants }, editing);
             }
+            Command::Shell { body: Some(body), faces, thickness, editing } => {
+                let pts = self.tabs[self.active].model.body(body).map(|b| crate::state::face_points(&b.mesh, &faces)).unwrap_or_default();
+                self.commit_feature(FeatureKind::Shell { body, open_points: pts, thickness }, editing);
+            }
             Command::SplitBody { body: Some(body), plane: Some(plane), editing, .. } => {
                 self.commit_feature(FeatureKind::SplitBody { body, plane }, editing);
             }
@@ -1117,6 +1150,7 @@ impl Merge360App {
                         }
                         FeatureKind::ConstructionPlane { plane } => row(ui, "Offset", &mut plane.offset, "po"),
                         FeatureKind::Pipe { diameter, .. } => row(ui, "Section Size", diameter, "pd"),
+                        FeatureKind::Shell { thickness, .. } => row(ui, "Thickness", thickness, "st"),
                         FeatureKind::Hole { diameter, depth, .. } => {
                             row(ui, "Diameter", diameter, "hd");
                             row(ui, "Depth", depth, "hp");

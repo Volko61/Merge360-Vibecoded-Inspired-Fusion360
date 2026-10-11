@@ -889,6 +889,19 @@ impl Merge360App {
                     }
                 }
             }
+            Some(Command::Shell { body, faces, .. }) => {
+                if let Some(SelItem::Face(b, f)) = hover {
+                    if *body != Some(b) {
+                        *body = Some(b);
+                        faces.clear();
+                    }
+                    if let Some(k) = faces.iter().position(|x| *x == f) {
+                        faces.remove(k);
+                    } else {
+                        faces.push(f);
+                    }
+                }
+            }
             Some(Command::Scale { bodies, .. }) => {
                 if let Some(b) = hover.and_then(|h| h.body()) {
                     if let Some(k) = bodies.iter().position(|x| *x == b) {
@@ -1181,6 +1194,14 @@ impl Merge360App {
             if moving && move_bodies.contains(&b.id) && tab.preview.as_ref().is_some_and(|p| p.mesh.is_some()) {
                 continue;
             }
+            // Bodies being modified in place show their preview instead.
+            let replaced = match &tab.command {
+                Some(Command::Shell { body: Some(sb), .. }) | Some(Command::Fillet { body: Some(sb), .. }) => *sb == b.id,
+                _ => false,
+            };
+            if replaced && tab.preview.as_ref().is_some_and(|p| p.mesh.is_some()) {
+                continue;
+            }
             let meta = tab.doc.body_meta(b.id);
             let mut d = BodyDraw::new(b.mesh.clone(), srgb(meta.color[0], meta.color[1], meta.color[2], 1.0));
             if dark_env {
@@ -1224,6 +1245,11 @@ impl Merge360App {
             if let Some(SelItem::Face(bid, f) | SelItem::FacePlane(bid, f, _)) = tab.hover {
                 if bid == b.id {
                     d.hover_face = Some(f);
+                }
+            }
+            if let Some(Command::Shell { body: Some(sb), faces, .. }) = &tab.command {
+                if *sb == b.id {
+                    d.selected_faces.extend(faces.iter().copied());
                 }
             }
             if let Some(Command::Measure { picks }) = &tab.command {

@@ -37,16 +37,31 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
 
 ### Working features
 
-* **Create:** Sketch (on origin planes or planar faces), Extrude (new body / join / cut / intersect,
-  one side or symmetric, multiple profiles, profiles with holes), Box, Cylinder, Sphere, Torus —
+* **Sketch** (on origin planes, construction planes or planar faces): line, 2-point / center
+  rectangle, circle, 3-point arc, polygon, point; **parametric**: sketch dimensions (lengths,
+  distances, diameters) and constraints (horizontal/vertical, coincident, parallel,
+  perpendicular, equal, tangent, concentric, fix) solved by a built-in constraint solver;
+  drag points with the Select tool; automatic H/V constraints.
+* **Create:** Extrude (new body / join / cut / intersect, one side or symmetric, profiles with
+  holes), Revolve (around X/Y/Z or a sketch line), Sweep and Pipe (along connected lines/arcs,
+  hollow pipes), Loft, Hole (simple / counterbore / countersink, distance or through all,
+  multiple points), Box, Cylinder, Sphere, Torus, Rectangular & Circular Pattern, Mirror —
   all with live preview and drag manipulators.
-* **Modify:** Combine (join / cut / intersect, keep tools), Move/Copy, Delete, Appearance, Change Parameters, Compute All.
-* **Inspect:** Measure (face area, body volume, minimum distance), Center of Mass, Properties.
+* **Modify:** Fillet and Chamfer (straight edges between planar faces, incl. face loops),
+  Shell (prismatic bodies, open faces), Combine (join / cut / intersect), Split Body, Scale,
+  Move/Copy, Press Pull (edges → fillet, profiles → extrude), Delete, Appearance,
+  Change Parameters, Compute All.
+* **Construct:** Offset Plane.
+* **Inspect:** Measure (edge length, face area, body volume, minimum distance), Section Analysis
+  (with section caps), Center of Mass, Properties.
 * **Files:** native `.m360` (RON, full parametric history), STL and STEP export.
-* Fully parametric: every feature is re‑editable from the timeline; undo/redo for everything.
+* Fully parametric: every feature is re-editable from the timeline (double-click), roll back with
+  the marker, suppress features; undo/redo for everything.
 
-Tools that are not implemented yet (fillet, chamfer, shell, revolve, joints, the other
-workspaces, …) are present in the UI and report “not available yet”.
+Tools that are not implemented yet (joints, draft, thread, the other workspaces, …) are present
+in the UI and report “not available yet”. Kernel limitations (truck): fillets meeting three at a
+corner, shells of non-prismatic bodies and booleans of exactly coplanar faces may fail; such
+features turn red in the timeline with an explanation.
 
 ### Mouse & keys (Fusion defaults)
 

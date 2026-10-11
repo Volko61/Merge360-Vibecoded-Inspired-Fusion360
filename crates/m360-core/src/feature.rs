@@ -204,6 +204,12 @@ pub enum FeatureKind {
         op: ExtrudeOp,
         participants: Vec<BodyId>,
     },
+    /// Hollow out a (prismatic) body; faces containing `open_points` are removed.
+    Shell {
+        body: BodyId,
+        open_points: Vec<[f64; 3]>,
+        thickness: f64,
+    },
     /// Split a body with a plane (the far side becomes a new body).
     SplitBody {
         body: BodyId,
@@ -369,6 +375,7 @@ impl FeatureKind {
             FeatureKind::Loft { .. } => "Loft",
             FeatureKind::SplitBody { .. } => "SplitBody",
             FeatureKind::Scale { .. } => "Scale",
+            FeatureKind::Shell { .. } => "Shell",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }

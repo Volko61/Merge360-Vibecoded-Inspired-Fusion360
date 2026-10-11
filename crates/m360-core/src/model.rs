@@ -278,6 +278,22 @@ pub fn hole_tools(plane: &PlaneRef, points: &[[f64; 2]], diameter: f64, depth: f
     Ok(out)
 }
 
+/// Which prism caps contain the given points.
+pub fn shell_open_caps(mesh: &BodyMesh, points: &[[f64; 3]]) -> m360_kernel::shell::OpenCaps {
+    let mut open = m360_kernel::shell::OpenCaps::default();
+    if let Some(p) = m360_kernel::shell::detect_prism(mesh) {
+        for q in points {
+            let h = (glam::DVec3::from(*q) - p.frame.origin).dot(p.frame.n);
+            if h.abs() < 1e-3 {
+                open.bottom = true;
+            } else if (h - p.height).abs() < 1e-3 {
+                open.top = true;
+            }
+        }
+    }
+    open
+}
+
 fn sketch_of(model: &Model, uid: u64) -> Result<(PlaneRef, Vec<SketchEntity>), String> {
     model
         .sketches
@@ -570,6 +586,15 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             }
             let tool = m360_kernel::sweep::loft(&secs).map_err(|e| e.to_string())?;
             apply_op(model, f.uid, tool, *op, participants)
+        }
+        FeatureKind::Shell { body, open_points, thickness } => {
+            let b = model.body(*body).ok_or("the shelled body no longer exists")?;
+            let open = shell_open_caps(&b.mesh, open_points);
+            let s = m360_kernel::shell::shell(&b.solid, &b.mesh, *thickness, open).map_err(|e| e.to_string())?;
+            // Curved walls are offset as fine polygons: hide their facet edges.
+            let cos = b.smooth_cos.min(0.985);
+            replace(model, new_body_smooth(*body, s, f.uid, cos));
+            Ok(())
         }
         FeatureKind::SplitBody { body, plane } => {
             let b = model.body(*body).ok_or("the body to split no longer exists")?;

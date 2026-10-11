@@ -107,10 +107,10 @@ pub fn to_world(p: &PlaneRef, l: [f64; 2]) -> Vec3 {
 }
 
 fn base_plane_ref(b: BasePlane) -> PlaneRef {
-    PlaneRef { base: b, offset: 0.0, flip: false }
+    PlaneRef { base: b, offset: 0.0, flip: false, custom: None }
 }
 
-/// Face planarity test: returns a PlaneRef if the face is planar and axis aligned.
+/// Face planarity test: returns the face plane if the face is planar.
 fn face_plane(tab: &DocTab, body: u64, face: u32, hit: Vec3) -> Option<PlaneRef> {
     let b = tab.model.body(body)?;
     let m = &b.mesh;
@@ -130,6 +130,19 @@ fn face_plane(tab: &DocTab, body: u64, face: u32, hit: Vec3) -> Option<PlaneRef>
         }
     }
     PlaneRef::from_point_normal(hit.as_dvec3(), n0?.as_dvec3())
+}
+
+/// Point of segment `a`-`b` closest to a ray.
+fn closest_on_segment(ray: &Ray, a: Vec3, b: Vec3) -> Vec3 {
+    let d = b - a;
+    let w = a - ray.origin;
+    let (dd, de, ee) = (d.dot(d), d.dot(ray.dir), ray.dir.dot(ray.dir));
+    let denom = dd * ee - de * de;
+    if denom.abs() < 1e-12 {
+        return a;
+    }
+    let k = ((de * ray.dir.dot(w) - ee * d.dot(w)) / denom).clamp(0.0, 1.0);
+    a + d * k
 }
 
 /// Screen distance from point to a segment.
@@ -172,6 +185,8 @@ impl Merge360App {
             | Some(Command::Properties) => PickMode::Bodies,
             Some(Command::Measure { .. }) => PickMode::Measure,
             Some(Command::Fillet { .. }) => PickMode::Edges,
+            Some(Command::RefPlane { method: crate::state::RefPlaneMethod::Mid, .. }) => PickMode::Planes,
+            Some(Command::RefPlane { .. }) => PickMode::Edges,
             Some(Command::Hole { .. }) => PickMode::Planes,
             Some(Command::OffsetPlane { base: None, .. }) | Some(Command::Section { plane: None, .. }) => PickMode::Planes,
             Some(Command::Mirror { picking_plane: true, .. }) => PickMode::Planes,
@@ -401,9 +416,9 @@ impl Merge360App {
                         if d > 6.0 || best_edge.as_ref().is_some_and(|x| x.0 <= d) {
                             continue;
                         }
-                        let ab = sb - sa;
-                        let k = ((pos - sa).dot(ab) / ab.length_sq().max(1e-6)).clamp(0.0, 1.0);
-                        let wp = pa.lerp(pb, k);
+                        // Closest point of the segment to the pick ray (a
+                        // screen-space fraction is not linear in depth).
+                        let wp = closest_on_segment(&ray, pa, pb);
                         let te = (wp - ray.origin).dot(ray.dir);
                         if face_t.is_none_or(|ft| te <= ft + cam.distance * 0.004) {
                             best_edge = Some((d, SelItem::Edge(b.id, ei as u32), wp));
@@ -831,6 +846,14 @@ impl Merge360App {
         }
         let point = self.canvas.cursor_world;
         let hover_plane = hover.and_then(|h| self.tabs[self.active].plane_of(&h));
+        // A hovered sketch line in world space (with its sketch normal).
+        let hover_line = match hover {
+            Some(SelItem::SketchEntity(uid, i)) => self.tabs[self.active].sketch_entities(uid).and_then(|(p, ents)| match ents.get(i) {
+                Some(SketchEntity::Line { a, b }) => Some((to_world(&p, *a).as_dvec3(), to_world(&p, *b).as_dvec3(), p.normal())),
+                _ => None,
+            }),
+            _ => None,
+        };
         let tab = self.tab();
         match &mut tab.command {
             Some(Command::Primitive { kind, plane_chosen, .. }) if !*plane_chosen => {
@@ -965,7 +988,7 @@ impl Merge360App {
             }
             Some(Command::Hole { plane, points, .. }) => {
                 if let (Some(SelItem::FacePlane(_, _, p)), Some(w)) = (hover, point) {
-                    let same = plane.is_some_and(|q| q.base == p.base && q.flip == p.flip && (q.offset - p.offset).abs() < 1e-3);
+                    let same = plane.is_some_and(|q| q.same_plane(&p));
                     if !same {
                         *plane = Some(p);
                         points.clear();
@@ -979,6 +1002,42 @@ impl Merge360App {
             Some(Command::OffsetPlane { base, .. }) => {
                 if hover_plane.is_some() {
                     *base = hover_plane;
+                }
+            }
+            Some(Command::RefPlane { method, picks, .. }) => {
+                use crate::state::{RefPick, RefPlaneMethod};
+                let pick = match (*method, hover) {
+                    (RefPlaneMethod::Mid, _) => hover_plane.map(RefPick::Plane),
+                    (RefPlaneMethod::Angle, Some(SelItem::Edge(b, e))) => tab.model.body(b).and_then(|bd| {
+                        let pts = bd.mesh.edges.get(e as usize)?;
+                        let info = bd.mesh.edge_info.get(e as usize)?;
+                        if !info.straight {
+                            return None;
+                        }
+                        let (a, z) = (Vec3::from(pts[0]).as_dvec3(), Vec3::from(pts[pts.len() - 1]).as_dvec3());
+                        // 0° is the plane of the first adjacent face.
+                        let n0 = info.normals.map_or_else(|| (z - a).any_orthonormal_vector(), |n| n[0].as_dvec3());
+                        Some(RefPick::Line { a, b: z, n0 })
+                    }),
+                    (RefPlaneMethod::Angle, Some(SelItem::SketchEntity(..))) => hover_line.map(|(a, b, n0)| RefPick::Line { a, b, n0 }),
+                    (RefPlaneMethod::ThreePoints, Some(SelItem::Edge(b, e))) => {
+                        // The edge end nearest to the click.
+                        let at = point.map(|w| w.as_dvec3());
+                        tab.model.body(b).and_then(|bd| bd.mesh.edges.get(e as usize)).and_then(|pts| {
+                            let (a, z) = (Vec3::from(pts[0]).as_dvec3(), Vec3::from(pts[pts.len() - 1]).as_dvec3());
+                            let at = at?;
+                            Some(RefPick::Point(if (at - a).length() <= (at - z).length() { a } else { z }))
+                        })
+                    }
+                    _ => None,
+                };
+                if let Some(p) = pick {
+                    if picks.len() >= method.picks() {
+                        picks.clear();
+                    }
+                    if !picks.contains(&p) {
+                        picks.push(p);
+                    }
                 }
             }
             Some(Command::Section { plane, .. }) => {
@@ -1451,6 +1510,11 @@ impl Merge360App {
                 .collect();
             if let Some(Command::OffsetPlane { base: Some(b), distance, .. }) = &tab.command {
                 quads.push((PlaneRef { offset: b.offset + if b.flip { -distance } else { *distance }, ..*b }, true, true));
+            }
+            if let Some(Command::RefPlane { method, picks, angle }) = &tab.command {
+                if let Some(p) = crate::state::ref_plane(*method, picks, *angle) {
+                    quads.push((p, true, true));
+                }
             }
             if let Some(sec) = tab.section.filter(|s| s.visible) {
                 if matches!(tab.command, Some(Command::Section { .. })) {

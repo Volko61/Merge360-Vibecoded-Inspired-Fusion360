@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::BodyId;
 
-/// One of the three origin planes, optionally offset along its normal.
+/// One of the three origin planes (or an arbitrary plane), optionally
+/// offset along its normal.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PlaneRef {
     pub base: BasePlane,
@@ -14,6 +15,17 @@ pub struct PlaneRef {
     /// Sketch on the back side of the plane (normal reversed).
     #[serde(default)]
     pub flip: bool,
+    /// Arbitrary plane (replaces `base` when set).
+    #[serde(default)]
+    pub custom: Option<CustomFrame>,
+}
+
+/// An arbitrary plane: origin and orthonormal in-plane axes.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CustomFrame {
+    pub origin: [f64; 3],
+    pub u: [f64; 3],
+    pub v: [f64; 3],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,9 +40,13 @@ impl PlaneRef {
         self.frame([0.0, 0.0]).n
     }
 
-    /// Plane through `point` with world-axis-aligned `normal`, if any.
+    /// Plane through `point` with the given `normal`. Axis-aligned normals
+    /// give origin-plane references, others an arbitrary plane.
     pub fn from_point_normal(point: DVec3, normal: DVec3) -> Option<PlaneRef> {
         let n = normal.normalize_or_zero();
+        if n == DVec3::ZERO {
+            return None;
+        }
         let (base, axis) = if n.z.abs() > 0.999 {
             (BasePlane::XY, DVec3::Z)
         } else if n.y.abs() > 0.999 {
@@ -38,32 +54,69 @@ impl PlaneRef {
         } else if n.x.abs() > 0.999 {
             (BasePlane::YZ, DVec3::X)
         } else {
-            return None;
+            return Some(Self::arbitrary(point, n));
         };
         let flip = n.dot(axis) < 0.0;
         // Mesh hits are f32: snap the offset to 1e-4 mm to remove noise.
         let offset = (point.dot(axis) * 1e4).round() / 1e4;
-        Some(PlaneRef { base, offset, flip })
+        Some(PlaneRef { base, offset, flip, custom: None })
     }
 
-    pub const XY: PlaneRef = PlaneRef { base: BasePlane::XY, offset: 0.0, flip: false };
-    pub const XZ: PlaneRef = PlaneRef { base: BasePlane::XZ, offset: 0.0, flip: false };
-    pub const YZ: PlaneRef = PlaneRef { base: BasePlane::YZ, offset: 0.0, flip: false };
+    /// Arbitrary plane through `point` with unit normal `n`. The in-plane U
+    /// axis is horizontal (perpendicular to the world up axis +Y) when
+    /// possible; the origin is the plane point closest to the world origin.
+    pub fn arbitrary(point: DVec3, n: DVec3) -> PlaneRef {
+        let n = n.normalize();
+        let u = if n.y.abs() < 0.999 { DVec3::Y.cross(n).normalize() } else { DVec3::X };
+        let v = n.cross(u);
+        let d = (point.dot(n) * 1e4).round() / 1e4;
+        let origin = n * d;
+        PlaneRef { base: BasePlane::XY, offset: 0.0, flip: false, custom: Some(CustomFrame { origin: origin.into(), u: u.into(), v: v.into() }) }
+    }
+
+    /// Arbitrary plane with the given origin and in-plane axes.
+    pub fn from_frame(origin: DVec3, u: DVec3, v: DVec3) -> PlaneRef {
+        let n = u.cross(v).normalize();
+        let u = u.normalize();
+        let v = n.cross(u);
+        PlaneRef { base: BasePlane::XY, offset: 0.0, flip: false, custom: Some(CustomFrame { origin: origin.into(), u: u.into(), v: v.into() }) }
+    }
+
+    /// Whether two references describe the same oriented plane.
+    pub fn same_plane(&self, other: &PlaneRef) -> bool {
+        let (a, b) = (self.frame([0.0, 0.0]), other.frame([0.0, 0.0]));
+        a.n.dot(b.n) > 1.0 - 1e-6 && (b.origin - a.origin).dot(a.n).abs() < 1e-3
+    }
+
+    pub const XY: PlaneRef = PlaneRef { base: BasePlane::XY, offset: 0.0, flip: false, custom: None };
+    pub const XZ: PlaneRef = PlaneRef { base: BasePlane::XZ, offset: 0.0, flip: false, custom: None };
+    pub const YZ: PlaneRef = PlaneRef { base: BasePlane::YZ, offset: 0.0, flip: false, custom: None };
+
+    /// Origin plane reference.
+    pub fn base(base: BasePlane) -> PlaneRef {
+        PlaneRef { base, offset: 0.0, flip: false, custom: None }
+    }
 
     /// Placement frame with the given in-plane center.
     pub fn frame(&self, center: [f64; 2]) -> Frame {
-        let (u, v) = match self.base {
-            BasePlane::XY => (DVec3::X, DVec3::Y),
-            // Fusion's XZ ground plane: normal +Y.
-            BasePlane::XZ => (DVec3::X, DVec3::NEG_Z),
-            BasePlane::YZ => (DVec3::Y, DVec3::Z),
+        let (o, u, v) = match &self.custom {
+            Some(c) => (DVec3::from(c.origin), DVec3::from(c.u), DVec3::from(c.v)),
+            None => match self.base {
+                BasePlane::XY => (DVec3::ZERO, DVec3::X, DVec3::Y),
+                // Fusion's XZ ground plane: normal +Y.
+                BasePlane::XZ => (DVec3::ZERO, DVec3::X, DVec3::NEG_Z),
+                BasePlane::YZ => (DVec3::ZERO, DVec3::Y, DVec3::Z),
+            },
         };
         let n = u.cross(v);
         let v = if self.flip { -v } else { v };
-        Frame::new(n * self.offset + u * center[0] + v * center[1], u, v)
+        Frame::new(o + n * self.offset + u * center[0] + v * center[1], u, v)
     }
 
     pub fn label(&self) -> String {
+        if self.custom.is_some() {
+            return if self.offset == 0.0 { "Plane".to_string() } else { format!("Plane ({:+.2})", self.offset) };
+        }
         let name = match self.base {
             BasePlane::XY => "XY Plane",
             BasePlane::XZ => "XZ Plane",

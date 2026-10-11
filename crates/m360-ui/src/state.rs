@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use glam::DVec3;
+
 use m360_core::{
     model::build_primitive, BasePlane, BodyId, BooleanOp, Document, ExtrudeOp, FeatureKind, History, Model,
     PlaneRef, Regenerator, SketchEntity,
@@ -416,6 +418,12 @@ pub enum Command {
         distance: f64,
         editing: Option<EditCtx>,
     },
+    /// Plane at Angle / Midplane / Plane Through Three Points.
+    RefPlane {
+        method: RefPlaneMethod,
+        picks: Vec<RefPick>,
+        angle: f64,
+    },
     Section {
         plane: Option<PlaneRef>,
         offset: f64,
@@ -477,6 +485,9 @@ impl Command {
             Command::Pattern { .. } => "RECTANGULAR PATTERN",
             Command::Mirror { .. } => "MIRROR",
             Command::OffsetPlane { .. } => "OFFSET PLANE",
+            Command::RefPlane { method: RefPlaneMethod::Angle, .. } => "PLANE AT ANGLE",
+            Command::RefPlane { method: RefPlaneMethod::Mid, .. } => "MIDPLANE",
+            Command::RefPlane { method: RefPlaneMethod::ThreePoints, .. } => "PLANE THROUGH THREE POINTS",
             Command::Joint { .. } => "JOINT",
             Command::Sweep { .. } => "SWEEP",
             Command::Pipe { .. } => "PIPE",
@@ -518,6 +529,79 @@ impl Command {
             | Command::Joint { editing, .. } => editing.as_ref(),
             _ => None,
         }
+    }
+}
+
+/// How a reference plane is built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefPlaneMethod {
+    /// Through a line, rotated by an angle from an adjacent face.
+    Angle,
+    /// Midway between two planes (or bisecting them).
+    Mid,
+    ThreePoints,
+}
+
+impl RefPlaneMethod {
+    pub fn picks(self) -> usize {
+        match self {
+            RefPlaneMethod::Angle => 1,
+            RefPlaneMethod::Mid => 2,
+            RefPlaneMethod::ThreePoints => 3,
+        }
+    }
+}
+
+/// A geometric reference picked for a reference plane.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RefPick {
+    Plane(PlaneRef),
+    /// Line from `a` to `b`; `n0` is the normal of the plane at 0°.
+    Line { a: DVec3, b: DVec3, n0: DVec3 },
+    Point(DVec3),
+}
+
+/// The plane defined by reference picks.
+pub fn ref_plane(method: RefPlaneMethod, picks: &[RefPick], angle_deg: f64) -> Option<PlaneRef> {
+    match (method, picks) {
+        (RefPlaneMethod::Angle, [RefPick::Line { a, b, n0 }]) => {
+            let d = (*b - *a).normalize_or_zero();
+            if d == DVec3::ZERO {
+                return None;
+            }
+            let n0 = (*n0 - d * n0.dot(d)).normalize_or_zero();
+            if n0 == DVec3::ZERO {
+                return None;
+            }
+            let (s, c) = angle_deg.to_radians().sin_cos();
+            let n = n0 * c + d.cross(n0) * s;
+            Some(PlaneRef::from_frame((*a + *b) / 2.0, d, n.cross(d)))
+        }
+        (RefPlaneMethod::Mid, [RefPick::Plane(p), RefPick::Plane(q)]) => {
+            let (f, g) = (p.frame([0.0, 0.0]), q.frame([0.0, 0.0]));
+            let (n1, n2) = (f.n, g.n);
+            let (d1, d2) = (f.origin.dot(n1), g.origin.dot(n2));
+            if n1.dot(n2).abs() > 1.0 - 1e-9 {
+                // Parallel: halfway between them.
+                let off = (g.origin - f.origin).dot(n1) / 2.0;
+                return Some(PlaneRef::from_frame(f.origin + n1 * off, f.u, f.v));
+            }
+            // Bisector through the intersection line.
+            let k = n1.dot(n2);
+            let det = 1.0 - k * k;
+            let p0 = n1 * ((d1 - d2 * k) / det) + n2 * ((d2 - d1 * k) / det);
+            let line = n1.cross(n2).normalize();
+            let n = (n1 - n2).normalize();
+            Some(PlaneRef::from_frame(p0, line, n.cross(line)))
+        }
+        (RefPlaneMethod::ThreePoints, [RefPick::Point(a), RefPick::Point(b), RefPick::Point(c)]) => {
+            let n = (*b - *a).cross(*c - *a);
+            if n.length() < 1e-9 {
+                return None;
+            }
+            Some(PlaneRef::from_frame((*a + *b + *c) / 3.0, *b - *a, n.normalize().cross((*b - *a).normalize())))
+        }
+        _ => None,
     }
 }
 
@@ -699,7 +783,7 @@ impl DocTab {
     /// The plane referenced by a selectable item, if any.
     pub fn plane_of(&self, item: &SelItem) -> Option<PlaneRef> {
         match item {
-            SelItem::Plane(b) => Some(PlaneRef { base: *b, offset: 0.0, flip: false }),
+            SelItem::Plane(b) => Some(PlaneRef { base: *b, offset: 0.0, flip: false, custom: None }),
             SelItem::FacePlane(_, _, p) => Some(*p),
             SelItem::ConstructionPlane(uid) => self.model.planes.iter().find(|p| p.uid == *uid).map(|p| p.plane),
             _ => None,

@@ -368,7 +368,7 @@ mod tests {
         let mut d = Document::default();
         let b = d.add_feature(FeatureKind::Box { plane: PlaneRef::XZ, center: [0.0, 0.0], length: 40.0, width: 40.0, height: 10.0 });
         d.add_feature(FeatureKind::Hole {
-            plane: PlaneRef { base: BasePlane::XZ, offset: 10.0, flip: false },
+            plane: PlaneRef { base: BasePlane::XZ, offset: 10.0, flip: false, custom: None },
             points: vec![[-10.0, -10.0], [10.0, 10.0]],
             diameter: 5.0,
             depth: 0.0,
@@ -394,7 +394,7 @@ mod tests {
             pattern: PatternKind::Rectangular { dir1: Axis::X, count1: 3, spacing1: 15.0, dir2: Axis::Y, count2: 2, spacing2: 15.0 },
         });
         d.add_feature(FeatureKind::Pattern { bodies: vec![b], pattern: PatternKind::Circular { axis: Axis::Z, count: 4, total_deg: 360.0 } });
-        d.add_feature(FeatureKind::Mirror { bodies: vec![b], plane: PlaneRef { base: BasePlane::YZ, offset: 0.0, flip: false } });
+        d.add_feature(FeatureKind::Mirror { bodies: vec![b], plane: PlaneRef { base: BasePlane::YZ, offset: 0.0, flip: false, custom: None } });
         let m = Regenerator::default().regenerate(&d);
         assert!(m.errors.is_empty(), "{:?}", m.errors);
         assert_eq!(m.bodies.len(), 1 + 5 + 3 + 1);
@@ -428,10 +428,10 @@ mod tests {
         });
         d.add_feature(FeatureKind::Sweep { sketch: prof, profiles: vec![0], path_sketch: path, path: vec![1, 0], op: ExtrudeOp::NewBody, participants: vec![] });
         // Loft between two squares on parallel planes.
-        let s1 = d.add_feature(FeatureKind::Sketch { constraints: vec![], plane: PlaneRef { base: BasePlane::XZ, offset: 40.0, flip: false }, entities: crate::sketch::rectangle([-10.0, -10.0], [10.0, 10.0]) });
-        let s2 = d.add_feature(FeatureKind::Sketch { constraints: vec![], plane: PlaneRef { base: BasePlane::XZ, offset: 60.0, flip: false }, entities: crate::sketch::rectangle([-4.0, -4.0], [4.0, 4.0]) });
+        let s1 = d.add_feature(FeatureKind::Sketch { constraints: vec![], plane: PlaneRef { base: BasePlane::XZ, offset: 40.0, flip: false, custom: None }, entities: crate::sketch::rectangle([-10.0, -10.0], [10.0, 10.0]) });
+        let s2 = d.add_feature(FeatureKind::Sketch { constraints: vec![], plane: PlaneRef { base: BasePlane::XZ, offset: 60.0, flip: false, custom: None }, entities: crate::sketch::rectangle([-4.0, -4.0], [4.0, 4.0]) });
         let loft = d.add_feature(FeatureKind::Loft { sections: vec![(s1, 0), (s2, 0)], op: ExtrudeOp::NewBody, participants: vec![] });
-        d.add_feature(FeatureKind::SplitBody { body: loft, plane: PlaneRef { base: BasePlane::XZ, offset: 50.0, flip: false } });
+        d.add_feature(FeatureKind::SplitBody { body: loft, plane: PlaneRef { base: BasePlane::XZ, offset: 50.0, flip: false, custom: None } });
         d.add_feature(FeatureKind::Scale { bodies: vec![loft], point: [0.0, 0.0, 0.0], factor: 0.5 });
         let m = Regenerator::default().regenerate(&d);
         assert!(m.errors.is_empty(), "{:?}", m.errors);

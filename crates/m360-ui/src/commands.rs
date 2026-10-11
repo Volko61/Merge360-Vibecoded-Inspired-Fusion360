@@ -643,6 +643,42 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::RefPlane { method, picks, angle } => {
+                use crate::state::{ref_plane, RefPick, RefPlaneMethod};
+                let ok = ref_plane(*method, picks, *angle).is_some();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    let names: &[&str] = match method {
+                        RefPlaneMethod::Angle => &["Line"],
+                        RefPlaneMethod::Mid => &["Plane 1", "Plane 2"],
+                        RefPlaneMethod::ThreePoints => &["Point 1", "Point 2", "Point 3"],
+                    };
+                    for (k, name) in names.iter().enumerate() {
+                        row_label(ui, name);
+                        let text = match picks.get(k) {
+                            Some(RefPick::Plane(p)) => p.label(),
+                            Some(RefPick::Line { a, b, .. }) => format!("Line ({})", units.format((*b - *a).length())),
+                            Some(RefPick::Point(p)) => format!("({:.1}, {:.1}, {:.1})", p.x, p.y, p.z),
+                            None => "Select".into(),
+                        };
+                        if selection_field(ui, picks.len() == k, &text).clicked() {
+                            picks.truncate(k);
+                        }
+                        ui.end_row();
+                    }
+                    if *method == RefPlaneMethod::Angle {
+                        row_label(ui, "Angle");
+                        angle_field(ui, "plane_angle", angle);
+                        ui.end_row();
+                    }
+                    if *method == RefPlaneMethod::ThreePoints {
+                        ui.label("");
+                        ui.label(RichText::new("Click near the ends of edges").small().color(theme::TEXT_DIM));
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Section { plane, offset, flip } => {
                 let ok = plane.is_some();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
@@ -853,7 +889,7 @@ impl Merge360App {
                     ui.end_row();
                     for (name, b) in [("XY Plane", m360_core::BasePlane::XY), ("XZ Plane", m360_core::BasePlane::XZ), ("YZ Plane", m360_core::BasePlane::YZ)] {
                         if ui.button(name).clicked() {
-                            self.pending_sketch_plane = Some(m360_core::PlaneRef { base: b, offset: 0.0, flip: false });
+                            self.pending_sketch_plane = Some(m360_core::PlaneRef { base: b, offset: 0.0, flip: false, custom: None });
                         }
                     }
                     ui.end_row();
@@ -1066,6 +1102,11 @@ impl Merge360App {
             Command::OffsetPlane { base: Some(base), distance, editing } => {
                 let plane = m360_core::PlaneRef { offset: base.offset + if base.flip { -distance } else { distance }, ..base };
                 self.commit_feature(FeatureKind::ConstructionPlane { plane }, editing);
+            }
+            Command::RefPlane { method, picks, angle } => {
+                if let Some(plane) = crate::state::ref_plane(method, &picks, angle) {
+                    self.commit_feature(FeatureKind::ConstructionPlane { plane }, None);
+                }
             }
             Command::Section { .. } => {} // the section stays active (see browser ▸ Analysis)
             Command::Mirror { bodies, plane: Some(plane), editing, .. } => {

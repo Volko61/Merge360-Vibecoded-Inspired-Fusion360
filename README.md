@@ -55,7 +55,8 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   Shell (prismatic bodies, open faces), Combine (join / cut / intersect), Split Body, Scale,
   Move/Copy, Press Pull (edges → fillet, profiles → extrude), Delete, Appearance,
   Change Parameters, Compute All.
-* **Construct:** Offset Plane.
+* **Construct:** Offset Plane, Plane at Angle, Midplane, Plane Through Three Points. Sketches,
+  holes and planes work on faces of any orientation.
 * **Assemble:** Components (new / activate / visibility), Joints (rigid, revolute, slider with
   live motion value).
 * **Parameters:** user parameters and expressions (`width * 2 + 5 mm`) for any feature value.

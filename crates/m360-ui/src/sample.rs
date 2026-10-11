@@ -12,7 +12,7 @@ pub fn sample_document() -> Document {
         width: 80.0,
         height: 20.0,
     });
-    let top = PlaneRef { base: m360_core::BasePlane::XZ, offset: 20.0, flip: false };
+    let top = PlaneRef { base: m360_core::BasePlane::XZ, offset: 20.0, flip: false, custom: None };
     let mut entities = vec![
         SketchEntity::Circle { c: [-40.0, 20.0], r: 8.0 },
         SketchEntity::Circle { c: [40.0, 20.0], r: 8.0 },
@@ -40,7 +40,7 @@ pub fn sample_document() -> Document {
         participants: vec![base],
     });
     let cyl = d.add_feature(FeatureKind::Cylinder {
-        plane: PlaneRef { base: m360_core::BasePlane::XZ, offset: 50.0, flip: false },
+        plane: PlaneRef { base: m360_core::BasePlane::XZ, offset: 50.0, flip: false, custom: None },
         center: [0.0, 0.0],
         diameter: 30.0,
         height: 25.0,

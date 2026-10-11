@@ -312,7 +312,7 @@ impl Merge360App {
         let now = self.now();
         let tab = self.tab();
         let plane = tab.selection.iter().find_map(|s| match s {
-            crate::state::SelItem::Plane(b) => Some(m360_core::PlaneRef { base: *b, offset: 0.0, flip: false }),
+            crate::state::SelItem::Plane(b) => Some(m360_core::PlaneRef { base: *b, offset: 0.0, flip: false, custom: None }),
             crate::state::SelItem::FacePlane(_, _, p) => Some(*p),
             crate::state::SelItem::Sketch(u) => tab.sketch_entities(*u).map(|x| x.0),
             _ => None,

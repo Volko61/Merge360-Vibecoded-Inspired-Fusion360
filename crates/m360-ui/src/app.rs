@@ -199,6 +199,7 @@ impl Merge360App {
                     }
                     (Some(Command::Extrude { symmetric, .. }), "symmetric") => *symmetric = v == "true",
                     (Some(Command::Extrude { taper, .. }), "taper") => *taper = num.unwrap_or(*taper),
+                    (Some(Command::RefPlane { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
                     (Some(Command::Extrude { op, .. }), "op") => {
                         *op = match v.as_str() {
                             "cut" => ExtrudeOp::Cut,
@@ -529,6 +530,21 @@ impl Merge360App {
                 });
                 tab.selection.clear();
                 self.toast(ToastKind::Info, format!("Component{n} created"));
+            }
+            "plane_at_angle" | "midplane" | "plane_three_points" => {
+                use crate::state::{RefPick, RefPlaneMethod};
+                let method = match id {
+                    "plane_at_angle" => RefPlaneMethod::Angle,
+                    "midplane" => RefPlaneMethod::Mid,
+                    _ => RefPlaneMethod::ThreePoints,
+                };
+                let picks: Vec<RefPick> = if method == RefPlaneMethod::Mid {
+                    tab.selection.iter().filter_map(|s| tab.plane_of(s)).take(2).map(RefPick::Plane).collect()
+                } else {
+                    Vec::new()
+                };
+                tab.selection.clear();
+                tab.command = Some(Command::RefPlane { method, picks, angle: 45.0 });
             }
             "offset_plane" => {
                 let base = tab.selection.iter().find_map(|s| tab.plane_of(s));

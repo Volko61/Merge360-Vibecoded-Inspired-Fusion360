@@ -1148,83 +1148,126 @@ impl Merge360App {
     }
 
     fn parameters_ui(&mut self, ui: &mut egui::Ui) {
+        use m360_core::expr::{eval, eval_params, is_symbolic, UserParam};
         let units = self.tabs[self.active].doc.units;
-        ui.label(RichText::new("Model Parameters").strong());
-        ui.separator();
-        let features = self.tabs[self.active].doc.features.clone();
+        let params = self.tabs[self.active].doc.params.clone();
+        let (vars, perrs) = eval_params(&params, units);
         egui::ScrollArea::vertical().show(ui, |ui| {
-            egui::Grid::new("params").striped(true).num_columns(3).spacing([16.0, 4.0]).show(ui, |ui| {
-                ui.label(RichText::new("Feature").strong());
-                ui.label(RichText::new("Parameter").strong());
-                ui.label(RichText::new("Value").strong());
+            // ---- user parameters
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("User Parameters").strong());
+                if ui.small_button("+ Add").clicked() {
+                    let mut k = params.len() + 1;
+                    while params.iter().any(|p| p.name == format!("d{k}")) {
+                        k += 1;
+                    }
+                    let name = format!("d{k}");
+                    self.tab().edit("Add Parameter", |d| d.params.push(UserParam { name, expr: "10".into(), comment: String::new() }));
+                }
+            });
+            egui::Grid::new("user_params").striped(true).num_columns(5).spacing([12.0, 4.0]).show(ui, |ui| {
+                for h in ["Name", "Expression", "Value", "Comment", ""] {
+                    ui.label(RichText::new(h).strong());
+                }
+                ui.end_row();
+                let mut remove = None;
+                for (i, p) in params.iter().enumerate() {
+                    let mut name = p.name.clone();
+                    let mut expr = p.expr.clone();
+                    let mut comment = p.comment.clone();
+                    let rn = ui.add(egui::TextEdit::singleline(&mut name).desired_width(80.0));
+                    let err = perrs.iter().find(|(n, _)| *n == p.name).map(|e| e.1.clone());
+                    let re = ui.add(egui::TextEdit::singleline(&mut expr).desired_width(140.0).text_color(if err.is_some() { theme::ERROR } else { theme::TEXT }));
+                    match vars.get(&p.name) {
+                        Some(v) => ui.label(units.format(*v)),
+                        None => ui.colored_label(theme::ERROR, err.unwrap_or_default()),
+                    };
+                    let rc = ui.add(egui::TextEdit::singleline(&mut comment).desired_width(120.0));
+                    if ui.small_button("✕").on_hover_text("Delete parameter").clicked() {
+                        remove = Some(i);
+                    }
+                    ui.end_row();
+                    let valid_name = !name.is_empty() && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+                    if (rn.lost_focus() && valid_name && name != p.name) || (re.lost_focus() && expr != p.expr) || (rc.lost_focus() && comment != p.comment) {
+                        let old = p.name.clone();
+                        self.tab().edit("Change Parameter", |d| {
+                            if let Some(q) = d.params.get_mut(i) {
+                                q.name = if valid_name { name.clone() } else { q.name.clone() };
+                                q.expr = expr;
+                                q.comment = comment;
+                            }
+                            // Renaming a parameter updates expressions that use it.
+                            if valid_name && name != old {
+                                for f in &mut d.features {
+                                    for e in f.exprs.values_mut() {
+                                        *e = rename_ident(e, &old, &name);
+                                    }
+                                }
+                                for q in &mut d.params {
+                                    q.expr = rename_ident(&q.expr, &old, &name);
+                                }
+                            }
+                        });
+                    }
+                }
+                if let Some(i) = remove {
+                    self.tab().edit("Delete Parameter", |d| {
+                        d.params.remove(i);
+                    });
+                }
+            });
+            ui.add_space(10.0);
+            ui.label(RichText::new("Model Parameters").strong());
+            ui.label(RichText::new("Type a value or an expression using user parameters (e.g. width / 2 + 3 mm).").small().color(theme::TEXT_DIM));
+            let features = self.tabs[self.active].doc.features.clone();
+            egui::Grid::new("params").striped(true).num_columns(4).spacing([16.0, 4.0]).show(ui, |ui| {
+                for h in ["Feature", "Parameter", "Expression", "Value"] {
+                    ui.label(RichText::new(h).strong());
+                }
                 ui.end_row();
                 for f in &features {
                     let mut kind = f.kind.clone();
-                    let mut changed = false;
-                    let mut row = |ui: &mut egui::Ui, name: &str, v: &mut f64, key: &str| {
+                    for (name, angle, value) in kind.numeric_fields_mut() {
+                        let u = if angle { m360_core::Units::Millimeter } else { units };
+                        let expr = f.exprs.get(name).cloned();
+                        let id = egui::Id::new(("param_expr", f.uid, name));
+                        let shown = expr.clone().unwrap_or_else(|| if angle { format!("{:.4}", *value) } else { format!("{:.4}", units.from_mm(*value)) });
+                        let mut text: String = ui.data_mut(|d| d.get_temp(id)).unwrap_or(shown.clone());
                         ui.label(&f.name);
                         ui.label(name);
-                        if length_field(ui, (f.uid, key), v, units) {
-                            changed = true;
-                        }
+                        let result = eval(&text, u, &vars);
+                        let r = ui.add(egui::TextEdit::singleline(&mut text).id(id.with("te")).desired_width(150.0).text_color(if result.is_ok() { theme::TEXT } else { theme::ERROR }));
+                        match expr.as_ref().map(|e| eval(e, u, &vars)) {
+                            Some(Ok(v)) => ui.label(if angle { format!("{v:.2}") } else { units.format(v) }),
+                            Some(Err(e)) => ui.colored_label(theme::ERROR, e),
+                            None => ui.label(if angle { format!("{:.2}", *value) } else { units.format(*value) }),
+                        };
                         ui.end_row();
-                    };
-                    match &mut kind {
-                        FeatureKind::Box { length, width, height, .. } => {
-                            row(ui, "Length", length, "l");
-                            row(ui, "Width", width, "w");
-                            row(ui, "Height", height, "h");
+                        if r.has_focus() {
+                            ui.data_mut(|d| d.insert_temp(id, text.clone()));
+                        } else {
+                            ui.data_mut(|d| d.remove::<String>(id));
                         }
-                        FeatureKind::Cylinder { diameter, height, .. } => {
-                            row(ui, "Diameter", diameter, "d");
-                            row(ui, "Height", height, "h");
-                        }
-                        FeatureKind::Sphere { diameter, .. } => row(ui, "Diameter", diameter, "d"),
-                        FeatureKind::Torus { inner_diameter, torus_diameter, .. } => {
-                            row(ui, "Inner Diameter", inner_diameter, "i");
-                            row(ui, "Torus Diameter", torus_diameter, "t");
-                        }
-                        FeatureKind::Extrude { distance, .. } => row(ui, "Distance", distance, "d"),
-                        FeatureKind::Revolve { angle_deg, .. } => {
-                            ui.label(&f.name);
-                            ui.label("Angle");
-                            if angle_field(ui, (f.uid, "a"), angle_deg) {
-                                changed = true;
+                        if r.lost_focus() && text != shown {
+                            if let Ok(v) = result {
+                                let (uid, field, symbolic) = (f.uid, name.to_string(), is_symbolic(&text));
+                                let t = text.clone();
+                                self.tab().edit("Change Parameter", move |d| {
+                                    if let Some(ff) = d.feature_mut(uid) {
+                                        if symbolic {
+                                            ff.exprs.insert(field.clone(), t);
+                                        } else {
+                                            ff.exprs.remove(&field);
+                                        }
+                                        for (n, _, val) in ff.kind.numeric_fields_mut() {
+                                            if n == field {
+                                                *val = v;
+                                            }
+                                        }
+                                    }
+                                });
                             }
-                            ui.end_row();
                         }
-                        FeatureKind::ConstructionPlane { plane } => row(ui, "Offset", &mut plane.offset, "po"),
-                        FeatureKind::Pipe { diameter, .. } => row(ui, "Section Size", diameter, "pd"),
-                        FeatureKind::Joint { motion: m360_core::JointMotion::Slider { offset }, .. } => row(ui, "Slider Distance", offset, "jo"),
-                        FeatureKind::Joint { motion: m360_core::JointMotion::Revolute { angle_deg }, .. } => {
-                            ui.label(&f.name);
-                            ui.label("Revolute Angle");
-                            if angle_field(ui, (f.uid, "ja"), angle_deg) {
-                                changed = true;
-                            }
-                            ui.end_row();
-                        }
-                        FeatureKind::Shell { thickness, .. } => row(ui, "Thickness", thickness, "st"),
-                        FeatureKind::Hole { diameter, depth, .. } => {
-                            row(ui, "Diameter", diameter, "hd");
-                            row(ui, "Depth", depth, "hp");
-                        }
-                        FeatureKind::Fillet { size, chamfer, .. } => row(ui, if *chamfer { "Distance" } else { "Radius" }, size, "s"),
-                        FeatureKind::Move { translate, .. } => {
-                            let [x, y, z] = translate;
-                            row(ui, "X Distance", x, "x");
-                            row(ui, "Y Distance", y, "y");
-                            row(ui, "Z Distance", z, "z");
-                        }
-                        _ => {}
-                    }
-                    if changed {
-                        let uid = f.uid;
-                        self.tab().edit("Change Parameter", |d| {
-                            if let Some(ff) = d.feature_mut(uid) {
-                                ff.kind = kind;
-                            }
-                        });
                     }
                 }
             });
@@ -1314,6 +1357,26 @@ fn center_rows(ui: &mut egui::Ui, center: &mut [f64; 2], units: Units) {
     row_label(ui, "Center Y");
     length_field(ui, "cy", &mut center[1], units);
     ui.end_row();
+}
+
+/// Replace whole-word occurrences of identifier `old` with `new`.
+fn rename_ident(expr: &str, old: &str, new: &str) -> String {
+    let mut out = String::new();
+    let mut word = String::new();
+    let flush = |w: &mut String, out: &mut String| {
+        out.push_str(if w == old { new } else { w });
+        w.clear();
+    };
+    for c in expr.chars() {
+        if c.is_ascii_alphanumeric() || c == '_' {
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
 }
 
 fn resolve(r: crate::widgets::DialogResult) -> Option<bool> {

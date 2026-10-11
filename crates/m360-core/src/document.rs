@@ -56,6 +56,8 @@ pub struct Document {
     pub named_views: Vec<NamedView>,
     #[serde(default)]
     pub components: Vec<ComponentDef>,
+    #[serde(default)]
+    pub params: Vec<crate::expr::UserParam>,
 }
 
 impl Default for Document {
@@ -74,6 +76,7 @@ impl Default for Document {
             sketches_folder_visible: true,
             named_views: Vec::new(),
             components: Vec::new(),
+            params: Vec::new(),
         }
     }
 }
@@ -123,7 +126,7 @@ impl Document {
             self.sketch_visible.insert(uid, true);
         }
         let at = self.marker.min(self.features.len());
-        self.features.insert(at, crate::Feature { uid, name, suppressed: false, kind });
+        self.features.insert(at, crate::Feature { uid, name, suppressed: false, kind, exprs: Default::default() });
         self.marker = at + 1;
         uid
     }
@@ -458,6 +461,28 @@ mod tests {
         assert!((mb.bbox_min.y - 12.0).abs() < 1e-3, "{:?}", mb.bbox_min);
         assert!(mb.bbox_min.x.abs() - 5.0 < 1e-3);
         let _ = a;
+    }
+
+    #[test]
+    fn user_parameters_drive_features() {
+        use crate::expr::UserParam;
+        let mut d = Document::default();
+        d.params.push(UserParam { name: "w".into(), expr: "20".into(), comment: String::new() });
+        let b = d.add_feature(FeatureKind::Box { plane: PlaneRef::XY, center: [0.0, 0.0], length: 1.0, width: 1.0, height: 1.0 });
+        let f = d.feature_mut(b).unwrap();
+        f.exprs.insert("Length".into(), "w".into());
+        f.exprs.insert("Width".into(), "w / 2".into());
+        f.exprs.insert("Height".into(), "w / 4 + 5 mm".into());
+        let mut r = Regenerator::default();
+        let m = r.regenerate(&d);
+        assert!(m.errors.is_empty(), "{:?}", m.errors);
+        assert!((m.bodies[0].mesh.volume() - 20.0 * 10.0 * 10.0).abs() < 1e-3);
+        d.params[0].expr = "40".into();
+        let m = r.regenerate(&d);
+        assert!((m.bodies[0].mesh.volume() - 40.0 * 20.0 * 15.0).abs() < 1e-3, "{}", m.bodies[0].mesh.volume());
+        d.params[0].name = "q".into();
+        let m = r.regenerate(&d);
+        assert!(m.errors.contains_key(&b));
     }
 
     #[test]

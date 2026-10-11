@@ -70,12 +70,22 @@ fn fingerprint(f: &Feature) -> String {
 
 impl Regenerator {
     pub fn regenerate(&mut self, doc: &Document) -> Model {
-        let active = &doc.features[..doc.marker.min(doc.features.len())];
+        let (vars, _) = crate::expr::eval_params(&doc.params, doc.units);
+        // Evaluate expression-driven fields first; the fingerprint then also
+        // captures parameter changes.
+        let active: Vec<Result<Feature, (u64, String)>> = doc.features[..doc.marker.min(doc.features.len())]
+            .iter()
+            .map(|f| f.evaluated(doc.units, &vars).map_err(|e| (f.uid, e)))
+            .collect();
+        let fp = |r: &Result<Feature, (u64, String)>| match r {
+            Ok(f) => fingerprint(f),
+            Err((uid, e)) => format!("error{uid}{e}"),
+        };
         let mut model = Model::default();
         let mut reuse = 0;
         for (i, f) in active.iter().enumerate() {
             match self.cache.get(i) {
-                Some((fp, m)) if *fp == fingerprint(f) => {
+                Some((k, m)) if *k == fp(f) => {
                     model = m.clone();
                     reuse = i + 1;
                 }
@@ -83,7 +93,15 @@ impl Regenerator {
             }
         }
         self.cache.truncate(reuse);
-        for f in &active[reuse..] {
+        for r in &active[reuse..] {
+            let f = match r {
+                Ok(f) => f,
+                Err((uid, e)) => {
+                    model.errors.insert(*uid, e.clone());
+                    self.cache.push((fp(r), model.clone()));
+                    continue;
+                }
+            };
             if !f.suppressed {
                 // Kernel panics must never take the application down.
                 let mut next = model.clone();
@@ -97,7 +115,7 @@ impl Regenerator {
                     }
                 }
             }
-            self.cache.push((fingerprint(f), model.clone()));
+            self.cache.push((fp(r), model.clone()));
         }
         model
     }

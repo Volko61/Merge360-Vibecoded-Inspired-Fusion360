@@ -1,6 +1,7 @@
 //! Merge360 document model: parametric feature history, regeneration and undo.
 
 pub mod document;
+pub mod expr;
 pub mod feature;
 pub mod history;
 pub mod model;

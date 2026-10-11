@@ -456,6 +456,34 @@ impl FeatureKind {
             if participants.is_empty())
     }
 
+    /// Named numeric parameters of the feature: (name, is_angle, value).
+    pub fn numeric_fields_mut(&mut self) -> Vec<(&'static str, bool, &mut f64)> {
+        use FeatureKind::*;
+        match self {
+            Box { length, width, height, .. } => vec![("Length", false, length), ("Width", false, width), ("Height", false, height)],
+            Cylinder { diameter, height, .. } => vec![("Diameter", false, diameter), ("Height", false, height)],
+            Sphere { diameter, .. } => vec![("Diameter", false, diameter)],
+            Torus { inner_diameter, torus_diameter, .. } => vec![("Inner Diameter", false, inner_diameter), ("Torus Diameter", false, torus_diameter)],
+            Extrude { distance, .. } => vec![("Distance", false, distance)],
+            Revolve { angle_deg, .. } => vec![("Angle", true, angle_deg)],
+            Hole { diameter, depth, .. } => vec![("Diameter", false, diameter), ("Depth", false, depth)],
+            Pipe { diameter, wall, .. } => vec![("Section Size", false, diameter), ("Thickness", false, wall)],
+            Fillet { size, chamfer, .. } => vec![(if *chamfer { "Distance" } else { "Radius" }, false, size)],
+            Shell { thickness, .. } => vec![("Thickness", false, thickness)],
+            Move { translate, angle_deg, .. } => {
+                let [x, y, z] = translate;
+                vec![("X Distance", false, x), ("Y Distance", false, y), ("Z Distance", false, z), ("Angle", true, angle_deg)]
+            }
+            Scale { factor, .. } => vec![("Scale Factor", true, factor)],
+            ConstructionPlane { plane } => vec![("Offset", false, &mut plane.offset)],
+            Pattern { pattern: PatternKind::Rectangular { spacing1, spacing2, .. }, .. } => vec![("Spacing 1", false, spacing1), ("Spacing 2", false, spacing2)],
+            Pattern { pattern: PatternKind::Circular { total_deg, .. }, .. } => vec![("Total Angle", true, total_deg)],
+            Joint { motion: JointMotion::Revolute { angle_deg }, .. } => vec![("Angle", true, angle_deg)],
+            Joint { motion: JointMotion::Slider { offset }, .. } => vec![("Distance", false, offset)],
+            _ => vec![],
+        }
+    }
+
     /// For features that create copies of bodies: the source bodies and the
     /// transform of each copy. Copy `k` of body `i` gets id
     /// `uid << 16 | (i * transforms + k)`.
@@ -490,4 +518,24 @@ pub struct Feature {
     pub name: String,
     pub suppressed: bool,
     pub kind: FeatureKind,
+    /// Parameter expressions driving numeric fields (field name -> expression).
+    #[serde(default)]
+    pub exprs: std::collections::BTreeMap<String, String>,
+}
+
+impl Feature {
+    /// Copy with expression-driven fields evaluated.
+    pub fn evaluated(&self, units: crate::Units, vars: &std::collections::HashMap<String, f64>) -> Result<Feature, String> {
+        if self.exprs.is_empty() {
+            return Ok(self.clone());
+        }
+        let mut f = self.clone();
+        for (name, angle, value) in f.kind.numeric_fields_mut() {
+            if let Some(e) = self.exprs.get(name) {
+                let u = if angle { crate::Units::Millimeter } else { units };
+                *value = crate::expr::eval(e, u, vars).map_err(|err| format!("{name} = {e}: {err}"))?;
+            }
+        }
+        Ok(f)
+    }
 }

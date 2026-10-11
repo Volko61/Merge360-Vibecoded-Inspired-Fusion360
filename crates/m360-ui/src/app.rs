@@ -706,7 +706,8 @@ impl Merge360App {
         }
         let tab = self.tab();
         let Some(idx) = tab.doc.feature_index(uid) else { return };
-        let kind = tab.doc.features[idx].kind.clone();
+        let (vars, _) = m360_core::expr::eval_params(&tab.doc.params, tab.doc.units);
+        let kind = tab.doc.features[idx].evaluated(tab.doc.units, &vars).map(|f| f.kind).unwrap_or_else(|_| tab.doc.features[idx].kind.clone());
         if let FeatureKind::Sketch { .. } = kind {
             self.edit_sketch(uid);
             return;
@@ -802,8 +803,19 @@ impl Merge360App {
         match editing {
             Some(EditCtx { uid, before }) => {
                 let mut doc = tab.doc.clone();
+                let (vars, _) = m360_core::expr::eval_params(&doc.params, doc.units);
                 if let Some(f) = doc.feature_mut(uid) {
-                    f.kind = kind;
+                    // Fields changed in the dialog stop following their expression.
+                    let old = f.evaluated(before.units, &vars).map(|e| e.kind).unwrap_or_else(|_| f.kind.clone());
+                    let mut old = old;
+                    let mut new_kind = kind;
+                    let olds: Vec<(&str, f64)> = old.numeric_fields_mut().into_iter().map(|(n, _, v)| (n, *v)).collect();
+                    for (n, _, v) in new_kind.numeric_fields_mut() {
+                        if olds.iter().any(|(on, ov)| *on == n && (ov - *v).abs() > 1e-9) {
+                            f.exprs.remove(n);
+                        }
+                    }
+                    f.kind = new_kind;
                 }
                 doc.marker = before.marker;
                 let label = format!("Edit {}", doc.feature(uid).map_or("feature", |f| f.name.as_str()));

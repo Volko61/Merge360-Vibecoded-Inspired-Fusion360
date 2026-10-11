@@ -208,6 +208,18 @@ pub enum Command {
         picking_axis: bool,
         editing: Option<EditCtx>,
     },
+    Pattern {
+        bodies: Vec<BodyId>,
+        pattern: m360_core::PatternKind,
+        editing: Option<EditCtx>,
+    },
+    Mirror {
+        bodies: Vec<BodyId>,
+        plane: Option<PlaneRef>,
+        /// True while the Mirror Plane field is active.
+        picking_plane: bool,
+        editing: Option<EditCtx>,
+    },
     Hole {
         plane: Option<PlaneRef>,
         points: Vec<[f64; 2]>,
@@ -247,6 +259,9 @@ impl Command {
             Command::Move { .. } => "MOVE/COPY",
             Command::Revolve { .. } => "REVOLVE",
             Command::Hole { .. } => "HOLE",
+            Command::Pattern { pattern: m360_core::PatternKind::Circular { .. }, .. } => "CIRCULAR PATTERN",
+            Command::Pattern { .. } => "RECTANGULAR PATTERN",
+            Command::Mirror { .. } => "MIRROR",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
             Command::Fillet { .. } => "FILLET",
             Command::SketchPlane => "CREATE SKETCH",
@@ -267,7 +282,9 @@ impl Command {
             | Command::Move { editing, .. }
             | Command::Fillet { editing, .. }
             | Command::Revolve { editing, .. }
-            | Command::Hole { editing, .. } => editing.as_ref(),
+            | Command::Hole { editing, .. }
+            | Command::Pattern { editing, .. }
+            | Command::Mirror { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
@@ -487,6 +504,39 @@ impl DocTab {
                     return;
                 };
                 (key, m360_core::model::revolve_tool(&plane, &ents, profiles, axis, *angle_deg))
+            }
+            Command::Move { .. } | Command::Pattern { .. } | Command::Mirror { .. } => {
+                let kind = match cmd {
+                    Command::Move { bodies, translate, axis, angle_deg, .. } => {
+                        // Moves preview as a "copy" of the moved bodies.
+                        FeatureKind::Move { bodies: bodies.clone(), translate: *translate, axis: *axis, angle_deg: *angle_deg, copy: true }
+                    }
+                    Command::Pattern { bodies, pattern, .. } => FeatureKind::Pattern { bodies: bodies.clone(), pattern: *pattern },
+                    Command::Mirror { bodies, plane: Some(plane), .. } => FeatureKind::Mirror { bodies: bodies.clone(), plane: *plane },
+                    _ => {
+                        self.preview = None;
+                        return;
+                    }
+                };
+                let key = format!("{kind:?}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let (bodies, mats) = kind.copy_transforms().unwrap();
+                let mut meshes = Vec::new();
+                for id in bodies {
+                    if let Some(b) = self.model.body(*id) {
+                        for m in &mats {
+                            meshes.push(b.mesh.transformed(*m));
+                        }
+                    }
+                }
+                self.preview = if meshes.is_empty() {
+                    None
+                } else {
+                    Some(Preview { key, mesh: Some(Arc::new(BodyMesh::merge(&meshes))), error: None })
+                };
+                return;
             }
             Command::Hole { plane: Some(plane), points, diameter, depth, through_all, kind, .. } if !points.is_empty() => {
                 let key = format!("hole{plane:?}{points:?}{diameter}{depth}{through_all}{kind:?}");

@@ -93,8 +93,8 @@ impl Document {
                 BodyMeta { name: format!("Body{n}"), visible: true, color: BODY_COLOR },
             );
         }
-        if let FeatureKind::Move { copy: true, bodies, .. } = &kind {
-            for i in 0..bodies.len() {
+        if let Some((bodies, mats)) = kind.copy_transforms() {
+            for i in 0..bodies.len() * mats.len() {
                 let n = self.bodies.len() + 1;
                 self.bodies.insert(
                     (uid << 16) | i as u64,
@@ -333,6 +333,28 @@ mod tests {
         let removed = 2.0 * (pi * 6.25 * 7.0 + pi * 20.25 * 3.0);
         let v = m.bodies[0].mesh.volume();
         assert!((v - (16000.0 - removed)).abs() < 15.0, "{v}");
+    }
+
+    #[test]
+    fn pattern_and_mirror() {
+        use crate::{Axis, BasePlane, PatternKind};
+        let mut d = Document::default();
+        let b = d.add_feature(FeatureKind::Box { plane: PlaneRef::XY, center: [20.0, 0.0], length: 10.0, width: 10.0, height: 10.0 });
+        d.add_feature(FeatureKind::Pattern {
+            bodies: vec![b],
+            pattern: PatternKind::Rectangular { dir1: Axis::X, count1: 3, spacing1: 15.0, dir2: Axis::Y, count2: 2, spacing2: 15.0 },
+        });
+        d.add_feature(FeatureKind::Pattern { bodies: vec![b], pattern: PatternKind::Circular { axis: Axis::Z, count: 4, total_deg: 360.0 } });
+        d.add_feature(FeatureKind::Mirror { bodies: vec![b], plane: PlaneRef { base: BasePlane::YZ, offset: 0.0, flip: false } });
+        let m = Regenerator::default().regenerate(&d);
+        assert!(m.errors.is_empty(), "{:?}", m.errors);
+        assert_eq!(m.bodies.len(), 1 + 5 + 3 + 1);
+        assert_eq!(d.bodies.len(), 10);
+        for body in &m.bodies {
+            assert!((body.mesh.volume() - 1000.0).abs() < 1.0, "{}", body.mesh.volume());
+        }
+        let mirrored = m.bodies.last().unwrap();
+        assert!((mirrored.mesh.bbox_max.x + 15.0).abs() < 1e-3);
     }
 
     #[test]

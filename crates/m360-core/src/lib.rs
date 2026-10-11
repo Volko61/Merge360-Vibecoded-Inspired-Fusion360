@@ -8,7 +8,7 @@ pub mod sketch;
 pub mod units;
 
 pub use document::{BodyMeta, Document, NamedView};
-pub use feature::{Axis, BasePlane, ExtrudeOp, Feature, FeatureKind, HoleType, PlaneRef, RevolveAxis, SketchEntity};
+pub use feature::{Axis, BasePlane, ExtrudeOp, Feature, FeatureKind, HoleType, PatternKind, PlaneRef, RevolveAxis, SketchEntity};
 pub use history::History;
 pub use m360_kernel::ops::BooleanOp;
 pub use model::{Body, BodyId, Model, Regenerator};

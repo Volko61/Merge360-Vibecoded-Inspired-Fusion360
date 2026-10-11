@@ -178,6 +178,16 @@ pub enum FeatureKind {
         kind: HoleType,
         participants: Vec<BodyId>,
     },
+    /// Copies of bodies along a rectangular grid or around an axis.
+    Pattern {
+        bodies: Vec<BodyId>,
+        pattern: PatternKind,
+    },
+    /// Mirrored copies of bodies across a plane.
+    Mirror {
+        bodies: Vec<BodyId>,
+        plane: PlaneRef,
+    },
     /// Fillet (or chamfer) straight edges of a body. Edges are stored by
     /// their end points and re-resolved on every regeneration.
     Fillet {
@@ -195,6 +205,41 @@ pub enum FeatureKind {
         /// Bodies a Join/Cut/Intersect acts on.
         participants: Vec<BodyId>,
     },
+}
+
+/// Layout of a Pattern feature.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum PatternKind {
+    Rectangular { dir1: Axis, count1: u32, spacing1: f64, dir2: Axis, count2: u32, spacing2: f64 },
+    /// Around an origin axis; `total_deg` = 360 spreads instances evenly.
+    Circular { axis: Axis, count: u32, total_deg: f64 },
+}
+
+impl PatternKind {
+    /// Transforms of the copies (identity excluded).
+    pub fn transforms(&self) -> Vec<DMat4> {
+        match *self {
+            PatternKind::Rectangular { dir1, count1, spacing1, dir2, count2, spacing2 } => {
+                let mut out = Vec::new();
+                for i in 0..count1.max(1) {
+                    for j in 0..count2.max(1) {
+                        if i == 0 && j == 0 {
+                            continue;
+                        }
+                        let t = dir1.vec() * spacing1 * i as f64 + dir2.vec() * spacing2 * j as f64;
+                        out.push(DMat4::from_translation(t));
+                    }
+                }
+                out
+            }
+            PatternKind::Circular { axis, count, total_deg } => {
+                let n = count.max(1);
+                let full = (total_deg.abs() - 360.0).abs() < 1e-6;
+                let step = if full || n == 1 { total_deg / n as f64 } else { total_deg / (n - 1) as f64 };
+                (1..n).map(|k| DMat4::from_axis_angle(axis.vec(), (step * k as f64).to_radians())).collect()
+            }
+        }
+    }
 }
 
 /// Hole type (Fusion's Simple / Counterbore / Countersink).
@@ -274,6 +319,9 @@ impl FeatureKind {
             FeatureKind::Extrude { .. } => "Extrude",
             FeatureKind::Revolve { .. } => "Revolve",
             FeatureKind::Hole { .. } => "Hole",
+            FeatureKind::Pattern { pattern: PatternKind::Circular { .. }, .. } => "CircularPattern",
+            FeatureKind::Pattern { .. } => "RectangularPattern",
+            FeatureKind::Mirror { .. } => "Mirror",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }
@@ -289,6 +337,28 @@ impl FeatureKind {
                 | FeatureKind::Extrude { op: ExtrudeOp::NewBody, .. }
                 | FeatureKind::Revolve { op: ExtrudeOp::NewBody, .. }
         ) || matches!(self, FeatureKind::Extrude { participants, op: ExtrudeOp::Join, .. } | FeatureKind::Revolve { participants, op: ExtrudeOp::Join, .. } if participants.is_empty())
+    }
+
+    /// For features that create copies of bodies: the source bodies and the
+    /// transform of each copy. Copy `k` of body `i` gets id
+    /// `uid << 16 | (i * transforms + k)`.
+    pub fn copy_transforms(&self) -> Option<(&[BodyId], Vec<DMat4>)> {
+        match self {
+            FeatureKind::Move { bodies, translate, axis, angle_deg, copy: true } => {
+                Some((bodies, vec![Self::move_matrix(*translate, *axis, *angle_deg)]))
+            }
+            FeatureKind::Pattern { bodies, pattern } => Some((bodies, pattern.transforms())),
+            FeatureKind::Mirror { bodies, plane } => {
+                let n = plane.normal();
+                let d = plane.frame([0.0, 0.0]).origin.dot(n);
+                // Reflection x' = x - 2 (n.x - d) n
+                let r = glam::DMat3::IDENTITY - 2.0 * glam::DMat3::from_cols(n * n.x, n * n.y, n * n.z);
+                let mut m = DMat4::from_mat3(r);
+                m.w_axis = (n * 2.0 * d).extend(1.0);
+                Some((bodies, vec![m]))
+            }
+            _ => None,
+        }
     }
 
     pub fn move_matrix(translate: [f64; 3], axis: Axis, angle_deg: f64) -> DMat4 {

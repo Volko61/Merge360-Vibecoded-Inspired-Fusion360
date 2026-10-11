@@ -213,6 +213,9 @@ impl Merge360App {
                     (Some(Command::Move { copy, .. }), "copy") => *copy = v == "true",
                     (Some(Command::Fillet { size, .. }), "size") => *size = num.unwrap_or(*size),
                     (Some(Command::Revolve { angle_deg, .. }), "angle") => *angle_deg = num.unwrap_or(*angle_deg),
+                    (Some(Command::Pattern { pattern: m360_core::PatternKind::Rectangular { count1, .. }, .. }), "count") => *count1 = num.unwrap_or(1.0) as u32,
+                    (Some(Command::Pattern { pattern: m360_core::PatternKind::Rectangular { spacing1, .. }, .. }), "spacing") => *spacing1 = num.unwrap_or(*spacing1),
+                    (Some(Command::Pattern { pattern: m360_core::PatternKind::Circular { count, .. }, .. }), "count") => *count = num.unwrap_or(1.0) as u32,
                     (Some(Command::Hole { diameter, .. }), "diameter") => *diameter = num.unwrap_or(*diameter),
                     (Some(Command::Hole { depth, .. }), "depth") => *depth = num.unwrap_or(*depth),
                     (Some(Command::Hole { through_all, .. }), "through") => *through_all = v == "true",
@@ -390,6 +393,20 @@ impl Merge360App {
                     copy: false,
                     editing: None,
                 });
+            }
+            "rect_pattern" | "circ_pattern" => {
+                let pattern = if id == "rect_pattern" {
+                    m360_core::PatternKind::Rectangular { dir1: m360_core::Axis::X, count1: 3, spacing1: 30.0, dir2: m360_core::Axis::Z, count2: 1, spacing2: 30.0 }
+                } else {
+                    m360_core::PatternKind::Circular { axis: m360_core::Axis::Y, count: 6, total_deg: 360.0 }
+                };
+                tab.command = Some(Command::Pattern { bodies: sel_bodies, pattern, editing: None });
+                tab.selection.clear();
+            }
+            "mirror" => {
+                let picking_plane = !sel_bodies.is_empty();
+                tab.command = Some(Command::Mirror { bodies: sel_bodies, plane: None, picking_plane, editing: None });
+                tab.selection.clear();
             }
             "hole" => {
                 // Pre-selected planar faces seed the placement.
@@ -613,6 +630,8 @@ impl Merge360App {
             FeatureKind::Move { bodies, translate, axis, angle_deg, copy } => {
                 Command::Move { bodies, translate, axis, angle_deg, copy, editing }
             }
+            FeatureKind::Pattern { bodies, pattern } => Command::Pattern { bodies, pattern, editing },
+            FeatureKind::Mirror { bodies, plane } => Command::Mirror { bodies, plane: Some(plane), picking_plane: false, editing },
             FeatureKind::Hole { plane, points, diameter, depth, through_all, kind, .. } => {
                 Command::Hole { plane: Some(plane), points, diameter, depth, through_all, kind, editing }
             }

@@ -64,6 +64,30 @@ impl BodyMesh {
         out
     }
 
+    /// A copy transformed by `m` (normals and winding fixed for reflections).
+    pub fn transformed(&self, m: glam::DMat4) -> BodyMesh {
+        let mf = m.as_mat4();
+        let nm = glam::Mat3::from_mat4(mf).inverse().transpose();
+        let flip = m.determinant() < 0.0;
+        let mut out = self.clone();
+        out.positions = self.positions.iter().map(|p| mf.transform_point3(Vec3::from(*p)).to_array()).collect();
+        out.normals = self.normals.iter().map(|n| (nm * Vec3::from(*n)).normalize_or_zero().to_array()).collect();
+        if flip {
+            for t in out.indices.chunks_exact_mut(3) {
+                t.swap(1, 2);
+            }
+        }
+        out.edges = self.edges.iter().map(|e| e.iter().map(|p| mf.transform_point3(Vec3::from(*p)).to_array()).collect()).collect();
+        out.edge_info = Vec::new();
+        out.bbox_min = Vec3::splat(f32::MAX);
+        out.bbox_max = Vec3::splat(f32::MIN);
+        for p in &out.positions {
+            out.bbox_min = out.bbox_min.min(Vec3::from(*p));
+            out.bbox_max = out.bbox_max.max(Vec3::from(*p));
+        }
+        out
+    }
+
     /// Unit normal of a face if it is planar.
     pub fn planar_normal(&self, face: u32) -> Option<Vec3> {
         let mut n0: Option<Vec3> = None;

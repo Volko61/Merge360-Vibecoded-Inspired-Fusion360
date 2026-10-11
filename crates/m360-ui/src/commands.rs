@@ -356,6 +356,84 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Pattern { bodies, pattern, .. } => {
+                let ok = !bodies.is_empty();
+                let text = if bodies.is_empty() { "Select".to_string() } else { format!("{} Bodies", bodies.len()) };
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Pattern Type");
+                    ui.label("Bodies");
+                    ui.end_row();
+                    row_label(ui, "Objects");
+                    if selection_field(ui, true, &text).clicked() {
+                        bodies.clear();
+                    }
+                    ui.end_row();
+                    let axis_combo = |ui: &mut egui::Ui, id: &str, a: &mut Axis| {
+                        egui::ComboBox::from_id_salt(id.to_string()).selected_text(format!("{a:?} Axis")).show_ui(ui, |ui| {
+                            for x in [Axis::X, Axis::Y, Axis::Z] {
+                                ui.selectable_value(a, x, format!("{x:?} Axis"));
+                            }
+                        });
+                    };
+                    match pattern {
+                        m360_core::PatternKind::Rectangular { dir1, count1, spacing1, dir2, count2, spacing2 } => {
+                            row_label(ui, "Direction 1");
+                            axis_combo(ui, "pd1", dir1);
+                            ui.end_row();
+                            row_label(ui, "Quantity");
+                            ui.add(egui::DragValue::new(count1).range(1..=100));
+                            ui.end_row();
+                            row_label(ui, "Spacing");
+                            length_field(ui, "ps1", spacing1, units);
+                            ui.end_row();
+                            row_label(ui, "Direction 2");
+                            axis_combo(ui, "pd2", dir2);
+                            ui.end_row();
+                            row_label(ui, "Quantity");
+                            ui.add(egui::DragValue::new(count2).range(1..=100));
+                            ui.end_row();
+                            row_label(ui, "Spacing");
+                            length_field(ui, "ps2", spacing2, units);
+                            ui.end_row();
+                        }
+                        m360_core::PatternKind::Circular { axis, count, total_deg } => {
+                            row_label(ui, "Axis");
+                            axis_combo(ui, "pca", axis);
+                            ui.end_row();
+                            row_label(ui, "Quantity");
+                            ui.add(egui::DragValue::new(count).range(1..=360));
+                            ui.end_row();
+                            row_label(ui, "Total Angle");
+                            angle_field(ui, "pct", total_deg);
+                            ui.end_row();
+                        }
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
+            Command::Mirror { bodies, plane, picking_plane, .. } => {
+                let ok = !bodies.is_empty() && plane.is_some();
+                let text = if bodies.is_empty() { "Select".to_string() } else { format!("{} Bodies", bodies.len()) };
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Pattern Type");
+                    ui.label("Bodies");
+                    ui.end_row();
+                    row_label(ui, "Objects");
+                    if selection_field(ui, !*picking_plane, &text).clicked() {
+                        *picking_plane = false;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Mirror Plane");
+                    let ptext = plane.map_or("Select".to_string(), |p| p.label());
+                    if selection_field(ui, *picking_plane, &ptext).clicked() {
+                        *picking_plane = true;
+                    }
+                    ui.end_row();
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Hole { plane, points, diameter, depth, through_all, kind, .. } => {
                 let ok = plane.is_some() && !points.is_empty() && preview_err.is_none();
                 let r = command_dialog(ctx, title, anchor, ok, |ui| {
@@ -636,6 +714,12 @@ impl Merge360App {
                 if new {
                     self.tab().doc.sketch_visible.insert(sketch, false);
                 }
+            }
+            Command::Pattern { bodies, pattern, editing } => {
+                self.commit_feature(FeatureKind::Pattern { bodies, pattern }, editing);
+            }
+            Command::Mirror { bodies, plane: Some(plane), editing, .. } => {
+                self.commit_feature(FeatureKind::Mirror { bodies, plane }, editing);
             }
             Command::Hole { plane: Some(plane), points, diameter, depth, through_all, kind, editing } => {
                 let participants = self.overlapping_bodies(ExtrudeOp::Cut);

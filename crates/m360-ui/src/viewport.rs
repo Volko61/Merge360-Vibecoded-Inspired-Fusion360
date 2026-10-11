@@ -165,6 +165,8 @@ impl Merge360App {
             Some(Command::Measure { .. }) => PickMode::Measure,
             Some(Command::Fillet { .. }) => PickMode::Edges,
             Some(Command::Hole { .. }) => PickMode::Planes,
+            Some(Command::Mirror { picking_plane: true, .. }) => PickMode::Planes,
+            Some(Command::Mirror { .. }) | Some(Command::Pattern { .. }) => PickMode::Bodies,
             _ => PickMode::Default,
         }
     }
@@ -720,6 +722,34 @@ impl Merge360App {
                     *plane_chosen = true;
                 }
             }
+            Some(Command::Mirror { plane, picking_plane: true, .. }) => {
+                match hover {
+                    Some(SelItem::Plane(b)) => *plane = Some(base_plane_ref(b)),
+                    Some(SelItem::FacePlane(_, _, p)) => *plane = Some(p),
+                    _ => {}
+                }
+            }
+            Some(Command::Mirror { bodies, picking_plane, plane, .. }) => {
+                if let Some(b) = hover.and_then(|h| h.body()) {
+                    if let Some(k) = bodies.iter().position(|x| *x == b) {
+                        bodies.remove(k);
+                    } else {
+                        bodies.push(b);
+                    }
+                    if plane.is_none() {
+                        *picking_plane = true;
+                    }
+                }
+            }
+            Some(Command::Pattern { bodies, .. }) => {
+                if let Some(b) = hover.and_then(|h| h.body()) {
+                    if let Some(k) = bodies.iter().position(|x| *x == b) {
+                        bodies.remove(k);
+                    } else {
+                        bodies.push(b);
+                    }
+                }
+            }
             Some(Command::Hole { plane, points, .. }) => {
                 if let (Some(SelItem::FacePlane(_, _, p)), Some(w)) = (hover, point) {
                     let same = plane.is_some_and(|q| q.base == p.base && q.flip == p.flip && (q.offset - p.offset).abs() < 1e-3);
@@ -959,6 +989,7 @@ impl Merge360App {
         let (combine_target, combine_tools, move_bodies, moving) = match &tab.command {
             Some(Command::Combine { target, tools, .. }) => (*target, tools.clone(), Vec::new(), false),
             Some(Command::Move { bodies, copy, .. }) => (None, Vec::new(), bodies.clone(), !*copy),
+            Some(Command::Pattern { bodies, .. }) | Some(Command::Mirror { bodies, .. }) => (None, Vec::new(), bodies.clone(), false),
             _ => (None, Vec::new(), Vec::new(), false),
         };
         let pick_bodies = self.pick_mode() == PickMode::Bodies;
@@ -1071,7 +1102,7 @@ impl Merge360App {
                     Some(Command::Revolve { op: ExtrudeOp::Join, .. }) => (srgb(0.55, 0.75, 0.95, 0.7), true),
                     Some(Command::Extrude { op: ExtrudeOp::Intersect, .. }) => (srgb(0.95, 0.6, 0.15, 0.45), true),
                     Some(Command::Extrude { op: ExtrudeOp::Join, .. }) => (srgb(0.55, 0.75, 0.95, 0.7), true),
-                    Some(Command::Move { .. }) => (srgb(0.62, 0.78, 0.95, 1.0), true),
+                    Some(Command::Move { .. }) | Some(Command::Pattern { .. }) | Some(Command::Mirror { .. }) => (srgb(0.62, 0.78, 0.95, 1.0), true),
                     _ => (srgb(0.72, 0.74, 0.77, 1.0), true),
                 };
                 let mut d = BodyDraw::new(Arc::clone(mesh), color);

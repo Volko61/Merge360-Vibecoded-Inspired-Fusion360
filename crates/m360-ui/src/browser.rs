@@ -366,6 +366,8 @@ pub fn feature_icon(kind: &FeatureKind) -> Icon {
         FeatureKind::Extrude { .. } => Icon::Extrude,
         FeatureKind::Revolve { .. } => Icon::Revolve,
         FeatureKind::Hole { .. } => Icon::Hole,
+        FeatureKind::Pattern { .. } => Icon::Pattern,
+        FeatureKind::Mirror { .. } => Icon::Mirror,
         FeatureKind::Fillet { chamfer: true, .. } => Icon::Chamfer,
         FeatureKind::Fillet { .. } => Icon::Fillet,
     }

@@ -361,17 +361,36 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             }
             Ok(())
         }
-        FeatureKind::Move { bodies, translate, axis, angle_deg, copy } => {
+        FeatureKind::Move { .. } | FeatureKind::Pattern { .. } | FeatureKind::Mirror { .. } if f.kind.copy_transforms().is_some() => {
+            let (bodies, mats) = f.kind.copy_transforms().unwrap();
+            if bodies.is_empty() {
+                return Err("no bodies selected".into());
+            }
+            if mats.is_empty() {
+                return Err("the pattern has a single instance".into());
+            }
+            for (i, id) in bodies.iter().enumerate() {
+                let b = model.body(*id).ok_or("a source body no longer exists")?.clone();
+                for (k, m) in mats.iter().enumerate() {
+                    let mut solid = ops::transform(&b.solid, *m);
+                    if m.determinant() < 0.0 {
+                        solid.not(); // reflections turn solids inside out
+                    }
+                    let id = (f.uid << 16) | (i * mats.len() + k) as u64;
+                    model.bodies.push(new_body_smooth(id, solid, f.uid, b.smooth_cos));
+                }
+            }
+            Ok(())
+        }
+        FeatureKind::Move { bodies, translate, axis, angle_deg, .. } => {
             if bodies.is_empty() {
                 return Err("no bodies selected".into());
             }
             let m = FeatureKind::move_matrix(*translate, *axis, *angle_deg);
-            for (i, id) in bodies.iter().enumerate() {
+            for id in bodies.iter() {
                 let b = model.body(*id).ok_or("a moved body no longer exists")?;
                 let solid = ops::transform(&b.solid, m);
-                if *copy {
-                    model.bodies.push(new_body((f.uid << 16) | i as u64, solid, f.uid));
-                } else {
+                {
                     let idx = model.bodies.iter().position(|x| x.id == *id).unwrap();
                     model.bodies[idx] = rebuilt(model, *id, solid, f.uid);
                 }

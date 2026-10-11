@@ -200,6 +200,7 @@ impl Merge360App {
                     (Some(Command::Extrude { symmetric, .. }), "symmetric") => *symmetric = v == "true",
                     (Some(Command::Extrude { taper, .. }), "taper") => *taper = num.unwrap_or(*taper),
                     (Some(Command::RefPlane { angle, .. }), "angle") => *angle = num.unwrap_or(*angle),
+                    (Some(Command::Interference { bodies, results }), "compute") => *results = Some(crate::state::interferences(&tab.model, bodies)),
                     (Some(Command::Thread { pitch, .. }), "pitch") => *pitch = num.unwrap_or(*pitch),
                     (Some(Command::Thread { full_length, length, .. }), "length") => {
                         *full_length = false;
@@ -663,6 +664,14 @@ impl Merge360App {
                 tab.command = Some(Command::Measure { picks });
             }
             "center_of_mass" => tab.command = Some(Command::CenterOfMass),
+            "interference" => {
+                let mut bodies = sel_bodies.clone();
+                if bodies.is_empty() {
+                    bodies = tab.model.bodies.iter().map(|b| b.id).filter(|id| tab.body_visible(*id)).collect();
+                }
+                tab.selection.clear();
+                tab.command = Some(Command::Interference { bodies, results: None });
+            }
             "change_parameters" => tab.command = Some(Command::Parameters),
             "doc_settings" => tab.command = Some(Command::DocSettings),
             "properties" => tab.command = Some(Command::Properties),

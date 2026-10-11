@@ -516,6 +516,41 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Interference { bodies, results } => {
+                let names: Vec<String> = bodies.iter().map(|b| self.tabs[self.active].doc.body_meta(*b).name).collect();
+                let mut compute = false;
+                let r = command_dialog(ctx, title, anchor, true, |ui| {
+                    row_label(ui, "Bodies");
+                    let t = if bodies.is_empty() { "Select".to_string() } else { format!("{} selected", bodies.len()) };
+                    if selection_field(ui, bodies.is_empty(), &t).clicked() {
+                        bodies.clear();
+                        *results = None;
+                    }
+                    ui.end_row();
+                    ui.label("");
+                    compute = ui.add_enabled(bodies.len() >= 2, egui::Button::new("Compute")).clicked();
+                    ui.end_row();
+                    if let Some(rs) = results {
+                        if rs.is_empty() {
+                            ui.label("");
+                            ui.label(RichText::new("No interference").color(theme::SUCCESS));
+                            ui.end_row();
+                        }
+                        let name = |id: u64| bodies.iter().position(|b| *b == id).map_or(String::new(), |k| names[k].clone());
+                        for i in rs.iter() {
+                            ui.colored_label(theme::ERROR, "⚠");
+                            ui.label(format!("{} ↔ {}: {} mm³", name(i.a), name(i.b), (i.volume * 100.0).round() / 100.0));
+                            ui.end_row();
+                        }
+                    }
+                });
+                if compute {
+                    let res = crate::state::interferences(&self.tabs[self.active].model, bodies);
+                    *results = Some(res);
+                }
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Thread { body, cyl, size, pitch, full_length, length, .. } => {
                 use crate::state::ISO_THREADS;
                 let ok = body.is_some() && cyl.is_some() && *pitch > 1e-3;

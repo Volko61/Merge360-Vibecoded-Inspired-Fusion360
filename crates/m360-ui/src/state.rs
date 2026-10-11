@@ -428,6 +428,11 @@ pub enum Command {
         length: f64,
         editing: Option<EditCtx>,
     },
+    Interference {
+        bodies: Vec<BodyId>,
+        /// Computed overlaps (None until Compute).
+        results: Option<Vec<Interference>>,
+    },
     /// Plane at Angle / Midplane / Plane Through Three Points.
     RefPlane {
         method: RefPlaneMethod,
@@ -515,6 +520,7 @@ impl Command {
             Command::Parameters => "PARAMETERS",
             Command::DocSettings => "DOCUMENT SETTINGS",
             Command::CenterOfMass => "CENTER OF MASS",
+            Command::Interference { .. } => "INTERFERENCE",
             Command::Properties => "PROPERTIES",
         }
     }
@@ -542,6 +548,48 @@ impl Command {
             _ => None,
         }
     }
+}
+
+/// Overlap between two bodies.
+#[derive(Clone)]
+pub struct Interference {
+    pub a: BodyId,
+    pub b: BodyId,
+    pub volume: f64,
+    pub mesh: Arc<BodyMesh>,
+}
+
+/// Pairwise overlaps of bodies (bounding boxes first, then a boolean
+/// intersection).
+pub fn interferences(model: &Model, bodies: &[BodyId]) -> Vec<Interference> {
+    let bs: Vec<_> = bodies.iter().filter_map(|id| model.body(*id)).collect();
+    let mut out = Vec::new();
+    for i in 0..bs.len() {
+        for j in i + 1..bs.len() {
+            let (a, b) = (bs[i], bs[j]);
+            let (am, bm) = (&a.mesh, &b.mesh);
+            if (0..3).any(|k| am.bbox_max[k] < bm.bbox_min[k] || bm.bbox_max[k] < am.bbox_min[k]) {
+                continue;
+            }
+            // Exact boolean when truck manages it, else a mesh estimate.
+            let exact = m360_kernel::quiet_catch(|| m360_kernel::ops::boolean(&a.solid, std::slice::from_ref(&b.solid), BooleanOp::Intersect))
+                .and_then(|r| r.ok())
+                .map(|s| {
+                    let mesh = m360_kernel::tessellate(&s);
+                    (mesh.volume(), mesh)
+                });
+            let found = match exact {
+                Some(e) => Some(e),
+                None => m360_kernel::mesh_overlap(am, bm),
+            };
+            // Bodies that merely touch give (numerically) tiny overlaps.
+            let min_vol = am.volume().abs().min(bm.volume().abs());
+            if let Some((volume, mesh)) = found.filter(|(v, _)| *v > 1e-4 * min_vol.max(1e-9)) {
+                out.push(Interference { a: a.id, b: b.id, volume, mesh: Arc::new(mesh) });
+            }
+        }
+    }
+    out
 }
 
 /// ISO metric coarse threads: (designation, nominal diameter, pitch).

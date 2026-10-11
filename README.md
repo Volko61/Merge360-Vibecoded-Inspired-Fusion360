@@ -62,7 +62,7 @@ so that fullscreen stays interactive. Set `WGPU_BACKEND=gl` or `vulkan` to force
   live motion value).
 * **Parameters:** user parameters and expressions (`width * 2 + 5 mm`) for any feature value.
 * **Insert:** Insert Mesh (STL, binary/ASCII) as polyhedral bodies that take part in booleans.
-* **Inspect:** Measure (edge length, face area, body volume, minimum distance), Section Analysis
+* **Inspect:** Measure (edge length, face area, body volume, minimum distance), Interference, Section Analysis
   (with section caps), Center of Mass, Properties.
 * **DRAWING workspace:** A3 sheet with title block, Front / Top / Right / Isometric views in
   third-angle layout with hidden-line removal (dashed), true silhouettes of curved faces,

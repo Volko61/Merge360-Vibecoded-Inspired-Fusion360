@@ -182,6 +182,7 @@ impl Merge360App {
             | Some(Command::Move { .. })
             | Some(Command::Appearance)
             | Some(Command::CenterOfMass)
+            | Some(Command::Interference { .. })
             | Some(Command::Properties) => PickMode::Bodies,
             Some(Command::Measure { .. }) => PickMode::Measure,
             Some(Command::Fillet { .. }) => PickMode::Edges,
@@ -963,6 +964,16 @@ impl Merge360App {
                     }
                 }
             }
+            Some(Command::Interference { bodies, results }) => {
+                if let Some(b) = hover.and_then(|h| h.body()) {
+                    if let Some(k) = bodies.iter().position(|x| *x == b) {
+                        bodies.remove(k);
+                    } else {
+                        bodies.push(b);
+                    }
+                    *results = None;
+                }
+            }
             Some(Command::Scale { bodies, .. }) => {
                 if let Some(b) = hover.and_then(|h| h.body()) {
                     if let Some(k) = bodies.iter().position(|x| *x == b) {
@@ -1318,6 +1329,9 @@ impl Merge360App {
                 }
                 VisualStyle::ShadedVisibleEdges => {}
             }
+            if matches!(&tab.command, Some(Command::Interference { results: Some(r), .. }) if !r.is_empty()) {
+                d.color[3] = 0.3;
+            }
             let blue = srgb(0.1, 0.5, 1.0, 1.0);
             if Some(b.id) == combine_target {
                 d.highlight = [blue[0], blue[1], blue[2], 0.32];
@@ -1437,6 +1451,15 @@ impl Merge360App {
                         scene.lines.push(LineInst::new(Vec3::from(w[0]), Vec3::from(w[1]), c, 3.2));
                     }
                 }
+            }
+        }
+
+        // Interference volumes.
+        if let Some(Command::Interference { results: Some(r), .. }) = &tab.command {
+            for i in r {
+                let mut d = BodyDraw::new(Arc::clone(&i.mesh), srgb(0.9, 0.12, 0.1, 0.9));
+                d.show_edges = true;
+                scene.bodies.push(d);
             }
         }
 

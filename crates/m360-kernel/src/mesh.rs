@@ -460,6 +460,85 @@ fn solve3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
     Some(out)
 }
 
+/// Heights where a vertical line (x, y) crosses the mesh, sorted.
+fn z_crossings(tris: &[[Vec3; 3]], x: f32, y: f32) -> Vec<f32> {
+    let mut zs = Vec::new();
+    for t in tris {
+        let (a, b, c) = (t[0], t[1], t[2]);
+        let d = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+        if d.abs() < 1e-12 {
+            continue;
+        }
+        let l1 = ((x - a.x) * (c.y - a.y) - (c.x - a.x) * (y - a.y)) / d;
+        let l2 = ((b.x - a.x) * (y - a.y) - (x - a.x) * (b.y - a.y)) / d;
+        if l1 < 0.0 || l2 < 0.0 || l1 + l2 > 1.0 {
+            continue;
+        }
+        zs.push(a.z + l1 * (b.z - a.z) + l2 * (c.z - a.z));
+    }
+    zs.sort_by(f32::total_cmp);
+    zs
+}
+
+/// Whether a point is inside a closed mesh (crossing parity upwards).
+fn inside(tris: &[[Vec3; 3]], p: Vec3) -> bool {
+    z_crossings(tris, p.x, p.y).iter().filter(|z| **z > p.z).count() % 2 == 1
+}
+
+/// Approximate overlap of two closed meshes: its volume (exact along a grid
+/// of vertical rays) and a display mesh made of the parts of each surface
+/// that lie inside the other body. `None` when they do not overlap.
+pub fn mesh_overlap(a: &BodyMesh, b: &BodyMesh) -> Option<(f64, BodyMesh)> {
+    let lo = a.bbox_min.max(b.bbox_min);
+    let hi = a.bbox_max.min(b.bbox_max);
+    if (0..3).any(|k| lo[k] >= hi[k]) {
+        return None;
+    }
+    let ta: Vec<[Vec3; 3]> = a.triangles().map(|(t, _)| t).collect();
+    let tb: Vec<[Vec3; 3]> = b.triangles().map(|(t, _)| t).collect();
+    let n = 96;
+    let (dx, dy) = ((hi.x - lo.x) / n as f32, (hi.y - lo.y) / n as f32);
+    let mut volume = 0.0f64;
+    for i in 0..n {
+        for j in 0..n {
+            // Off-center samples avoid hitting mesh edges exactly.
+            let x = lo.x + (i as f32 + 0.5 + 0.0137) * dx;
+            let y = lo.y + (j as f32 + 0.5 - 0.0071) * dy;
+            let intervals = |zs: Vec<f32>| -> Vec<(f32, f32)> { zs.chunks_exact(2).map(|c| (c[0], c[1])).collect() };
+            let (ia, ib) = (intervals(z_crossings(&ta, x, y)), intervals(z_crossings(&tb, x, y)));
+            for (a0, a1) in &ia {
+                for (b0, b1) in &ib {
+                    let len = a1.min(*b1) - a0.max(*b0);
+                    if len > 0.0 {
+                        volume += len as f64;
+                    }
+                }
+            }
+        }
+    }
+    volume *= (dx * dy) as f64;
+    if volume <= 1e-6 {
+        return None;
+    }
+    let mut out = BodyMesh { bbox_min: lo, bbox_max: hi, face_count: 1, ..Default::default() };
+    for (src, other) in [(&ta, &tb), (&tb, &ta)] {
+        for t in src.iter() {
+            let c = (t[0] + t[1] + t[2]) / 3.0;
+            if (0..3).any(|k| c[k] < lo[k] || c[k] > hi[k]) || !inside(other, c) {
+                continue;
+            }
+            let nrm = (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero();
+            for p in t {
+                out.indices.push(out.positions.len() as u32);
+                out.positions.push(p.to_array());
+                out.normals.push(nrm.to_array());
+                out.face_ids.push(0);
+            }
+        }
+    }
+    Some((volume, out))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::primitives::{make_box, make_cylinder};
@@ -478,5 +557,20 @@ mod tests {
         assert!(c.axis.dot(DVec3::X).abs() > 0.999 && !c.internal);
         let b = crate::tessellate(&make_box(&f, 5.0, 5.0, 5.0).unwrap());
         assert!((0..b.face_count).all(|i| b.face_cylinder(i).is_none()));
+    }
+
+    #[test]
+    fn overlap_box_sphere() {
+        use crate::primitives::make_sphere;
+        let f = Frame::new(DVec3::ZERO, DVec3::X, DVec3::Y);
+        let b = crate::tessellate(&make_box(&f, 50.0, 50.0, 50.0).unwrap());
+        // Sphere centred on the box face y = 25: half of it overlaps.
+        let s = crate::tessellate(&make_sphere(&Frame::new(DVec3::new(0.0, 25.0, 25.0), DVec3::X, DVec3::Y), 40.0).unwrap());
+        let (v, m) = super::mesh_overlap(&b, &s).unwrap();
+        let expect = 2.0 / 3.0 * std::f64::consts::PI * 8000.0;
+        assert!((v - expect).abs() / expect < 0.03, "{v} vs {expect}");
+        assert!(!m.indices.is_empty());
+        let far = crate::tessellate(&make_box(&Frame::new(DVec3::new(100.0, 0.0, 0.0), DVec3::X, DVec3::Y), 5.0, 5.0, 5.0).unwrap());
+        assert!(super::mesh_overlap(&b, &far).is_none());
     }
 }

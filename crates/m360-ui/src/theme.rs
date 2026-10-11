@@ -18,6 +18,7 @@ pub const SELECT_BG: Color32 = Color32::from_rgb(0xc4, 0xe2, 0xf5);
 pub const DIALOG_HEADER: Color32 = Color32::from_rgb(0x3a, 0x3c, 0x40);
 pub const SKETCH_GREEN: Color32 = Color32::from_rgb(0x2f, 0xa8, 0x4f);
 pub const ERROR: Color32 = Color32::from_rgb(0xd6, 0x3b, 0x30);
+pub const SUCCESS: Color32 = Color32::from_rgb(40, 150, 70);
 pub const WARNING: Color32 = Color32::from_rgb(0xf2, 0xb1, 0x27);
 pub const TIMELINE_BG: Color32 = Color32::from_rgb(0xef, 0xf0, 0xf1);
 

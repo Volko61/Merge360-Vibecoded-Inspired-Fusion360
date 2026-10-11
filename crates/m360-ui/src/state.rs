@@ -138,6 +138,9 @@ pub enum SketchTool {
     Polygon,
     Dimension,
     Constrain(ConKind),
+    Trim,
+    Offset,
+    Fillet,
 }
 
 /// Geometric constraint tools of the SKETCH tab.
@@ -179,9 +182,20 @@ impl ConKind {
     }
 }
 
+/// What the inline value editor applies to.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EditPurpose {
+    Dimension,
+    /// Offset these entities.
+    Offset(Vec<usize>),
+    /// Round the corner between two lines.
+    Fillet(usize, usize),
+}
+
 /// An open inline dimension editor in sketch mode.
 #[derive(Debug, Clone)]
 pub struct DimEdit {
+    pub purpose: EditPurpose,
     /// Existing constraint being edited, or the draft of a new one.
     pub index: Option<usize>,
     pub draft: m360_core::solver::SketchConstraint,
@@ -202,6 +216,9 @@ impl SketchTool {
             SketchTool::Arc => "3-Point Arc",
             SketchTool::Polygon => "Inscribed Polygon",
             SketchTool::Dimension => "Sketch Dimension",
+            SketchTool::Trim => "Trim",
+            SketchTool::Offset => "Offset",
+            SketchTool::Fillet => "Fillet",
             SketchTool::Constrain(k) => k.label(),
         }
     }

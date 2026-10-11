@@ -222,7 +222,7 @@ impl Merge360App {
                     // Entity points (only for tools that act on points).
                     let wants_points = matches!(
                         s.tool,
-                        SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_)
+                        SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Fillet
                     );
                     if wants_points {
                         let mut best_p: Option<(f32, m360_core::solver::PointRef)> = None;
@@ -1641,7 +1641,7 @@ impl Merge360App {
 
         // Sketch dimension label next to the cursor.
         let tab = &self.tabs[self.active];
-        if let (Some(s), Some(cur)) = (tab.sketch.as_ref().filter(|s| !matches!(s.tool, SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_))), self.canvas.sketch_cursor) {
+        if let (Some(s), Some(cur)) = (tab.sketch.as_ref().filter(|s| !matches!(s.tool, SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet)), self.canvas.sketch_cursor) {
             if let Some((plane, _)) = tab.sketch_entities(s.uid) {
                 if let Some(text) = crate::sketch::rubber_band_label(s, cur, tab.doc.units) {
                     if let Some(p) = self.to_screen(&tab.camera, to_world(&plane, cur)) {

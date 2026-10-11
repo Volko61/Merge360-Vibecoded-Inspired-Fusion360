@@ -216,3 +216,455 @@ mod tests {
         assert!((l[0].area() - 6.0).abs() < 1e-9);
     }
 }
+
+// ------------------------------------------------------------------ sketch editing (trim / offset / fillet)
+
+fn sub(a: [f64; 2], b: [f64; 2]) -> [f64; 2] {
+    [a[0] - b[0], a[1] - b[1]]
+}
+fn add(a: [f64; 2], b: [f64; 2]) -> [f64; 2] {
+    [a[0] + b[0], a[1] + b[1]]
+}
+fn mul(a: [f64; 2], k: f64) -> [f64; 2] {
+    [a[0] * k, a[1] * k]
+}
+fn dot(a: [f64; 2], b: [f64; 2]) -> f64 {
+    a[0] * b[0] + a[1] * b[1]
+}
+fn cross(a: [f64; 2], b: [f64; 2]) -> f64 {
+    a[0] * b[1] - a[1] * b[0]
+}
+fn norm(a: [f64; 2]) -> f64 {
+    a[0].hypot(a[1])
+}
+
+/// Angle (radians, [0, 2π)) of `p` around `c`.
+fn angle_of(c: [f64; 2], p: [f64; 2]) -> f64 {
+    (p[1] - c[1]).atan2(p[0] - c[0]).rem_euclid(std::f64::consts::TAU)
+}
+
+/// Arc as (center, radius, start angle, ccw sweep).
+fn arc_params(a: [f64; 2], m: [f64; 2], b: [f64; 2]) -> Option<([f64; 2], f64, f64, f64)> {
+    let (c, r) = m360_kernel::profile::circumcircle(a, m, b)?;
+    let (ta, tm, tb) = (angle_of(c, a), angle_of(c, m), angle_of(c, b));
+    let tau = std::f64::consts::TAU;
+    let ccw = |x: f64| (x - ta).rem_euclid(tau);
+    // Express as a CCW arc from start to end.
+    if ccw(tm) < ccw(tb) {
+        Some((c, r, ta, ccw(tb)))
+    } else {
+        Some((c, r, tb, (ta - tb).rem_euclid(tau)))
+    }
+}
+
+fn arc_point(c: [f64; 2], r: f64, t: f64) -> [f64; 2] {
+    [c[0] + r * t.cos(), c[1] + r * t.sin()]
+}
+
+/// Arc entity from center/radius/start/sweep (CCW).
+fn arc_entity(c: [f64; 2], r: f64, t0: f64, sweep: f64) -> SketchEntity {
+    SketchEntity::Arc { a: arc_point(c, r, t0), m: arc_point(c, r, t0 + sweep / 2.0), b: arc_point(c, r, t0 + sweep) }
+}
+
+/// Intersection points of two entities.
+pub fn intersections(e1: &SketchEntity, e2: &SketchEntity) -> Vec<[f64; 2]> {
+    use SketchEntity::*;
+    let circ = |e: &SketchEntity| -> Option<([f64; 2], f64)> {
+        match e {
+            Circle { c, r } => Some((*c, *r)),
+            Arc { a, m, b } => m360_kernel::profile::circumcircle(*a, *m, *b),
+            _ => None,
+        }
+    };
+    let on = |e: &SketchEntity, p: [f64; 2]| -> bool {
+        match e {
+            Line { a, b } => {
+                let d = sub(*b, *a);
+                let t = dot(sub(p, *a), d) / dot(d, d).max(1e-18);
+                (-1e-9..=1.0 + 1e-9).contains(&t)
+            }
+            Arc { a, m, b } => match arc_params(*a, *m, *b) {
+                Some((c, _, t0, sw)) => (angle_of(c, p) - t0).rem_euclid(std::f64::consts::TAU) <= sw + 1e-9,
+                None => false,
+            },
+            Circle { .. } => true,
+            Point { .. } => false,
+        }
+    };
+    let raw: Vec<[f64; 2]> = match (e1, e2) {
+        (Line { a, b }, Line { a: c, b: d }) => {
+            let (r, s) = (sub(*b, *a), sub(*d, *c));
+            let den = cross(r, s);
+            if den.abs() < 1e-12 {
+                vec![]
+            } else {
+                let t = cross(sub(*c, *a), s) / den;
+                vec![add(*a, mul(r, t))]
+            }
+        }
+        (Line { a, b }, other) | (other, Line { a, b }) if circ(other).is_some() => {
+            let (c, r) = circ(other).unwrap();
+            let d = sub(*b, *a);
+            let f = sub(*a, c);
+            let (qa, qb, qc) = (dot(d, d), 2.0 * dot(f, d), dot(f, f) - r * r);
+            let disc = qb * qb - 4.0 * qa * qc;
+            if disc < 0.0 || qa < 1e-18 {
+                vec![]
+            } else {
+                let sq = disc.sqrt();
+                vec![add(*a, mul(d, (-qb - sq) / (2.0 * qa))), add(*a, mul(d, (-qb + sq) / (2.0 * qa)))]
+            }
+        }
+        (x, y) if circ(x).is_some() && circ(y).is_some() => {
+            let ((c1, r1), (c2, r2)) = (circ(x).unwrap(), circ(y).unwrap());
+            let dvec = sub(c2, c1);
+            let dist = norm(dvec);
+            if dist < 1e-12 || dist > r1 + r2 || dist < (r1 - r2).abs() {
+                vec![]
+            } else {
+                let a = (r1 * r1 - r2 * r2 + dist * dist) / (2.0 * dist);
+                let h = (r1 * r1 - a * a).max(0.0).sqrt();
+                let p = add(c1, mul(dvec, a / dist));
+                let perp = [-dvec[1] / dist, dvec[0] / dist];
+                vec![add(p, mul(perp, h)), sub(p, mul(perp, h))]
+            }
+        }
+        _ => vec![],
+    };
+    raw.into_iter().filter(|p| on(e1, *p) && on(e2, *p)).collect()
+}
+
+/// Trim the piece of entity `idx` around `click` that lies between its
+/// intersections with other entities. Returns the replacement entities
+/// (empty: the whole entity is removed).
+pub fn trim(entities: &[SketchEntity], idx: usize, click: [f64; 2]) -> Option<Vec<SketchEntity>> {
+    let e = entities.get(idx)?;
+    let cuts: Vec<[f64; 2]> = entities
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != idx)
+        .flat_map(|(_, o)| intersections(e, o))
+        .collect();
+    match *e {
+        SketchEntity::Line { a, b } => {
+            let d = sub(b, a);
+            let len2 = dot(d, d).max(1e-18);
+            let tc = (dot(sub(click, a), d) / len2).clamp(0.0, 1.0);
+            let mut ts: Vec<f64> = cuts.iter().map(|p| dot(sub(*p, a), d) / len2).filter(|t| *t > 1e-9 && *t < 1.0 - 1e-9).collect();
+            ts.sort_by(f64::total_cmp);
+            let lo = ts.iter().copied().filter(|t| *t < tc).last().unwrap_or(0.0);
+            let hi = ts.iter().copied().find(|t| *t > tc).unwrap_or(1.0);
+            let mut out = Vec::new();
+            if lo > 0.0 {
+                out.push(SketchEntity::Line { a, b: add(a, mul(d, lo)) });
+            }
+            if hi < 1.0 {
+                out.push(SketchEntity::Line { a: add(a, mul(d, hi)), b });
+            }
+            Some(out)
+        }
+        SketchEntity::Circle { c, r } => {
+            let mut ts: Vec<f64> = cuts.iter().map(|p| angle_of(c, *p)).collect();
+            ts.sort_by(f64::total_cmp);
+            ts.dedup_by(|x, y| (*x - *y).abs() < 1e-9);
+            if ts.len() < 2 {
+                return Some(vec![]);
+            }
+            let tc = angle_of(c, click);
+            let tau = std::f64::consts::TAU;
+            // Interval (CCW) that contains the click; keep the rest of the circle.
+            let n = ts.len();
+            for k in 0..n {
+                let (t0, t1) = (ts[k], ts[(k + 1) % n]);
+                let sweep = (t1 - t0).rem_euclid(tau);
+                if (tc - t0).rem_euclid(tau) < sweep {
+                    return Some(vec![arc_entity(c, r, t1, tau - sweep)]);
+                }
+            }
+            Some(vec![])
+        }
+        SketchEntity::Arc { a, m, b } => {
+            let (c, r, t0, sw) = arc_params(a, m, b)?;
+            let tau = std::f64::consts::TAU;
+            let rel = |p: [f64; 2]| (angle_of(c, p) - t0).rem_euclid(tau);
+            let tc = rel(click).min(sw);
+            let mut ts: Vec<f64> = cuts.iter().map(|p| rel(*p)).filter(|t| *t > 1e-9 && *t < sw - 1e-9).collect();
+            ts.sort_by(f64::total_cmp);
+            let lo = ts.iter().copied().filter(|t| *t < tc).last().unwrap_or(0.0);
+            let hi = ts.iter().copied().find(|t| *t > tc).unwrap_or(sw);
+            let mut out = Vec::new();
+            if lo > 1e-9 {
+                out.push(arc_entity(c, r, t0, lo));
+            }
+            if hi < sw - 1e-9 {
+                out.push(arc_entity(c, r, t0 + hi, sw - hi));
+            }
+            Some(out)
+        }
+        SketchEntity::Point { .. } => Some(vec![]),
+    }
+}
+
+/// Ordered chain of lines/arcs: (start, end, arc midpoint), and whether it is closed.
+pub fn order_chain(entities: &[SketchEntity], chain: &[usize]) -> Option<(Vec<([f64; 2], [f64; 2], Option<[f64; 2]>)>, bool)> {
+    let mut segs: Vec<([f64; 2], [f64; 2], Option<[f64; 2]>)> = Vec::new();
+    for &i in chain {
+        match entities.get(i)? {
+            SketchEntity::Line { a, b } => segs.push((*a, *b, None)),
+            SketchEntity::Arc { a, m, b } => segs.push((*a, *b, Some(*m))),
+            _ => return None,
+        }
+    }
+    let same = |p: [f64; 2], q: [f64; 2]| norm(sub(p, q)) < 1e-6;
+    let degree = |p: [f64; 2], s: &[([f64; 2], [f64; 2], Option<[f64; 2]>)]| s.iter().filter(|x| same(x.0, p) || same(x.1, p)).count();
+    let start = segs.iter().position(|x| degree(x.0, &segs) == 1 || degree(x.1, &segs) == 1).unwrap_or(0);
+    let mut first = segs.remove(start);
+    if degree(first.0, &segs) > 0 && degree(first.1, &segs) == 0 {
+        first = (first.1, first.0, first.2);
+    }
+    let mut out = vec![first];
+    while !segs.is_empty() {
+        let tail = out.last().unwrap().1;
+        let k = segs.iter().position(|x| same(x.0, tail) || same(x.1, tail))?;
+        let x = segs.remove(k);
+        out.push(if same(x.0, tail) { x } else { (x.1, x.0, x.2) });
+    }
+    let closed = out.len() > 1 && same(out[0].0, out.last().unwrap().1);
+    Some((out, closed))
+}
+
+/// Offset an ordered chain to its left by `d` (negative: right), joining
+/// consecutive offset curves at their intersections.
+fn offset_chain(chain: &[([f64; 2], [f64; 2], Option<[f64; 2]>)], closed: bool, d: f64) -> Option<Vec<SketchEntity>> {
+    // Offset curve representation.
+    #[derive(Clone, Copy)]
+    enum C {
+        L([f64; 2], [f64; 2]),
+        /// center, radius, start angle, signed sweep (+ = CCW)
+        A([f64; 2], f64, f64, f64),
+    }
+    let left = |a: [f64; 2], b: [f64; 2]| {
+        let v = sub(b, a);
+        let l = norm(v).max(1e-12);
+        [-v[1] / l, v[0] / l]
+    };
+    let mut cs: Vec<C> = Vec::new();
+    for &(a, b, m) in chain {
+        match m {
+            None => {
+                let n = mul(left(a, b), d);
+                cs.push(C::L(add(a, n), add(b, n)));
+            }
+            Some(m) => {
+                let (c, r) = m360_kernel::profile::circumcircle(a, m, b)?;
+                // Traversal direction a -> m -> b.
+                let ccw = cross(sub(m, a), sub(b, m)) > 0.0;
+                // The left side of a CCW arc is towards the center.
+                let nr = if ccw { r - d } else { r + d };
+                if nr <= 1e-9 {
+                    return None;
+                }
+                let tau = std::f64::consts::TAU;
+                let (ta, tb, tm) = (angle_of(c, a), angle_of(c, b), angle_of(c, m));
+                let sweep = if ccw {
+                    (tm - ta).rem_euclid(tau) + (tb - tm).rem_euclid(tau)
+                } else {
+                    -((ta - tm).rem_euclid(tau) + (tm - tb).rem_euclid(tau))
+                };
+                cs.push(C::A(c, nr, ta, sweep));
+            }
+        }
+    }
+    let ends = |c: &C| match *c {
+        C::L(a, b) => (a, b),
+        C::A(c, r, t0, sw) => (arc_point(c, r, t0), arc_point(c, r, t0 + sw)),
+    };
+    // Join consecutive curves where they no longer meet.
+    let n = cs.len();
+    let joints = if closed { n } else { n - 1 };
+    for k in 0..joints {
+        let (i, j) = (k, (k + 1) % n);
+        let (pi, pj) = (ends(&cs[i]).1, ends(&cs[j]).0);
+        if norm(sub(pi, pj)) < 1e-6 {
+            continue;
+        }
+        // Intersection of the (extended) curves nearest to the joint.
+        let as_entity = |c: &C, extend: bool| match *c {
+            C::L(a, b) => {
+                let v = sub(b, a);
+                if extend {
+                    SketchEntity::Line { a: sub(a, mul(v, 100.0)), b: add(b, mul(v, 100.0)) }
+                } else {
+                    SketchEntity::Line { a, b }
+                }
+            }
+            C::A(c, r, _, _) => SketchEntity::Circle { c, r },
+        };
+        let x = intersections(&as_entity(&cs[i], true), &as_entity(&cs[j], true));
+        let target = mul(add(pi, pj), 0.5);
+        let p = x.into_iter().min_by(|a, b| norm(sub(*a, target)).total_cmp(&norm(sub(*b, target))))?;
+        let set_end = |c: &mut C, p: [f64; 2], at_start: bool| match c {
+            C::L(a, b) => {
+                if at_start {
+                    *a = p
+                } else {
+                    *b = p
+                }
+            }
+            C::A(cc, _, t0, sw) => {
+                let t = angle_of(*cc, p);
+                let tau = std::f64::consts::TAU;
+                if at_start {
+                    let end = *t0 + *sw;
+                    *t0 = t;
+                    let mut nsw = end - t;
+                    nsw = if *sw >= 0.0 { nsw.rem_euclid(tau) } else { -(-nsw).rem_euclid(tau) };
+                    *sw = nsw;
+                } else {
+                    let mut nsw = t - *t0;
+                    nsw = if *sw >= 0.0 { nsw.rem_euclid(tau) } else { -(-nsw).rem_euclid(tau) };
+                    *sw = nsw;
+                }
+            }
+        };
+        set_end(&mut cs[i], p, false);
+        set_end(&mut cs[j], p, true);
+    }
+    Some(
+        cs.into_iter()
+            .map(|c| match c {
+                C::L(a, b) => SketchEntity::Line { a, b },
+                C::A(c, r, t0, sw) => SketchEntity::Arc { a: arc_point(c, r, t0), m: arc_point(c, r, t0 + sw / 2.0), b: arc_point(c, r, t0 + sw) },
+            })
+            .collect(),
+    )
+}
+
+/// Offset curves by `d`. Closed chains grow outward for positive `d`;
+/// open chains move to the left of their traversal direction; circles
+/// become concentric.
+pub fn offset(entities: &[SketchEntity], chain: &[usize], d: f64) -> Vec<SketchEntity> {
+    if let [i] = chain {
+        if let Some(SketchEntity::Circle { c, r }) = entities.get(*i) {
+            return if r + d > 1e-9 { vec![SketchEntity::Circle { c: *c, r: r + d }] } else { vec![] };
+        }
+    }
+    let Some((ordered, closed)) = order_chain(entities, chain) else { return vec![] };
+    let side = if closed {
+        // Outward is to the right of a CCW loop.
+        let mut pts: Vec<[f64; 2]> = Vec::new();
+        for &(a, b, m) in &ordered {
+            pts.push(a);
+            if let Some(m) = m {
+                pts.extend(m360_kernel::profile::arc_points(a, m, b, 8));
+            }
+        }
+        if Loop2::Polygon(pts).signed_area() > 0.0 { -1.0 } else { 1.0 }
+    } else {
+        1.0
+    };
+    offset_chain(&ordered, closed, side * d).unwrap_or_default()
+}
+
+/// Round the corner shared by lines `l1` and `l2` with radius `r`.
+/// Returns (new l1, new l2, fillet arc).
+pub fn fillet_corner(entities: &[SketchEntity], l1: usize, l2: usize, r: f64) -> Option<(SketchEntity, SketchEntity, SketchEntity)> {
+    let (SketchEntity::Line { a: a1, b: b1 }, SketchEntity::Line { a: a2, b: b2 }) = (entities.get(l1)?, entities.get(l2)?) else {
+        return None;
+    };
+    let close = |p: [f64; 2], q: [f64; 2]| norm(sub(p, q)) < 1e-6;
+    // Corner and the far ends.
+    let (corner, f1, c1_is_a) = if close(*a1, *a2) || close(*a1, *b2) { (*a1, *b1, true) } else if close(*b1, *a2) || close(*b1, *b2) { (*b1, *a1, false) } else { return None };
+    let (f2, c2_is_a) = if close(*a2, corner) { (*b2, true) } else { (*a2, false) };
+    let (d1, d2) = (sub(f1, corner), sub(f2, corner));
+    let (l1n, l2n) = (norm(d1), norm(d2));
+    let (u1, u2) = (mul(d1, 1.0 / l1n), mul(d2, 1.0 / l2n));
+    let theta = dot(u1, u2).clamp(-1.0, 1.0).acos();
+    if !(1e-3..std::f64::consts::PI - 1e-3).contains(&theta) || r <= 0.0 {
+        return None;
+    }
+    let t = r / (theta / 2.0).tan();
+    if t >= l1n || t >= l2n {
+        return None;
+    }
+    let (p1, p2) = (add(corner, mul(u1, t)), add(corner, mul(u2, t)));
+    let bis = {
+        let s = add(u1, u2);
+        mul(s, 1.0 / norm(s))
+    };
+    let center = add(corner, mul(bis, r / (theta / 2.0).sin()));
+    let mid = sub(center, mul(bis, r));
+    let n1 = if c1_is_a { SketchEntity::Line { a: p1, b: f1 } } else { SketchEntity::Line { a: f1, b: p1 } };
+    let n2 = if c2_is_a { SketchEntity::Line { a: p2, b: f2 } } else { SketchEntity::Line { a: f2, b: p2 } };
+    Some((n1, n2, SketchEntity::Arc { a: p1, m: mid, b: p2 }))
+}
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+
+    #[test]
+    fn trim_crossing_lines() {
+        let e = vec![
+            SketchEntity::Line { a: [0.0, 0.0], b: [10.0, 0.0] },
+            SketchEntity::Line { a: [5.0, -5.0], b: [5.0, 5.0] },
+        ];
+        let r = trim(&e, 0, [8.0, 0.0]).unwrap();
+        assert_eq!(r, vec![SketchEntity::Line { a: [0.0, 0.0], b: [5.0, 0.0] }]);
+        let r = trim(&e, 1, [5.0, 0.5]).unwrap();
+        assert_eq!(r.len(), 1);
+    }
+
+    #[test]
+    fn trim_circle_by_line() {
+        let e = vec![SketchEntity::Circle { c: [0.0, 0.0], r: 5.0 }, SketchEntity::Line { a: [-10.0, 0.0], b: [10.0, 0.0] }];
+        let r = trim(&e, 0, [0.0, 5.0]).unwrap();
+        assert_eq!(r.len(), 1);
+        let SketchEntity::Arc { m, .. } = r[0] else { panic!() };
+        assert!(m[1] < -4.9, "kept the lower half: {m:?}");
+    }
+
+    #[test]
+    fn offset_rectangle_and_circle() {
+        let mut e = rectangle([0.0, 0.0], [10.0, 10.0]);
+        e.push(SketchEntity::Circle { c: [20.0, 0.0], r: 3.0 });
+        let o = offset(&e, &[0, 1, 2, 3], -1.0);
+        assert_eq!(o.len(), 4);
+        assert!((profiles(&o)[0].area() - 64.0).abs() < 1e-6, "{}", profiles(&o)[0].area());
+        let c = offset(&e, &[4], 2.0);
+        assert_eq!(c, vec![SketchEntity::Circle { c: [20.0, 0.0], r: 5.0 }]);
+    }
+
+    #[test]
+    fn offset_rounded_rectangle() {
+        let e = rectangle([0.0, 0.0], [10.0, 10.0]);
+        let (n1, n2, arc) = fillet_corner(&e, 0, 1, 2.0).unwrap();
+        let mut e2 = e.clone();
+        e2[0] = n1;
+        e2[1] = n2;
+        e2.push(arc);
+        for d in [-1.0, 1.0] {
+            let o = offset(&e2, &[0, 1, 2, 3, 4], d);
+            let p = profiles(&o);
+            assert_eq!(p.len(), 1, "d={d}");
+            let side = 10.0 + 2.0 * d;
+            let r = 2.0 + d;
+            let expect = side * side - (1.0 - std::f64::consts::PI / 4.0) * r * r;
+            assert!((p[0].area() - expect).abs() < 0.2, "d={d}: {} vs {expect}", p[0].area());
+        }
+    }
+
+    #[test]
+    fn fillet_rectangle_corner() {
+        let e = rectangle([0.0, 0.0], [10.0, 10.0]);
+        let (n1, n2, arc) = fillet_corner(&e, 0, 1, 2.0).unwrap();
+        let mut e2 = e.clone();
+        e2[0] = n1;
+        e2[1] = n2;
+        e2.push(arc);
+        let p = profiles(&e2);
+        assert_eq!(p.len(), 1);
+        let expect = 100.0 - (4.0 - std::f64::consts::PI);
+        assert!((p[0].area() - expect).abs() < 0.05, "{}", p[0].area());
+    }
+}

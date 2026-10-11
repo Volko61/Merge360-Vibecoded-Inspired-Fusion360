@@ -6,7 +6,7 @@ use m360_core::{FeatureKind, SketchEntity, Units};
 
 use crate::app::Merge360App;
 use crate::app::ToastKind;
-use crate::state::{ConKind, DimEdit, SelItem, SketchSession, SketchTool};
+use crate::state::{ConKind, DimEdit, EditPurpose, SelItem, SketchSession, SketchTool};
 use crate::viewport::{grid_step, ray_plane, to_world};
 
 fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
@@ -121,6 +121,10 @@ impl Merge360App {
             self.constraint_pick(hover);
             return;
         }
+        if self.tabs[self.active].sketch.as_ref().is_some_and(|s| matches!(s.tool, SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet)) {
+            self.edit_tool_pick(hover);
+            return;
+        }
         let Some(cur) = self.canvas.sketch_cursor else { return };
         let tab = self.tab();
         let Some(s) = &mut tab.sketch else { return };
@@ -178,7 +182,7 @@ impl Merge360App {
                     s.pending.clear();
                 }
             }
-            SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) => {}
+            SketchTool::Select | SketchTool::Dimension | SketchTool::Constrain(_) | SketchTool::Trim | SketchTool::Offset | SketchTool::Fillet => {}
         }
         if new.is_empty() {
             return;
@@ -221,6 +225,72 @@ impl Merge360App {
             }
         });
         true
+    }
+
+    /// Trim / Offset / Fillet tools.
+    fn edit_tool_pick(&mut self, hover: Option<SelItem>) {
+        let pointer = self.canvas.last_pointer.unwrap_or_default();
+        let units = self.tabs[self.active].doc.units;
+        let tab = &self.tabs[self.active];
+        let Some(s) = &tab.sketch else { return };
+        let (uid, tool) = (s.uid, s.tool);
+        let Some((_, ents)) = tab.sketch_entities(uid) else { return };
+        let open = |app: &mut Self, purpose: EditPurpose, default: f64| {
+            if let Some(s) = &mut app.tab().sketch {
+                let text = format!("{}", units.from_mm(default));
+                s.dim_edit = Some(DimEdit {
+                    purpose,
+                    index: None,
+                    draft: SketchConstraint::Fix(PointRef::new(0, 0)),
+                    text,
+                    pos: pointer,
+                    focus: 3,
+                });
+            }
+        };
+        match (tool, hover) {
+            (SketchTool::Trim, Some(SelItem::SketchEntity(_, i))) => {
+                let Some(click) = self.canvas.sketch_raw else { return };
+                let Some(rep) = m360_core::sketch::trim(&ents, i, click) else { return };
+                self.sketch_edit("Trim", move |e, c| {
+                    // Constraints on the trimmed entity no longer apply.
+                    c.retain(|k| !k.entities().contains(&i));
+                    let mut rep = rep.into_iter();
+                    match rep.next() {
+                        Some(first) => {
+                            e[i] = first;
+                            e.extend(rep);
+                        }
+                        None => {
+                            e.remove(i);
+                            *c = c.iter().filter_map(|k| k.remapped(&[i])).collect();
+                        }
+                    }
+                });
+            }
+            (SketchTool::Offset, Some(SelItem::SketchEntity(_, i))) => {
+                let chain = match ents.get(i) {
+                    Some(SketchEntity::Line { .. }) | Some(SketchEntity::Arc { .. }) => crate::viewport::chain_of(&tab.model, uid, i),
+                    _ => vec![i],
+                };
+                open(self, EditPurpose::Offset(chain), 2.0);
+            }
+            (SketchTool::Fillet, Some(SelItem::SketchPoint(_, p))) => {
+                let Some(q) = point_of(&ents, p) else { return };
+                let lines: Vec<usize> = ents
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, e)| matches!(e, SketchEntity::Line { a, b } if dist(*a, q) < 1e-6 || dist(*b, q) < 1e-6))
+                    .map(|(i, _)| i)
+                    .collect();
+                if lines.len() == 2 {
+                    open(self, EditPurpose::Fillet(lines[0], lines[1]), 2.0);
+                } else {
+                    self.toast(ToastKind::Info, "Click a corner where exactly two lines meet.");
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Picks of the Sketch Dimension and constraint tools.
@@ -380,7 +450,7 @@ impl Merge360App {
         };
         let text = format!("{:.3}", units.from_mm(value)).trim_end_matches('0').trim_end_matches('.').to_string();
         if let Some(s) = &mut self.tab().sketch {
-            s.dim_edit = Some(DimEdit { index, draft, text, pos, focus: 3 });
+            s.dim_edit = Some(DimEdit { purpose: EditPurpose::Dimension, index, draft, text, pos, focus: 3 });
         }
     }
 
@@ -415,6 +485,34 @@ impl Merge360App {
         }
         let Some(v) = commit else { return };
         let ed = s.dim_edit.take().unwrap();
+        match ed.purpose.clone() {
+            EditPurpose::Offset(chain) => {
+                self.sketch_edit("Offset", |e, _| {
+                    let new = m360_core::sketch::offset(e, &chain, v);
+                    e.extend(new);
+                });
+                return;
+            }
+            EditPurpose::Fillet(l1, l2) => {
+                if v <= 0.0 {
+                    return;
+                }
+                let tab = self.tab();
+                let ents = tab.sketch.as_ref().and_then(|s| tab.sketch_entities(s.uid)).map(|x| x.1).unwrap_or_default();
+                match m360_core::sketch::fillet_corner(&ents, l1, l2, v) {
+                    Some((n1, n2, arc)) => {
+                        self.sketch_edit("Sketch Fillet", |e, _| {
+                            e[l1] = n1;
+                            e[l2] = n2;
+                            e.push(arc);
+                        });
+                    }
+                    None => self.toast(ToastKind::Warning, "The fillet radius is too large for these lines."),
+                }
+                return;
+            }
+            EditPurpose::Dimension => {}
+        }
         if v <= 0.0 {
             self.toast(ToastKind::Warning, "Dimensions must be positive.");
             return;

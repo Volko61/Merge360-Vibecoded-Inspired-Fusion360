@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/m360-core", "crates/m360-kernel", "crates/m360-render", "crates/m360-ui", "app"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 

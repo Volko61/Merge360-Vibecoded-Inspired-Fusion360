@@ -142,6 +142,8 @@ enum PickMode {
     Measure,
     Sketch,
     Edges,
+    /// Lines of a given sketch (revolve axis).
+    Axis(u64),
 }
 
 impl Merge360App {
@@ -153,6 +155,8 @@ impl Merge360App {
         match &tab.command {
             Some(Command::Primitive { plane_chosen: false, .. }) | Some(Command::SketchPlane) => PickMode::Planes,
             Some(Command::Extrude { .. }) => PickMode::Profiles,
+            Some(Command::Revolve { picking_axis: true, sketch: Some(sk), .. }) => PickMode::Axis(*sk),
+            Some(Command::Revolve { .. }) => PickMode::Profiles,
             Some(Command::Combine { .. })
             | Some(Command::Move { .. })
             | Some(Command::Appearance)
@@ -209,6 +213,23 @@ impl Merge360App {
                     }
                 }
             }
+        }
+
+        // Revolve axis: lines of the profile's sketch.
+        if let PickMode::Axis(uid) = mode {
+            if let Some((plane, ents)) = self.tabs[active].sketch_entities(uid) {
+                let hit = ents
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, e)| matches!(e, SketchEntity::Line { .. }))
+                    .map(|(i, e)| (i, self.entity_screen_dist(&cam, &plane, e, pos)))
+                    .filter(|(_, d)| *d < 8.0)
+                    .min_by(|a, b| a.1.total_cmp(&b.1));
+                let (o, _, _, n) = plane_frame(&plane);
+                let w = ray_plane(&ray, o, n).map(|t| ray.origin + ray.dir * t).unwrap_or(Vec3::ZERO);
+                return hit.map(|(i, _)| (SelItem::SketchEntity(uid, i), w));
+            }
+            return None;
         }
 
         // Body faces.
@@ -335,6 +356,11 @@ impl Merge360App {
                         s([c[0] + r * a.cos(), c[1] + r * a.sin()])
                     })
                     .collect();
+                pts.windows(2).map(|w| seg_dist(pos, w[0], w[1])).fold(f32::MAX, f32::min)
+            }
+            SketchEntity::Arc { a, m, b } => {
+                let mut pts: Vec<Pos2> = s(*a).into_iter().collect();
+                pts.extend(m360_kernel::profile::arc_points(*a, *m, *b, 32).into_iter().filter_map(s));
                 pts.windows(2).map(|w| seg_dist(pos, w[0], w[1])).fold(f32::MAX, f32::min)
             }
         }
@@ -703,6 +729,27 @@ impl Merge360App {
                     self.start_sketch(p);
                 }
             }
+            Some(Command::Revolve { sketch, profiles, axis, picking_axis, .. }) => match hover {
+                Some(SelItem::SketchEntity(_, i)) if *picking_axis => {
+                    *axis = Some(m360_core::RevolveAxis::SketchLine(i));
+                    *picking_axis = false;
+                }
+                Some(SelItem::Profile(uid, i)) => {
+                    if *sketch != Some(uid) {
+                        *sketch = Some(uid);
+                        profiles.clear();
+                    }
+                    if let Some(k) = profiles.iter().position(|x| *x == i) {
+                        profiles.remove(k);
+                    } else {
+                        profiles.push(i);
+                    }
+                    if axis.is_none() {
+                        *picking_axis = true;
+                    }
+                }
+                _ => {}
+            },
             Some(Command::Extrude { sketch, profiles, .. }) => {
                 if let Some(SelItem::Profile(uid, i)) = hover {
                     if *sketch != Some(uid) {
@@ -966,6 +1013,17 @@ impl Merge360App {
             scene.bodies.push(d);
         }
 
+        // Revolve axis line.
+        if let Some(Command::Revolve { sketch: Some(sk), axis: Some(axis), .. }) = &tab.command {
+            if let Some((plane, ents)) = tab.sketch_entities(*sk) {
+                if let Ok((p, d)) = m360_core::model::revolve_axis(&plane, &ents, axis) {
+                    let ext = cam.distance;
+                    let (p, d) = (p.as_vec3(), d.as_vec3());
+                    scene.lines.push(LineInst::new(p - d * ext, p + d * ext, srgb(0.05, 0.4, 0.95, 0.9), 1.8));
+                }
+            }
+        }
+
         // Edge highlights (hover / selection / fillet edges).
         {
             let mut hl: Vec<(u64, u32, [f32; 4])> = Vec::new();
@@ -995,7 +1053,8 @@ impl Merge360App {
         if let Some(p) = &tab.preview {
             if let Some(mesh) = &p.mesh {
                 let (color, edges) = match &tab.command {
-                    Some(Command::Extrude { op: ExtrudeOp::Cut, .. }) => (srgb(0.9, 0.25, 0.2, 0.45), true),
+                    Some(Command::Extrude { op: ExtrudeOp::Cut, .. }) | Some(Command::Revolve { op: ExtrudeOp::Cut, .. }) => (srgb(0.9, 0.25, 0.2, 0.45), true),
+                    Some(Command::Revolve { op: ExtrudeOp::Join, .. }) => (srgb(0.55, 0.75, 0.95, 0.7), true),
                     Some(Command::Extrude { op: ExtrudeOp::Intersect, .. }) => (srgb(0.95, 0.6, 0.15, 0.45), true),
                     Some(Command::Extrude { op: ExtrudeOp::Join, .. }) => (srgb(0.55, 0.75, 0.95, 0.7), true),
                     Some(Command::Move { .. }) => (srgb(0.62, 0.78, 0.95, 1.0), true),
@@ -1092,7 +1151,7 @@ impl Merge360App {
                         for (i, tris) in cache.tris.iter().enumerate() {
                             let item = SelItem::Profile(sk.uid, i);
                             let selected = tab.selection.contains(&item)
-                                || matches!(&tab.command, Some(Command::Extrude { sketch: Some(s), profiles, .. }) if *s == sk.uid && profiles.contains(&i));
+                                || matches!(&tab.command, Some(Command::Extrude { sketch: Some(s), profiles, .. }) | Some(Command::Revolve { sketch: Some(s), profiles, .. }) if *s == sk.uid && profiles.contains(&i));
                             let hovered = tab.hover == Some(item);
                             let fill = if selected {
                                 srgb(0.25, 0.6, 1.0, 0.45)
@@ -1256,6 +1315,13 @@ pub fn entity_points(e: &SketchEntity) -> Vec<[f64; 2]> {
         SketchEntity::Line { a, b } => vec![*a, *b],
         SketchEntity::Circle { c, .. } => vec![*c],
         SketchEntity::Point { p } => vec![*p],
+        SketchEntity::Arc { a, b, m } => {
+            let mut v = vec![*a, *b];
+            if let Some((c, _)) = m360_kernel::profile::circumcircle(*a, *m, *b) {
+                v.push(c);
+            }
+            v
+        }
     }
 }
 
@@ -1273,6 +1339,13 @@ fn entity_lines(out: &mut Vec<LineInst>, plane: &PlaneRef, e: &SketchEntity, col
                     color,
                     width,
                 ));
+            }
+        }
+        SketchEntity::Arc { a, m, b } => {
+            let mut prev = *a;
+            for p in m360_kernel::profile::arc_points(*a, *m, *b, 48) {
+                out.push(LineInst::new(to_world(plane, prev), to_world(plane, p), color, width));
+                prev = p;
             }
         }
         SketchEntity::Point { .. } => {}

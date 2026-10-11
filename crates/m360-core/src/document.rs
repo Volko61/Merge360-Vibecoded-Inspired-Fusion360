@@ -271,6 +271,49 @@ mod tests {
     }
 
     #[test]
+    fn revolve_and_slot_extrude() {
+        use crate::{ExtrudeOp, RevolveAxis, SketchEntity};
+        let mut d = Document::default();
+        // Rectangle away from the Y axis on the XY plane, revolved into a tube.
+        let sk = d.add_feature(FeatureKind::Sketch {
+            plane: PlaneRef::XY,
+            entities: crate::sketch::rectangle([5.0, 0.0], [10.0, 20.0]),
+        });
+        d.add_feature(FeatureKind::Revolve {
+            sketch: sk,
+            profiles: vec![0],
+            axis: RevolveAxis::Y,
+            angle_deg: 360.0,
+            op: ExtrudeOp::NewBody,
+            participants: vec![],
+        });
+        let slot = d.add_feature(FeatureKind::Sketch {
+            plane: PlaneRef::XZ,
+            entities: vec![
+                SketchEntity::Line { a: [30.0, 0.0], b: [40.0, 0.0] },
+                SketchEntity::Arc { a: [40.0, 0.0], m: [42.0, 2.0], b: [40.0, 4.0] },
+                SketchEntity::Line { a: [40.0, 4.0], b: [30.0, 4.0] },
+                SketchEntity::Arc { a: [30.0, 4.0], m: [28.0, 2.0], b: [30.0, 0.0] },
+            ],
+        });
+        d.add_feature(FeatureKind::Extrude {
+            sketch: slot,
+            profiles: vec![0],
+            distance: 5.0,
+            symmetric: false,
+            op: ExtrudeOp::NewBody,
+            participants: vec![],
+        });
+        let m = Regenerator::default().regenerate(&d);
+        assert!(m.errors.is_empty(), "{:?}", m.errors);
+        assert_eq!(m.bodies.len(), 2);
+        let tube = std::f64::consts::PI * 75.0 * 20.0;
+        assert!((m.bodies[0].mesh.volume() - tube).abs() / tube < 0.01);
+        let slot_v = (40.0 + std::f64::consts::PI * 4.0) * 5.0;
+        assert!((m.bodies[1].mesh.volume() - slot_v).abs() / slot_v < 0.01, "{}", m.bodies[1].mesh.volume());
+    }
+
+    #[test]
     fn ron_roundtrip() {
         let mut d = Document::new("Part");
         d.add_feature(boxf(0.0));

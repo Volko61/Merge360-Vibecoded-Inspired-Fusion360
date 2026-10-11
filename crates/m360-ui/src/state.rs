@@ -128,6 +128,8 @@ pub enum SketchTool {
     CenterRect,
     Circle,
     Point,
+    Arc,
+    Polygon,
 }
 
 impl SketchTool {
@@ -139,6 +141,8 @@ impl SketchTool {
             SketchTool::CenterRect => "Center Rectangle",
             SketchTool::Circle => "Center Diameter Circle",
             SketchTool::Point => "Point",
+            SketchTool::Arc => "3-Point Arc",
+            SketchTool::Polygon => "Inscribed Polygon",
         }
     }
 }
@@ -194,6 +198,16 @@ pub enum Command {
         copy: bool,
         editing: Option<EditCtx>,
     },
+    Revolve {
+        sketch: Option<u64>,
+        profiles: Vec<usize>,
+        axis: Option<m360_core::RevolveAxis>,
+        angle_deg: f64,
+        op: ExtrudeOp,
+        /// True while the Axis selection field is active.
+        picking_axis: bool,
+        editing: Option<EditCtx>,
+    },
     Fillet {
         body: Option<BodyId>,
         edges: Vec<u32>,
@@ -222,6 +236,7 @@ impl Command {
             Command::Extrude { .. } => "EXTRUDE",
             Command::Combine { .. } => "COMBINE",
             Command::Move { .. } => "MOVE/COPY",
+            Command::Revolve { .. } => "REVOLVE",
             Command::Fillet { chamfer: true, .. } => "CHAMFER",
             Command::Fillet { .. } => "FILLET",
             Command::SketchPlane => "CREATE SKETCH",
@@ -240,7 +255,8 @@ impl Command {
             | Command::Extrude { editing, .. }
             | Command::Combine { editing, .. }
             | Command::Move { editing, .. }
-            | Command::Fillet { editing, .. } => editing.as_ref(),
+            | Command::Fillet { editing, .. }
+            | Command::Revolve { editing, .. } => editing.as_ref(),
             _ => None,
         }
     }
@@ -449,6 +465,17 @@ impl DocTab {
                     return;
                 };
                 (key, m360_core::model::extrude_tool(&plane, &ents, profiles, *distance, *symmetric))
+            }
+            Command::Revolve { sketch: Some(sk), profiles, axis: Some(axis), angle_deg, .. } if !profiles.is_empty() => {
+                let key = format!("rev{sk}{profiles:?}{axis:?}{angle_deg}");
+                if self.preview.as_ref().is_some_and(|p| p.key == key) {
+                    return;
+                }
+                let Some((plane, ents)) = self.sketch_entities(*sk) else {
+                    self.preview = None;
+                    return;
+                };
+                (key, m360_core::model::revolve_tool(&plane, &ents, profiles, axis, *angle_deg))
             }
             Command::Fillet { body: Some(b), edges, size, chamfer, .. } if !edges.is_empty() => {
                 let key = format!("fillet{b}{edges:?}{size}{chamfer}");

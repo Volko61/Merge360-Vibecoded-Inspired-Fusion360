@@ -291,6 +291,71 @@ impl Merge360App {
                 enabled = r.enabled;
                 finish = resolve(r);
             }
+            Command::Revolve { sketch, profiles, axis, angle_deg, op, picking_axis, .. } => {
+                let ok = sketch.is_some() && !profiles.is_empty() && axis.is_some() && preview_err.is_none();
+                let lines: Vec<usize> = sketch
+                    .and_then(|sk| self.tabs[self.active].sketch_entities(sk))
+                    .map(|(_, ents)| {
+                        ents.iter().enumerate().filter(|(_, e)| matches!(e, m360_core::SketchEntity::Line { .. })).map(|(i, _)| i).collect()
+                    })
+                    .unwrap_or_default();
+                let r = command_dialog(ctx, title, anchor, ok, |ui| {
+                    row_label(ui, "Profile");
+                    let text = if profiles.is_empty() { "Select".to_string() } else { format!("{} selected", profiles.len()) };
+                    if selection_field(ui, !*picking_axis, &text).clicked() {
+                        *picking_axis = false;
+                    }
+                    ui.end_row();
+                    row_label(ui, "Axis");
+                    ui.horizontal(|ui| {
+                        let text = axis.map_or("Select".to_string(), |a| a.label());
+                        if selection_field(ui, *picking_axis, &text).clicked() {
+                            *picking_axis = true;
+                        }
+                        egui::ComboBox::from_id_salt("rev_axis").selected_text("").width(20.0).show_ui(ui, |ui| {
+                            for a in [m360_core::RevolveAxis::X, m360_core::RevolveAxis::Y, m360_core::RevolveAxis::Z] {
+                                if ui.selectable_label(*axis == Some(a), a.label()).clicked() {
+                                    *axis = Some(a);
+                                    *picking_axis = false;
+                                }
+                            }
+                            for i in &lines {
+                                let a = m360_core::RevolveAxis::SketchLine(*i);
+                                if ui.selectable_label(*axis == Some(a), a.label()).clicked() {
+                                    *axis = Some(a);
+                                    *picking_axis = false;
+                                }
+                            }
+                        });
+                    });
+                    ui.end_row();
+                    row_label(ui, "Type");
+                    ui.label("Angle");
+                    ui.end_row();
+                    row_label(ui, "Angle");
+                    ui.horizontal(|ui| {
+                        angle_field(ui, "rev_angle", angle_deg);
+                        if ui.button("Full").clicked() {
+                            *angle_deg = 360.0;
+                        }
+                    });
+                    ui.end_row();
+                    row_label(ui, "Operation");
+                    egui::ComboBox::from_id_salt("rev_op").selected_text(op.label()).show_ui(ui, |ui| {
+                        for o in ExtrudeOp::ALL {
+                            ui.selectable_value(op, o, o.label());
+                        }
+                    });
+                    ui.end_row();
+                    if let Some(e) = &preview_err {
+                        ui.colored_label(theme::ERROR, "⚠");
+                        ui.colored_label(theme::ERROR, e);
+                        ui.end_row();
+                    }
+                });
+                enabled = r.enabled;
+                finish = resolve(r);
+            }
             Command::Fillet { body, edges, size, chamfer, .. } => {
                 let ok = body.is_some() && !edges.is_empty() && preview_err.is_none();
                 let text = if edges.is_empty() { "Select".to_string() } else { format!("{} Edges", edges.len()) };
@@ -475,28 +540,7 @@ impl Merge360App {
         match cmd {
             Command::Primitive { kind, editing, .. } => self.commit_feature(kind, editing),
             Command::Extrude { sketch: Some(sketch), profiles, distance, symmetric, op, editing } => {
-                // Participants: bodies overlapping the tool.
-                let tab = &self.tabs[self.active];
-                let participants = match (&tab.preview, op) {
-                    (_, ExtrudeOp::NewBody) => Vec::new(),
-                    (Some(p), _) => match &p.mesh {
-                        Some(m) => {
-                            let pad = Vec3::splat(0.01);
-                            tab.model
-                                .bodies
-                                .iter()
-                                .filter(|b| tab.body_visible(b.id))
-                                .filter(|b| {
-                                    let (a0, a1) = (b.mesh.bbox_min - pad, b.mesh.bbox_max + pad);
-                                    a0.cmple(m.bbox_max).all() && m.bbox_min.cmple(a1).all()
-                                })
-                                .map(|b| b.id)
-                                .collect()
-                        }
-                        None => Vec::new(),
-                    },
-                    _ => Vec::new(),
-                };
+                let participants = self.overlapping_bodies(op);
                 if matches!(op, ExtrudeOp::Cut | ExtrudeOp::Intersect) && participants.is_empty() {
                     self.toast(crate::app::ToastKind::Warning, "No bodies intersect the extrusion; nothing to cut.");
                 }
@@ -513,6 +557,17 @@ impl Merge360App {
             Command::Move { bodies, translate, axis, angle_deg, copy, editing } => {
                 self.commit_feature(FeatureKind::Move { bodies, translate, axis, angle_deg, copy }, editing)
             }
+            Command::Revolve { sketch: Some(sketch), profiles, axis: Some(axis), angle_deg, op, editing, .. } => {
+                let participants = self.overlapping_bodies(op);
+                if matches!(op, ExtrudeOp::Cut | ExtrudeOp::Intersect) && participants.is_empty() {
+                    self.toast(crate::app::ToastKind::Warning, "No bodies intersect the revolve; nothing to cut.");
+                }
+                let new = editing.is_none();
+                self.commit_feature(FeatureKind::Revolve { sketch, profiles, axis, angle_deg, op, participants }, editing);
+                if new {
+                    self.tab().doc.sketch_visible.insert(sketch, false);
+                }
+            }
             Command::Fillet { body: Some(body), edges, size, chamfer, editing } => {
                 let tab = &self.tabs[self.active];
                 let Some(b) = tab.model.body(body) else { return };
@@ -523,6 +578,26 @@ impl Merge360App {
         }
         self.tab().preview = None;
         self.tab().selection.clear();
+    }
+
+    /// Bodies whose bounds overlap the current preview tool (Join/Cut targets).
+    fn overlapping_bodies(&self, op: ExtrudeOp) -> Vec<u64> {
+        let tab = &self.tabs[self.active];
+        if op == ExtrudeOp::NewBody {
+            return Vec::new();
+        }
+        let Some(m) = tab.preview.as_ref().and_then(|p| p.mesh.as_ref()) else { return Vec::new() };
+        let pad = Vec3::splat(0.01);
+        tab.model
+            .bodies
+            .iter()
+            .filter(|b| tab.body_visible(b.id))
+            .filter(|b| {
+                let (a0, a1) = (b.mesh.bbox_min - pad, b.mesh.bbox_max + pad);
+                a0.cmple(m.bbox_max).all() && m.bbox_min.cmple(a1).all()
+            })
+            .map(|b| b.id)
+            .collect()
     }
 
     fn measure_rows(&self, ui: &mut egui::Ui, picks: &[SelItem], units: Units) {
@@ -658,6 +733,14 @@ impl Merge360App {
                             row(ui, "Torus Diameter", torus_diameter, "t");
                         }
                         FeatureKind::Extrude { distance, .. } => row(ui, "Distance", distance, "d"),
+                        FeatureKind::Revolve { angle_deg, .. } => {
+                            ui.label(&f.name);
+                            ui.label("Angle");
+                            if angle_field(ui, (f.uid, "a"), angle_deg) {
+                                changed = true;
+                            }
+                            ui.end_row();
+                        }
                         FeatureKind::Fillet { size, chamfer, .. } => row(ui, if *chamfer { "Distance" } else { "Radius" }, size, "s"),
                         FeatureKind::Move { translate, .. } => {
                             let [x, y, z] = translate;

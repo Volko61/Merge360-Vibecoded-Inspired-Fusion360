@@ -106,6 +106,8 @@ pub enum SketchEntity {
     Line { a: [f64; 2], b: [f64; 2] },
     Circle { c: [f64; 2], r: f64 },
     Point { p: [f64; 2] },
+    /// Three-point arc from `a` through `m` to `b`.
+    Arc { a: [f64; 2], m: [f64; 2], b: [f64; 2] },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -155,6 +157,14 @@ pub enum FeatureKind {
         plane: PlaneRef,
         entities: Vec<SketchEntity>,
     },
+    Revolve {
+        sketch: u64,
+        profiles: Vec<usize>,
+        axis: RevolveAxis,
+        angle_deg: f64,
+        op: ExtrudeOp,
+        participants: Vec<BodyId>,
+    },
     /// Fillet (or chamfer) straight edges of a body. Edges are stored by
     /// their end points and re-resolved on every regeneration.
     Fillet {
@@ -172,6 +182,27 @@ pub enum FeatureKind {
         /// Bodies a Join/Cut/Intersect acts on.
         participants: Vec<BodyId>,
     },
+}
+
+/// Axis of a Revolve feature.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RevolveAxis {
+    X,
+    Y,
+    Z,
+    /// A line entity of the profile's sketch.
+    SketchLine(usize),
+}
+
+impl RevolveAxis {
+    pub fn label(&self) -> String {
+        match self {
+            RevolveAxis::X => "X Axis".into(),
+            RevolveAxis::Y => "Y Axis".into(),
+            RevolveAxis::Z => "Z Axis".into(),
+            RevolveAxis::SketchLine(i) => format!("Sketch line {}", i + 1),
+        }
+    }
 }
 
 /// Operation of a sketch-based feature (Fusion's "Operation" dropdown).
@@ -210,6 +241,7 @@ impl FeatureKind {
             FeatureKind::Remove { .. } => "Remove",
             FeatureKind::Sketch { .. } => "Sketch",
             FeatureKind::Extrude { .. } => "Extrude",
+            FeatureKind::Revolve { .. } => "Revolve",
             FeatureKind::Fillet { chamfer: true, .. } => "Chamfer",
             FeatureKind::Fillet { .. } => "Fillet",
         }
@@ -223,7 +255,8 @@ impl FeatureKind {
                 | FeatureKind::Sphere { .. }
                 | FeatureKind::Torus { .. }
                 | FeatureKind::Extrude { op: ExtrudeOp::NewBody, .. }
-        ) || matches!(self, FeatureKind::Extrude { participants, op: ExtrudeOp::Join, .. } if participants.is_empty())
+                | FeatureKind::Revolve { op: ExtrudeOp::NewBody, .. }
+        ) || matches!(self, FeatureKind::Extrude { participants, op: ExtrudeOp::Join, .. } | FeatureKind::Revolve { participants, op: ExtrudeOp::Join, .. } if participants.is_empty())
     }
 
     pub fn move_matrix(translate: [f64; 3], axis: Axis, angle_deg: f64) -> DMat4 {

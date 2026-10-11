@@ -405,6 +405,8 @@ impl Merge360App {
                                 (Icon::Rectangle, crate::state::SketchTool::Rect, "sk_rect"),
                                 (Icon::Rectangle, crate::state::SketchTool::CenterRect, "sk_center_rect"),
                                 (Icon::Circle, crate::state::SketchTool::Circle, "sk_circle"),
+                                (Icon::Arc, crate::state::SketchTool::Arc, "sk_arc"),
+                                (Icon::Polygon, crate::state::SketchTool::Polygon, "sk_polygon"),
                                 (Icon::Point, crate::state::SketchTool::Point, "sk_point"),
                             ] {
                                 if nav_icon(ui, icon, tool == Some(t), t.label()).clicked() {

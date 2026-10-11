@@ -9,6 +9,7 @@ pub mod ops;
 pub mod primitives;
 pub mod profile;
 pub mod fillet;
+pub mod hole;
 
 pub use mesh::{tessellate, tessellate_smooth, BodyMesh, EdgeInfo, SMOOTH_COS};
 pub use primitives::Frame;

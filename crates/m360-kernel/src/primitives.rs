@@ -100,6 +100,50 @@ pub fn make_cylinder(frame: &Frame, diameter: f64, height: f64) -> Result<Solid>
     Ok(place(solid, frame))
 }
 
+/// Truncated cone (frustum) along the frame normal: radius `r0` at `z0`,
+/// radius `r1` at `z1` (one radius may be zero for a pointed cone).
+pub fn make_frustum(frame: &Frame, r0: f64, z0: f64, r1: f64, z1: f64) -> Result<Solid> {
+    if !(r0 >= 0.0 && r1 >= 0.0) || r0.max(r1) < 1e-6 || (z1 - z0).abs() < 1e-6 {
+        return Err(KernelError::InvalidParameter("invalid cone dimensions".into()));
+    }
+    let (r0, z0, r1, z1) = if z0 < z1 { (r0, z0, r1, z1) } else { (r1, z1, r0, z0) };
+    let circle = |r: f64, z: f64| -> Wire {
+        let v = builder::vertex(Point3::new(r, 0.0, z));
+        builder::rsweep(&v, Point3::new(0.0, 0.0, z), Vector3::unit_z(), Rad(2.0 * PI))
+    };
+    let solid = if r0 > 1e-6 && r1 > 1e-6 {
+        let w0 = circle(r0, z0);
+        let w1 = circle(r1, z1);
+        let mut shell = builder::try_wire_homotopy(&w0, &w1)
+            .map_err(|e| KernelError::OperationFailed(format!("cone: {e:?}")))?;
+        let bottom = builder::try_attach_plane(&[w0.inverse()])
+            .map_err(|e| KernelError::OperationFailed(format!("cone: {e:?}")))?;
+        let top = builder::try_attach_plane(&[w1.clone()])
+            .map_err(|e| KernelError::OperationFailed(format!("cone: {e:?}")))?;
+        shell.push(bottom);
+        shell.push(top);
+        let mut s = Solid::try_new(vec![shell]).map_err(|e| KernelError::OperationFailed(format!("cone: {e:?}")))?;
+        if crate::tessellate(&s).volume() < 0.0 {
+            s.not();
+        }
+        s
+    } else {
+        // Pointed cone: sweep the slanted line around the axis (like a sphere).
+        let (rb, zb, zt) = if r0 > 1e-6 { (r0, z0, z1) } else { (r1, z1, z0) };
+        let apex = builder::vertex(Point3::new(0.0, 0.0, zt));
+        let rim = builder::vertex(Point3::new(rb, 0.0, zb));
+        let center = builder::vertex(Point3::new(0.0, 0.0, zb));
+        let wire: Wire = vec![builder::line(&apex, &rim), builder::line(&rim, &center)].into();
+        let shell: Shell = builder::cone(&wire, Vector3::unit_z(), Rad(2.0 * PI));
+        let mut s = Solid::new(vec![shell]);
+        if crate::tessellate(&s).volume() < 0.0 {
+            s.not();
+        }
+        s
+    };
+    Ok(place(solid, frame))
+}
+
 /// Sphere centered on the frame origin.
 pub fn make_sphere(frame: &Frame, diameter: f64) -> Result<Solid> {
     positive("Diameter", diameter)?;
@@ -190,6 +234,17 @@ mod tests {
             let z0 = e[0][2];
             assert!(e.iter().all(|p| (p[2] - z0).abs() < 1e-4), "unexpected side edge");
         }
+    }
+
+    #[test]
+    fn frustum_and_cone_volume() {
+        let f = make_frustum(&xy(), 10.0, 0.0, 5.0, 12.0).unwrap();
+        let v = tessellate(&f).volume();
+        let expect = PI * 12.0 / 3.0 * (100.0 + 50.0 + 25.0);
+        assert!(rel_close(v, expect, 1e-2), "{v} vs {expect}");
+        let c = make_frustum(&xy(), 10.0, 0.0, 0.0, 12.0).unwrap();
+        let v = tessellate(&c).volume();
+        assert!(rel_close(v, PI * 100.0 * 4.0, 2e-2), "{v}");
     }
 
     #[test]

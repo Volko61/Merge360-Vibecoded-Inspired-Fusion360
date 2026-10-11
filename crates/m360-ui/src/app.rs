@@ -212,6 +212,22 @@ impl Merge360App {
                     (Some(Command::Move { translate, .. }), "z") => translate[2] = num.unwrap_or(0.0),
                     (Some(Command::Move { copy, .. }), "copy") => *copy = v == "true",
                     (Some(Command::Fillet { size, .. }), "size") => *size = num.unwrap_or(*size),
+                    (Some(Command::Revolve { angle_deg, .. }), "angle") => *angle_deg = num.unwrap_or(*angle_deg),
+                    (Some(Command::Revolve { axis, .. }), "axis") => {
+                        *axis = match v.as_str() {
+                            "x" => Some(m360_core::RevolveAxis::X),
+                            "y" => Some(m360_core::RevolveAxis::Y),
+                            "z" => Some(m360_core::RevolveAxis::Z),
+                            n => n.parse().ok().map(m360_core::RevolveAxis::SketchLine),
+                        }
+                    }
+                    (Some(Command::Revolve { op, .. }), "op") => {
+                        *op = match v.as_str() {
+                            "cut" => ExtrudeOp::Cut,
+                            "join" => ExtrudeOp::Join,
+                            _ => ExtrudeOp::NewBody,
+                        }
+                    }
                     (Some(Command::Fillet { chamfer, .. }), "chamfer") => *chamfer = v == "true",
                     _ => eprintln!("script: cannot set {k} on the current command"),
                 }
@@ -361,6 +377,29 @@ impl Merge360App {
                     axis: m360_core::Axis::Y,
                     angle_deg: 0.0,
                     copy: false,
+                    editing: None,
+                });
+            }
+            "revolve" => {
+                let mut sketch = None;
+                let mut profiles = Vec::new();
+                for sitem in &tab.selection {
+                    if let SelItem::Profile(sk, i) = sitem {
+                        if sketch.is_none() || sketch == Some(*sk) {
+                            sketch = Some(*sk);
+                            profiles.push(*i);
+                        }
+                    }
+                }
+                tab.selection.clear();
+                let op = if tab.model.bodies.is_empty() { ExtrudeOp::NewBody } else { ExtrudeOp::Join };
+                tab.command = Some(Command::Revolve {
+                    sketch,
+                    profiles,
+                    axis: None,
+                    angle_deg: 360.0,
+                    op,
+                    picking_axis: false,
                     editing: None,
                 });
             }
@@ -546,6 +585,15 @@ impl Merge360App {
             FeatureKind::Move { bodies, translate, axis, angle_deg, copy } => {
                 Command::Move { bodies, translate, axis, angle_deg, copy, editing }
             }
+            FeatureKind::Revolve { sketch, profiles, axis, angle_deg, op, .. } => Command::Revolve {
+                sketch: Some(sketch),
+                profiles,
+                axis: Some(axis),
+                angle_deg,
+                op,
+                picking_axis: false,
+                editing,
+            },
             FeatureKind::Fillet { body, edges, size, chamfer } => {
                 let idx = tab.model.body(body).map(|b| crate::state::edge_indices(&b.mesh, &edges)).unwrap_or_default();
                 Command::Fillet { body: Some(body), edges: idx, size, chamfer, editing }
@@ -925,6 +973,8 @@ pub(crate) fn sketch_tool(id: &str) -> Option<SketchTool> {
         "sk_center_rect" => SketchTool::CenterRect,
         "sk_circle" => SketchTool::Circle,
         "sk_point" => SketchTool::Point,
+        "sk_arc" => SketchTool::Arc,
+        "sk_polygon" => SketchTool::Polygon,
         _ => return None,
     })
 }

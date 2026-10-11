@@ -6,7 +6,7 @@ use std::sync::Arc;
 use m360_kernel::{fillet, ops, ops::BooleanOp, primitives, profile, tessellate, tessellate_smooth, BodyMesh, Solid, SMOOTH_COS};
 
 use crate::document::Document;
-use crate::feature::{ExtrudeOp, Feature, FeatureKind, SketchEntity};
+use crate::feature::{ExtrudeOp, Feature, FeatureKind, RevolveAxis, SketchEntity};
 use crate::PlaneRef;
 
 /// Stable body identifier. A body created by a feature takes that feature's
@@ -216,6 +216,67 @@ fn normal_extent(body: &Body, plane: &PlaneRef) -> (f64, f64) {
     (lo, hi)
 }
 
+/// World-space axis (point, direction) of a revolve.
+pub fn revolve_axis(plane: &PlaneRef, entities: &[SketchEntity], axis: &RevolveAxis) -> Result<(glam::DVec3, glam::DVec3), String> {
+    Ok(match axis {
+        RevolveAxis::X => (glam::DVec3::ZERO, glam::DVec3::X),
+        RevolveAxis::Y => (glam::DVec3::ZERO, glam::DVec3::Y),
+        RevolveAxis::Z => (glam::DVec3::ZERO, glam::DVec3::Z),
+        RevolveAxis::SketchLine(i) => match entities.get(*i) {
+            Some(SketchEntity::Line { a, b }) => {
+                let f = plane.frame([0.0, 0.0]);
+                let pa = f.to_world(glam::DVec3::new(a[0], a[1], 0.0));
+                let pb = f.to_world(glam::DVec3::new(b[0], b[1], 0.0));
+                (pa, (pb - pa).normalize())
+            }
+            _ => return Err("the revolve axis line no longer exists".into()),
+        },
+    })
+}
+
+/// Revolve the selected profiles of a sketch.
+pub fn revolve_tool(plane: &PlaneRef, entities: &[SketchEntity], profiles: &[usize], axis: &RevolveAxis, angle_deg: f64) -> Result<Solid, String> {
+    let (p, d) = revolve_axis(plane, entities, axis)?;
+    let frame = plane.frame([0.0, 0.0]);
+    let mut shells = Vec::new();
+    for r in &selected_regions(entities, profiles)? {
+        let s = profile::revolve(&frame, r, p, d, angle_deg).map_err(|e| e.to_string())?;
+        shells.extend(s.into_boundaries());
+    }
+    Ok(Solid::new(shells))
+}
+
+/// Apply a tool body with a Fusion-style operation to the participants.
+fn apply_op(model: &mut Model, uid: u64, tool: Solid, op: ExtrudeOp, participants: &[BodyId]) -> Result<(), String> {
+    let live: Vec<BodyId> = participants.iter().copied().filter(|id| model.body(*id).is_some()).collect();
+    match op {
+        ExtrudeOp::NewBody => model.bodies.push(new_body(uid, tool, uid)),
+        ExtrudeOp::Join if live.is_empty() => model.bodies.push(new_body(uid, tool, uid)),
+        ExtrudeOp::Join => {
+            let target = live[0];
+            let t = model.body(target).unwrap();
+            let joined = ops::boolean(&t.solid, std::slice::from_ref(&tool), BooleanOp::Join).unwrap_or_else(|_| {
+                let mut shells = t.solid.boundaries().clone();
+                shells.extend(tool.into_boundaries());
+                Solid::new(shells)
+            });
+            replace(model, rebuilt(model, target, joined, uid));
+        }
+        ExtrudeOp::Cut | ExtrudeOp::Intersect => {
+            if live.is_empty() {
+                return Err("no bodies to cut/intersect".into());
+            }
+            let bop = if op == ExtrudeOp::Cut { BooleanOp::Cut } else { BooleanOp::Intersect };
+            for id in live {
+                let t = model.body(id).unwrap();
+                let res = ops::boolean(&t.solid, std::slice::from_ref(&tool), bop).map_err(|e| e.to_string())?;
+                replace(model, rebuilt(model, id, res, uid));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Match stored edge endpoints against the straight edges of a body.
 pub fn resolve_edges(mesh: &BodyMesh, edges: &[[[f64; 3]; 2]]) -> Result<Vec<fillet::EdgeSpec>, String> {
     if edges.is_empty() {
@@ -361,6 +422,16 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
                 }
             }
             Ok(())
+        }
+        FeatureKind::Revolve { sketch, profiles, axis, angle_deg, op, participants } => {
+            let sk = model
+                .sketches
+                .iter()
+                .find(|s| s.uid == *sketch)
+                .ok_or("the sketch used by this feature no longer exists")?;
+            let (plane, entities) = (sk.plane, sk.entities.clone());
+            let tool = revolve_tool(&plane, &entities, profiles, axis, *angle_deg)?;
+            apply_op(model, f.uid, tool, *op, participants)
         }
         FeatureKind::Fillet { body, edges, size, chamfer } => {
             let b = model.body(*body).ok_or("the filleted body no longer exists")?;

@@ -244,6 +244,49 @@ pub fn extrude_range(frame: &Frame, region: &Region, z0: f64, z1: f64) -> Result
     Ok(builder::transformed(&solid, to_truck(frame.matrix())))
 }
 
+/// Revolve a region (in `frame`) around a world-space axis by `angle_deg`
+/// (positive = right-handed around `axis_dir`; 360 for a full revolution).
+pub fn revolve(frame: &Frame, region: &Region, axis_point: glam::DVec3, axis_dir: glam::DVec3, angle_deg: f64) -> Result<Solid> {
+    if !angle_deg.is_finite() || angle_deg.abs() < 1e-3 {
+        return Err(KernelError::InvalidParameter("angle must not be zero".into()));
+    }
+    let dir = axis_dir.normalize_or_zero();
+    if dir == glam::DVec3::ZERO {
+        return Err(KernelError::InvalidParameter("invalid axis".into()));
+    }
+    if dir.dot(frame.n).abs() > 1e-6 {
+        return Err(KernelError::InvalidParameter("the axis must lie in the sketch plane".into()));
+    }
+    // The profile must stay on one side of the axis.
+    let side: Vec<f64> = region
+        .outer
+        .points(64)
+        .iter()
+        .map(|p| {
+            let w = frame.to_world(glam::DVec3::new(p[0], p[1], 0.0)) - axis_point;
+            w.cross(dir).dot(frame.n)
+        })
+        .collect();
+    let max = side.iter().cloned().fold(f64::MIN, f64::max);
+    let min = side.iter().cloned().fold(f64::MAX, f64::min);
+    let scale = max.abs().max(min.abs()).max(1e-9);
+    if max > 1e-6 * scale && min < -1e-6 * scale && max.min(-min) > 1e-4 * scale {
+        return Err(KernelError::InvalidParameter("the profile crosses the revolve axis".into()));
+    }
+    let face = builder::transformed(&region.face_at(0.0)?, to_truck(frame.matrix()));
+    let o = Point3::new(axis_point.x, axis_point.y, axis_point.z);
+    let a = Vector3::new(dir.x, dir.y, dir.z);
+    let angle = angle_deg.to_radians();
+    let full = angle.abs() >= 2.0 * PI - 1e-9;
+    let solid = builder::rsweep(&face, o, a, Rad(if full { 2.0 * PI } else { angle }));
+    // A negative sweep produces an inside-out solid; fix orientation via volume.
+    let mut solid = solid;
+    if crate::tessellate(&solid).volume() < 0.0 {
+        solid.not();
+    }
+    Ok(solid)
+}
+
 /// Triangulate a region (world space) for profile shading.
 pub fn region_triangles(frame: &Frame, region: &Region) -> Vec<[f32; 3]> {
     let Ok(face) = region.face_at(0.0) else { return Vec::new() };
@@ -308,6 +351,33 @@ mod tests {
         let v = tessellate(&s).volume();
         let expect = PI * 4.0 * 10.0;
         assert!((v - expect).abs() / expect < 0.01, "{v}");
+    }
+
+    #[test]
+    fn revolve_rectangle_into_tube() {
+        // Rectangle x in [5, 10], y in [0, 20] revolved around the Y axis.
+        let r = Region { outer: Loop2::Polygon(vec![[5.0, 0.0], [10.0, 0.0], [10.0, 20.0], [5.0, 20.0]]), holes: vec![] };
+        let s = revolve(&xy(), &r, DVec3::ZERO, DVec3::Y, 360.0).unwrap();
+        let v = tessellate(&s).volume();
+        let expect = PI * (100.0 - 25.0) * 20.0;
+        assert!((v - expect).abs() / expect < 0.01, "{v} vs {expect}");
+        let half = revolve(&xy(), &r, DVec3::ZERO, DVec3::Y, -180.0).unwrap();
+        let v = tessellate(&half).volume();
+        assert!((v - expect / 2.0).abs() / expect < 0.01, "{v}");
+        assert!(revolve(&xy(), &r, DVec3::new(7.0, 0.0, 0.0), DVec3::Y, 90.0).is_err());
+    }
+
+    #[test]
+    fn revolve_profile_touching_axis() {
+        // Drill-like profile in the XY plane touching the Y axis: x = radius, y = height.
+        let r = Region {
+            outer: Loop2::Polygon(vec![[0.0, -12.0], [5.0, -10.0], [5.0, 0.0], [8.0, 0.0], [8.0, 3.0], [0.0, 3.0]]),
+            holes: vec![],
+        };
+        let s = revolve(&xy(), &r, DVec3::ZERO, DVec3::Y, 360.0).unwrap();
+        let v = tessellate(&s).volume();
+        let expect = PI * (25.0 * 10.0 + 64.0 * 3.0 + 25.0 * 2.0 / 3.0);
+        assert!((v - expect).abs() / expect < 0.02, "{v} vs {expect}");
     }
 
     #[test]

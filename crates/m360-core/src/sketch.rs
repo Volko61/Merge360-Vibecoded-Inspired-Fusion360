@@ -1,6 +1,6 @@
 //! Sketch profile detection: closed loops of lines and circles, with holes.
 
-use m360_kernel::profile::{Loop2, Region};
+use m360_kernel::profile::{Loop2, Region, Seg2};
 
 use crate::feature::SketchEntity;
 
@@ -10,12 +10,13 @@ fn same(a: [f64; 2], b: [f64; 2]) -> bool {
     (a[0] - b[0]).hypot(a[1] - b[1]) < MERGE_TOL
 }
 
-/// Find closed loops: every circle, plus every cycle of lines whose
-/// vertices all have exactly two incident lines.
+/// Find closed loops: every circle, plus every cycle of lines/arcs whose
+/// vertices all have exactly two incident curves.
 pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
     let mut out = Vec::new();
     let mut verts: Vec<[f64; 2]> = Vec::new();
-    let mut edges: Vec<(usize, usize)> = Vec::new();
+    // (start vertex, end vertex, arc transit point)
+    let mut edges: Vec<(usize, usize, Option<[f64; 2]>)> = Vec::new();
     let vid = |p: [f64; 2], verts: &mut Vec<[f64; 2]>| {
         if let Some(i) = verts.iter().position(|q| same(*q, p)) {
             i
@@ -25,20 +26,24 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
         }
     };
     for e in entities {
-        match e {
-            SketchEntity::Circle { c, r } if *r > 1e-9 => out.push(Loop2::Circle { c: *c, r: *r }),
-            SketchEntity::Line { a, b } if !same(*a, *b) => {
-                let ia = vid(*a, &mut verts);
-                let ib = vid(*b, &mut verts);
-                if !edges.iter().any(|&(x, y)| (x, y) == (ia, ib) || (x, y) == (ib, ia)) {
-                    edges.push((ia, ib));
-                }
+        let (a, b, m) = match e {
+            SketchEntity::Circle { c, r } if *r > 1e-9 => {
+                out.push(Loop2::Circle { c: *c, r: *r });
+                continue;
             }
-            _ => {}
+            SketchEntity::Line { a, b } if !same(*a, *b) => (*a, *b, None),
+            SketchEntity::Arc { a, m, b } if !same(*a, *b) => (*a, *b, Some(*m)),
+            _ => continue,
+        };
+        let ia = vid(a, &mut verts);
+        let ib = vid(b, &mut verts);
+        let dup = edges.iter().any(|&(x, y, t)| t.is_none() && m.is_none() && ((x, y) == (ia, ib) || (x, y) == (ib, ia)));
+        if !dup {
+            edges.push((ia, ib, m));
         }
     }
     let mut adj: Vec<Vec<usize>> = vec![Vec::new(); verts.len()];
-    for (k, &(a, b)) in edges.iter().enumerate() {
+    for (k, &(a, b, _)) in edges.iter().enumerate() {
         adj[a].push(k);
         adj[b].push(k);
     }
@@ -47,11 +52,12 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
         if used[start] {
             continue;
         }
-        let (a, b) = edges[start];
+        let (a, b, m0) = edges[start];
         if adj[a].len() != 2 || adj[b].len() != 2 {
             continue;
         }
         let mut chain = vec![a];
+        let mut segs = vec![Seg2 { end: verts[b], transit: m0 }];
         let mut cur_edge = start;
         let mut cur = b;
         let mut seen = vec![start];
@@ -68,17 +74,19 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
                 break false;
             }
             seen.push(next_edge);
-            let (x, y) = edges[next_edge];
+            let (x, y, m) = edges[next_edge];
             cur = if x == cur { y } else { x };
+            segs.push(Seg2 { end: verts[cur], transit: m });
             cur_edge = next_edge;
         };
         for e in &seen {
             used[*e] = true;
         }
-        if closed && chain.len() >= 3 {
-            let poly = Loop2::Polygon(chain.iter().map(|&i| verts[i]).collect());
-            if poly.area() > 1e-9 {
-                out.push(poly);
+        let has_arc = segs.iter().any(|s| s.transit.is_some());
+        if closed && (chain.len() >= 3 || (has_arc && segs.len() >= 2)) {
+            let lp = if has_arc { Loop2::Path(segs) } else { Loop2::Polygon(chain.iter().map(|&i| verts[i]).collect()) };
+            if lp.area() > 1e-9 {
+                out.push(lp);
             }
         }
     }
@@ -144,9 +152,45 @@ pub fn rectangle(a: [f64; 2], b: [f64; 2]) -> Vec<SketchEntity> {
     ]
 }
 
+/// Vertices of a regular polygon inscribed in the circle (c, |v - c|),
+/// starting at v.
+pub fn polygon(c: [f64; 2], v: [f64; 2], sides: usize) -> Vec<SketchEntity> {
+    let r = (v[0] - c[0]).hypot(v[1] - c[1]);
+    let a0 = (v[1] - c[1]).atan2(v[0] - c[0]);
+    let pts: Vec<[f64; 2]> = (0..sides)
+        .map(|i| {
+            let a = a0 + i as f64 / sides as f64 * std::f64::consts::TAU;
+            [c[0] + r * a.cos(), c[1] + r * a.sin()]
+        })
+        .collect();
+    (0..sides).map(|i| SketchEntity::Line { a: pts[i], b: pts[(i + 1) % sides] }).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slot_of_lines_and_arcs() {
+        // A slot: two lines joined by two half circles.
+        let e = vec![
+            SketchEntity::Line { a: [0.0, 0.0], b: [10.0, 0.0] },
+            SketchEntity::Arc { a: [10.0, 0.0], m: [12.0, 2.0], b: [10.0, 4.0] },
+            SketchEntity::Line { a: [10.0, 4.0], b: [0.0, 4.0] },
+            SketchEntity::Arc { a: [0.0, 4.0], m: [-2.0, 2.0], b: [0.0, 0.0] },
+        ];
+        let p = profiles(&e);
+        assert_eq!(p.len(), 1);
+        let expect = 40.0 + std::f64::consts::PI * 4.0;
+        assert!((p[0].area() - expect).abs() < 0.2, "{}", p[0].area());
+    }
+
+    #[test]
+    fn hexagon() {
+        let p = profiles(&polygon([0.0, 0.0], [10.0, 0.0], 6));
+        assert_eq!(p.len(), 1);
+        assert!((p[0].area() - 1.5 * 3f64.sqrt() * 100.0).abs() < 1e-6);
+    }
 
     #[test]
     fn rectangle_with_circle_hole() {

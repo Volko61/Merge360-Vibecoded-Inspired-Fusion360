@@ -22,7 +22,24 @@ pub fn rubber_band(s: &SketchSession, cursor: [f64; 2]) -> Vec<SketchEntity> {
             m360_core::sketch::rectangle([first[0] - d[0], first[1] - d[1]], cursor)
         }
         SketchTool::Circle => vec![SketchEntity::Circle { c: first, r: dist(first, cursor) }],
+        SketchTool::Arc => match s.pending.len() {
+            1 => vec![SketchEntity::Line { a: first, b: cursor }],
+            _ => arc_or_line(first, s.pending[1], cursor),
+        },
+        SketchTool::Polygon => m360_core::sketch::polygon(first, cursor, POLYGON_SIDES),
         _ => Vec::new(),
+    }
+}
+
+pub const POLYGON_SIDES: usize = 6;
+
+/// Arc from a to b through m, or a line when the points are collinear.
+fn arc_or_line(a: [f64; 2], b: [f64; 2], m: [f64; 2]) -> Vec<SketchEntity> {
+    let cross = (b[0] - a[0]) * (m[1] - a[1]) - (b[1] - a[1]) * (m[0] - a[0]);
+    if cross.abs() < 1e-9 || dist(m, a) < 1e-9 || dist(m, b) < 1e-9 {
+        vec![SketchEntity::Line { a, b }]
+    } else {
+        vec![SketchEntity::Arc { a, m, b }]
     }
 }
 
@@ -45,6 +62,12 @@ pub fn rubber_band_label(s: &SketchSession, cursor: [f64; 2], units: Units) -> O
             units.format(2.0 * (cursor[1] - first[1]).abs())
         ),
         SketchTool::Circle => format!("⌀ {}", units.format(2.0 * dist(first, cursor))),
+        SketchTool::Arc if s.pending.len() == 1 => units.format(dist(first, cursor)),
+        SketchTool::Arc => match m360_kernel::profile::circumcircle(first, cursor, s.pending[1]) {
+            Some((_, r)) => format!("R {}", units.format(r)),
+            None => return None,
+        },
+        SketchTool::Polygon => format!("{} sides, R {}", POLYGON_SIDES, units.format(dist(first, cursor))),
         _ => return None,
     })
 }
@@ -118,19 +141,34 @@ impl Merge360App {
                     s.pending.push(cur);
                 }
             }
-            SketchTool::Rect | SketchTool::CenterRect | SketchTool::Circle => {
+            SketchTool::Arc => {
+                if s.pending.len() < 2 {
+                    if s.pending.last().is_none_or(|p| dist(*p, cur) > 1e-9) {
+                        s.pending.push(cur);
+                    }
+                } else {
+                    new = rubber_band(s, cur);
+                    label = "Arc";
+                    s.pending.clear();
+                }
+            }
+            SketchTool::Rect | SketchTool::CenterRect | SketchTool::Circle | SketchTool::Polygon => {
                 if s.pending.is_empty() {
                     s.pending.push(cur);
                 } else {
                     new = rubber_band(s, cur);
                     let degenerate = match s.tool {
-                        SketchTool::Circle => dist(s.pending[0], cur) < 1e-9,
+                        SketchTool::Circle | SketchTool::Polygon => dist(s.pending[0], cur) < 1e-9,
                         _ => (cur[0] - s.pending[0][0]).abs() < 1e-9 || (cur[1] - s.pending[0][1]).abs() < 1e-9,
                     };
                     if degenerate {
                         new.clear();
                     }
-                    label = if s.tool == SketchTool::Circle { "Circle" } else { "Rectangle" };
+                    label = match s.tool {
+                        SketchTool::Circle => "Circle",
+                        SketchTool::Polygon => "Polygon",
+                        _ => "Rectangle",
+                    };
                     s.pending.clear();
                 }
             }

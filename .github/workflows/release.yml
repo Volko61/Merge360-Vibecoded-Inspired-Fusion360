@@ -62,7 +62,9 @@ jobs:
           cp "$bin" README.md LICENSE "dist/$name/"
           cd dist
           if [[ "${{ matrix.archive }}" == zip ]]; then
-            7z a "$name.zip" "$name" > /dev/null
+            # Flat zip (no top-level folder): winget's portable installer
+            # references merge360.exe by a version-independent path.
+            (cd "$name" && 7z a "../$name.zip" . > /dev/null)
           else
             tar czf "$name.tar.gz" "$name"
           fi
@@ -93,3 +95,19 @@ jobs:
           files: dist/*
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+  winget:
+    name: Publish to winget
+    needs: release
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    runs-on: windows-latest
+    steps:
+      # Opens a PR on microsoft/winget-pkgs for each new release, which is what
+      # makes `winget upgrade` see it. Needs a classic PAT (public_repo) in the
+      # WINGET_TOKEN secret, and the first version submitted manually
+      # (see packaging/winget/README.md).
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Volko61.Merge360
+          installers-regex: 'merge360-.*-(x86_64|aarch64)-pc-windows-msvc\.zip$'
+          token: ${{ secrets.WINGET_TOKEN }}

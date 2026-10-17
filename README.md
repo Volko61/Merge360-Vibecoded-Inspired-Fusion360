@@ -7,6 +7,29 @@ user interface and workflow (offline only, no cloud features).
 
 ![layout](docs/layout.txt)
 
+## Installing
+
+**Windows** (x64 / ARM64):
+
+```powershell
+winget install Volko61.Merge360
+winget upgrade Volko61.Merge360   # update
+```
+
+**Linux** (x86_64 / aarch64): installs to `~/.local/bin` (or `/usr/local/bin` as root),
+verifies the SHA-256 checksum and adds a desktop entry.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/main/install.sh | sh
+# or
+wget -qO- https://raw.githubusercontent.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/main/install.sh | sh
+```
+
+Updating: run `merge360 --update` (uses winget on Windows, the install script on Linux),
+or re-run the command above. `MERGE360_VERSION=0.3.0` pins a version and
+`MERGE360_UNINSTALL=1` removes it. Archives are also on the
+[releases page](https://github.com/Volko61/Merge360-Vibecoded-Inspired-Fusion360/releases).
+
 ## Running
 
 ```bash

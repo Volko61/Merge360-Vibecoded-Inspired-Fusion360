@@ -388,12 +388,17 @@ impl Merge360App {
     }
 
     fn export_drawing_svg(&mut self) {
+        let units = self.tabs[self.active].doc.units;
         let Some(d) = self.drawing_cache() else { return };
         let scale = d.scale;
         let place = Self::layout(d);
         let mut svg = String::new();
         let _ = writeln!(svg, r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}mm" height="{}mm" viewBox="0 0 {} {}">"#, SHEET.x, SHEET.y, SHEET.x, SHEET.y);
         let _ = writeln!(svg, r#"<rect x="0" y="0" width="{}" height="{}" fill="white"/>"#, SHEET.x, SHEET.y);
+        let _ = writeln!(
+            svg,
+            r##"<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="2.2" markerHeight="2.2" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 1 L10 5 L0 9 z" fill="#1e3c8c"/></marker></defs>"##
+        );
         let fy = |y: f32| SHEET.y - y;
         let _ = writeln!(svg, r#"<rect x="{m}" y="{m}" width="{}" height="{}" fill="none" stroke="black" stroke-width="0.5"/>"#, SHEET.x - 2.0 * MARGIN, SHEET.y - 2.0 * MARGIN, m = MARGIN);
         for (v, at) in d.views.iter().zip(&place) {
@@ -408,9 +413,31 @@ impl Merge360App {
             }
             let c = *at + Vec2::new((v.max.x - v.min.x) * scale * 0.5, if v.kind == ViewKind::Iso { -6.0 } else { -14.0 });
             let _ = writeln!(svg, r#"<text x="{:.2}" y="{:.2}" font-size="3.5" text-anchor="middle" font-family="sans-serif">{}</text>"#, c.x, fy(c.y), v.kind.label());
+            // Overall dimensions for the orthographic views, as on the sheet.
+            if v.kind != ViewKind::Iso {
+                let (w, h) = (v.max.x - v.min.x, v.max.y - v.min.y);
+                let line = |svg: &mut String, a: Vec2, b: Vec2, width: f32, arrows: bool| {
+                    let m = if arrows { r#" marker-start="url(#arrow)" marker-end="url(#arrow)""# } else { "" };
+                    let _ = writeln!(svg, r##"<line x1="{:.3}" y1="{:.3}" x2="{:.3}" y2="{:.3}" stroke="#1e3c8c" stroke-width="{width}"{m}/>"##, a.x, fy(a.y), b.x, fy(b.y));
+                };
+                let text = |svg: &mut String, at: Vec2, anchor: &str, t: String| {
+                    let _ = writeln!(svg, r##"<text x="{:.2}" y="{:.2}" font-size="3" text-anchor="{anchor}" font-family="sans-serif" fill="#1e3c8c">{}</text>"##, at.x, fy(at.y), xml_escape(&t));
+                };
+                let (p0, p1) = (map(v.min), map(Vec2::new(v.max.x, v.min.y)));
+                let off = Vec2::new(0.0, -6.0);
+                line(&mut svg, p0, p0 + off * 1.3, 0.13, false);
+                line(&mut svg, p1, p1 + off * 1.3, 0.13, false);
+                line(&mut svg, p0 + off, p1 + off, 0.2, true);
+                text(&mut svg, p0 + off + (p1 - p0) * 0.5 + Vec2::new(0.0, 0.8), "middle", units.format(w as f64));
+                let (q0, q1) = (map(Vec2::new(v.max.x, v.min.y)), map(v.max));
+                let off = Vec2::new(6.0, 0.0);
+                line(&mut svg, q0, q0 + off * 1.3, 0.13, false);
+                line(&mut svg, q1, q1 + off * 1.3, 0.13, false);
+                line(&mut svg, q0 + off, q1 + off, 0.2, true);
+                text(&mut svg, q0 + off + (q1 - q0) * 0.5 + Vec2::new(1.0, -1.0), "start", units.format(h as f64));
+            }
         }
         let name = self.tabs[self.active].doc.name.clone();
-        let units = self.tabs[self.active].doc.units;
         let tx = SHEET.x - MARGIN - TITLE_W;
         let _ = writeln!(svg, r#"<rect x="{tx}" y="{}" width="{TITLE_W}" height="{TITLE_H}" fill="none" stroke="black" stroke-width="0.35"/>"#, fy(MARGIN + TITLE_H));
         let lines = [

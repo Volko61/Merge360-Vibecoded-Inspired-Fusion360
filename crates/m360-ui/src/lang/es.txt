@@ -707,3 +707,4 @@ iterations	iteraciones
 Normal to face	Normal a la cara
 There is no body to study.	No hay ningún cuerpo que estudiar.
 Create a study first.	Cree primero un estudio.
+Save All	Guardar todo

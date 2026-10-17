@@ -77,6 +77,9 @@ fn guarded<T>(f: impl FnOnce() -> Option<T>) -> Result<Option<T>> {
 /// Split a solid by a plane (point + normal). Returns (front, back) where
 /// front lies on the side the normal points to.
 pub fn split(solid: &Solid, point: glam::DVec3, normal: glam::DVec3) -> Result<(Solid, Solid)> {
+    if !normal.is_finite() || normal.length() < 1e-12 || !point.is_finite() {
+        return Err(KernelError::InvalidParameter("the split plane is undefined".into()));
+    }
     let mesh = crate::mesh::tessellate_with(solid, 0.5);
     let size = ((mesh.bbox_max - mesh.bbox_min).length() as f64).max(1.0) * 4.0;
     let n = normal.normalize();
@@ -95,8 +98,8 @@ pub fn split(solid: &Solid, point: glam::DVec3, normal: glam::DVec3) -> Result<(
 
 /// Uniform scale about a point.
 pub fn scale(solid: &Solid, point: glam::DVec3, factor: f64) -> Result<Solid> {
-    if factor.is_nan() || factor <= 1e-9 {
-        return Err(KernelError::InvalidParameter("scale factor must be positive".into()));
+    if !factor.is_finite() || factor <= 1e-9 || factor > 1e6 {
+        return Err(KernelError::InvalidParameter("scale factor must be positive (at most 1e6)".into()));
     }
     let m = DMat4::from_translation(point) * DMat4::from_scale(glam::DVec3::splat(factor)) * DMat4::from_translation(-point);
     Ok(transform(solid, m))

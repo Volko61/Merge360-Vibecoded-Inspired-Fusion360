@@ -379,10 +379,18 @@ fn path() -> Option<std::path::PathBuf> {
 
 impl Preferences {
     pub fn load() -> Self {
-        let p: Preferences = path()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|t| ron::from_str(&t).ok())
-            .unwrap_or_default();
+        let file = path();
+        let text = file.as_ref().and_then(|p| std::fs::read_to_string(p).ok());
+        let p: Preferences = match (&file, text) {
+            (Some(f), Some(t)) => ron::from_str(&t).unwrap_or_else(|e| {
+                // Keep the unreadable file: the next save would otherwise wipe every setting.
+                let bak = f.with_extension("ron.bak");
+                log::warn!("invalid preferences file {} ({e}); moved to {}", f.display(), bak.display());
+                let _ = std::fs::rename(f, &bak);
+                Preferences::default()
+            }),
+            _ => Preferences::default(),
+        };
         p.apply_globals();
         p
     }

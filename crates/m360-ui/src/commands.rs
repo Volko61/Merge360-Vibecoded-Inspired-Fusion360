@@ -1818,6 +1818,7 @@ impl Merge360App {
             match decision {
                 Some(0) => {
                     self.flags.confirm_close = None;
+                    self.flags.close_after_save = Some(i);
                     self.active = i;
                     self.actions.push(Action::Save);
                 }
@@ -1826,6 +1827,40 @@ impl Merge360App {
                     self.close_tab(i);
                 }
                 Some(_) => self.flags.confirm_close = None,
+                None => {}
+            }
+        }
+        if self.flags.confirm_quit {
+            let n = self.tabs.iter().filter(|t| t.dirty).count();
+            let mut decision = None;
+            egui::Modal::new(egui::Id::new("confirm_quit")).show(ctx, |ui| {
+                ui.set_width(340.0);
+                ui.heading(tr("Save changes?"));
+                ui.label(format!("{n} design(s) have unsaved changes."));
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if theme::primary_button(ui, tr("Save All")).clicked() {
+                        decision = Some(0);
+                    }
+                    if theme::secondary_button(ui, tr("Don't Save")).clicked() {
+                        decision = Some(1);
+                    }
+                    if theme::secondary_button(ui, tr("Cancel")).clicked() {
+                        decision = Some(2);
+                    }
+                });
+            });
+            match decision {
+                Some(0) => {
+                    self.flags.confirm_quit = false;
+                    self.flags.save_all_quit = true;
+                }
+                Some(1) => {
+                    self.flags.confirm_quit = false;
+                    self.flags.quit_ok = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                Some(_) => self.flags.confirm_quit = false,
                 None => {}
             }
         }

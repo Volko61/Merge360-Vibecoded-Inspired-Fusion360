@@ -21,8 +21,10 @@ pub struct Frame {
 
 impl Frame {
     pub fn new(origin: DVec3, u: DVec3, v: DVec3) -> Self {
-        let u = u.normalize();
-        let n = u.cross(v).normalize();
+        // Degenerate input (zero or parallel axes) falls back to an arbitrary
+        // orthonormal frame instead of producing NaNs.
+        let u = u.try_normalize().unwrap_or(DVec3::X);
+        let n = u.cross(v).try_normalize().unwrap_or_else(|| u.any_orthonormal_vector());
         let v = n.cross(u);
         Self { origin, u, v, n }
     }

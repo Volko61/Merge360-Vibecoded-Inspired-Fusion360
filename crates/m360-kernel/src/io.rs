@@ -9,22 +9,35 @@ use crate::{BodyMesh, KernelError, Result, Solid};
 
 /// Parse an STL file (binary or ASCII) into triangles.
 pub fn read_stl(bytes: &[u8]) -> Result<Vec<[[f32; 3]; 3]>> {
-    let ascii = bytes.starts_with(b"solid") && std::str::from_utf8(bytes).is_ok_and(|s| s.contains("facet"));
+    // A binary file whose size matches its triangle count is binary, even if its
+    // header happens to start with "solid".
+    let binary_size = bytes.len() >= 84 && bytes.len() == 84 + 50 * u32::from_le_bytes(bytes[80..84].try_into().unwrap()) as usize;
+    let ascii = !binary_size && bytes.starts_with(b"solid") && bytes.windows(5).any(|w| w == b"facet");
     if ascii {
-        let text = std::str::from_utf8(bytes).map_err(|e| KernelError::Io(e.to_string()))?;
+        // Names may be in any 8-bit encoding; only the keywords and numbers matter.
+        let text = String::from_utf8_lossy(bytes);
         let mut tris = Vec::new();
         let mut cur: Vec<[f32; 3]> = Vec::new();
-        for line in text.lines() {
+        for (n, line) in text.lines().enumerate() {
             let mut it = line.split_whitespace();
-            if it.next() == Some("vertex") {
-                let v: Vec<f32> = it.filter_map(|x| x.parse().ok()).collect();
-                if v.len() == 3 {
+            match it.next() {
+                Some("facet") | Some("outer") => cur.clear(),
+                Some("vertex") => {
+                    let v: Vec<f32> = it.map(|x| x.parse::<f32>()).collect::<std::result::Result<_, _>>().map_err(|_| KernelError::Io(format!("invalid vertex on line {}", n + 1)))?;
+                    if v.len() != 3 || v.iter().any(|x| !x.is_finite()) {
+                        return Err(KernelError::Io(format!("invalid vertex on line {}", n + 1)));
+                    }
                     cur.push([v[0], v[1], v[2]]);
                 }
-                if cur.len() == 3 {
-                    tris.push([cur[0], cur[1], cur[2]]);
+                Some("endloop") => {
+                    if cur.len() < 3 {
+                        return Err(KernelError::Io(format!("facet with fewer than 3 vertices ending on line {}", n + 1)));
+                    }
+                    // Non-standard polygon facets are fanned into triangles.
+                    tris.extend((1..cur.len() - 1).map(|k| [cur[0], cur[k], cur[k + 1]]));
                     cur.clear();
                 }
+                _ => {}
             }
         }
         return Ok(tris);
@@ -59,9 +72,18 @@ pub fn mesh_to_solid(tris: &[[[f32; 3]; 3]]) -> Result<Solid> {
     let mut edges: HashMap<([i64; 3], [i64; 3]), truck_modeling::Edge> = HashMap::new();
     let mut faces = Vec::new();
     for t in tris {
+        if t.iter().flatten().any(|x| !x.is_finite()) {
+            return Err(KernelError::InvalidParameter("the mesh has invalid coordinates".into()));
+        }
         let ks = [key(t[0]), key(t[1]), key(t[2])];
         if ks[0] == ks[1] || ks[1] == ks[2] || ks[0] == ks[2] {
             continue; // degenerate
+        }
+        // Zero-area slivers (collinear vertices) have no plane.
+        let p = t.map(|v| glam::DVec3::new(v[0] as f64, v[1] as f64, v[2] as f64));
+        let max_edge = (p[1] - p[0]).length_squared().max((p[2] - p[1]).length_squared()).max((p[0] - p[2]).length_squared());
+        if (p[1] - p[0]).cross(p[2] - p[0]).length() < 1e-9 * max_edge {
+            continue;
         }
         for (k, p) in ks.iter().zip(t) {
             verts.entry(*k).or_insert_with(|| builder::vertex(Point3::new(p[0] as f64, p[1] as f64, p[2] as f64)));
@@ -77,6 +99,9 @@ pub fn mesh_to_solid(tris: &[[[f32; 3]; 3]]) -> Result<Solid> {
             }
         }
         faces.push(builder::try_attach_plane(&[wire]).map_err(|e| KernelError::OperationFailed(format!("mesh face: {e:?}")))?);
+    }
+    if faces.is_empty() {
+        return Err(KernelError::InvalidParameter("the mesh has only degenerate triangles".into()));
     }
     let shell: Shell = faces.into();
     // One shell per connected part; parts that are not closed are kept for

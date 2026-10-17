@@ -251,6 +251,12 @@ pub fn solve(mesh: &BodyMesh, study: &Study, mat: Elastic) -> Result<Solution, S
         if nodes.is_empty() {
             return Err("a loaded face is not part of this body".into());
         }
+        // Nodes shared with a support would absorb their share: spread the whole
+        // force over the free nodes of the face.
+        let nodes: Vec<usize> = nodes.into_iter().filter(|&d| !fixed[3 * d]).collect();
+        if nodes.is_empty() {
+            return Err("a loaded face is entirely fixed".into());
+        }
         let per = load.force / nodes.len() as f64;
         for d in nodes {
             f[3 * d] += per.x;

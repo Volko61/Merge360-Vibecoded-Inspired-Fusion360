@@ -72,16 +72,18 @@ impl Merge360App {
                 return;
             }
         };
+        let si = self.cam.setup;
         let tab = self.tab();
         if tab.doc.cam.is_empty() {
             tab.doc.cam.push(CamSetup::default());
         }
-        let setup = &mut tab.doc.cam[0];
+        let si = si.min(tab.doc.cam.len() - 1);
+        let setup = &mut tab.doc.cam[si];
         let n = setup.ops.iter().filter(|o| o.kind.label() == kind.label()).count() + 1;
         setup.ops.push(CamOp { name: format!("{}{n}", tr(name)), kind, tool, stepdown: 2.0, clearance: 5.0 });
         let i = setup.ops.len() - 1;
         tab.dirty = true;
-        self.cam.setup = 0;
+        self.cam.setup = si;
         self.cam.op = Some(i);
         self.cam.show_paths = true;
     }

@@ -290,6 +290,11 @@ impl Merge360App {
         }
         if close || !open {
             self.file_dialog = None;
+            // Cancelled Save As: abandon a pending close or save-all-and-quit.
+            if mode == FileMode::Save {
+                self.flags.close_after_save = None;
+                self.flags.save_all_quit = false;
+            }
         }
     }
 

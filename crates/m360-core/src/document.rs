@@ -70,7 +70,13 @@ pub struct Document {
     /// Simulation workspace study.
     #[serde(default)]
     pub simulation: Option<crate::simulation::SimStudy>,
+    /// File format revision (0: saved before v0.3, profiles in legacy order).
+    #[serde(default)]
+    pub format: u32,
 }
+
+/// Current file format revision.
+pub const FORMAT: u32 = 1;
 
 impl Default for Document {
     fn default() -> Self {
@@ -92,6 +98,7 @@ impl Default for Document {
             cam: Vec::new(),
             animation: Default::default(),
             simulation: None,
+            format: FORMAT,
         }
     }
 }
@@ -129,7 +136,7 @@ impl Document {
             );
         }
         if let Some((bodies, mats)) = kind.copy_transforms() {
-            for i in 0..bodies.len() * mats.len() {
+            for i in 0..(bodies.len() * mats.len()).min(crate::model::MAX_COPIES) {
                 let n = self.bodies.len() + 1;
                 self.bodies.insert(
                     (uid << 16) | i as u64,
@@ -208,7 +215,47 @@ impl Document {
     }
 
     pub fn from_ron(s: &str) -> Result<Self, String> {
-        ron::from_str(s).map_err(|e| e.to_string())
+        let mut doc: Self = ron::from_str(s).map_err(|e| e.to_string())?;
+        if doc.format < 1 {
+            doc.migrate_profile_order();
+        }
+        doc.format = FORMAT;
+        Ok(doc)
+    }
+
+    /// Renumber sketch profile references from the pre-v0.3 loop order.
+    fn migrate_profile_order(&mut self) {
+        let maps: std::collections::HashMap<u64, Vec<usize>> = self
+            .features
+            .iter()
+            .filter_map(|f| match &f.kind {
+                FeatureKind::Sketch { entities, .. } => Some((f.uid, crate::sketch::legacy_profile_map(entities))),
+                _ => None,
+            })
+            .collect();
+        let remap = |sketch: u64, i: &mut usize| {
+            if let Some(n) = maps.get(&sketch).and_then(|m| m.get(*i)) {
+                *i = *n;
+            }
+        };
+        for f in &mut self.features {
+            match &mut f.kind {
+                FeatureKind::Extrude { sketch, profiles, .. }
+                | FeatureKind::Revolve { sketch, profiles, .. }
+                | FeatureKind::Sweep { sketch, profiles, .. }
+                | FeatureKind::Patch { sketch, profiles, .. } => profiles.iter_mut().for_each(|i| remap(*sketch, i)),
+                FeatureKind::Loft { sections, .. } => sections.iter_mut().for_each(|(sk, i)| remap(*sk, i)),
+                _ => {}
+            }
+        }
+        for op in self.cam.iter_mut().flat_map(|s| s.ops.iter_mut()) {
+            match &mut op.kind {
+                crate::cam::CamOpKind::Contour { sketch, profiles, .. } | crate::cam::CamOpKind::Pocket { sketch, profiles, .. } => {
+                    profiles.iter_mut().for_each(|i| remap(*sketch, i))
+                }
+                _ => {}
+            }
+        }
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
@@ -304,7 +351,7 @@ mod tests {
                 e
             },
         });
-        // Profile 0 is the circle, profile 1 the rectangle with a hole.
+        // Profile 0 is the rectangle with a hole, profile 1 the circle.
         let base = d.add_feature(FeatureKind::Extrude {
             taper: 0.0,
             faces: Vec::new(),
@@ -319,7 +366,7 @@ mod tests {
             taper: 0.0,
             faces: Vec::new(),
             sketch: sk,
-            profiles: vec![0],
+            profiles: vec![1],
             distance: 5.0,
             symmetric: false,
             op: ExtrudeOp::Cut,
@@ -520,5 +567,35 @@ mod tests {
         });
         let s = d.to_ron().unwrap();
         assert_eq!(Document::from_ron(&s).unwrap(), d);
+    }
+
+    #[test]
+    fn legacy_profile_order_is_migrated() {
+        let mut d = Document::new("t");
+        let mut e = crate::sketch::rectangle([-10.0, -10.0], [10.0, 10.0]);
+        e.push(crate::SketchEntity::Circle { c: [30.0, 0.0], r: 4.0 });
+        let sk = d.add_feature(FeatureKind::Sketch { constraints: vec![], plane: PlaneRef::XY, entities: e });
+        d.add_feature(FeatureKind::Extrude {
+            taper: 0.0,
+            faces: Vec::new(),
+            sketch: sk,
+            profiles: vec![1],
+            distance: 5.0,
+            symmetric: false,
+            op: crate::ExtrudeOp::NewBody,
+            participants: vec![],
+        });
+        // An old file: no format field, the circle (legacy profile 0) extruded.
+        let mut old = d.clone();
+        if let FeatureKind::Extrude { profiles, .. } = &mut old.features[1].kind {
+            *profiles = vec![0];
+        }
+        let ron = old.to_ron().unwrap().replace("format:1,", "").replace("format: 1,", "");
+        assert!(!ron.contains("format"));
+        let loaded = Document::from_ron(&ron).unwrap();
+        assert_eq!(loaded.format, FORMAT);
+        assert_eq!(loaded.features[1].kind, d.features[1].kind);
+        // Current files are left alone.
+        assert_eq!(Document::from_ron(&d.to_ron().unwrap()).unwrap().features, d.features);
     }
 }

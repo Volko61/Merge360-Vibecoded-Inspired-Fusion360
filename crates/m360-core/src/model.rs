@@ -10,8 +10,11 @@ use crate::feature::{CoilPosition, CoilSectionType, ExtrudeOp, Feature, FeatureK
 use crate::PlaneRef;
 
 /// Stable body identifier. A body created by a feature takes that feature's
-/// uid; copies get `uid << 16 | index`.
+/// uid; copies get `uid << 16 | index` (see [`MAX_COPIES`]).
 pub type BodyId = u64;
+
+/// Most body copies one feature may create (the index of `uid << 16 | index`).
+pub const MAX_COPIES: usize = 0xFFFF;
 
 #[derive(Clone)]
 pub struct Body {
@@ -107,7 +110,7 @@ impl Regenerator {
         // captures parameter changes.
         let active: Vec<Result<Feature, (u64, String)>> = doc.features[..doc.marker.min(doc.features.len())]
             .iter()
-            .map(|f| f.evaluated(doc.units, &vars).map_err(|e| (f.uid, e)))
+            .map(|f| if f.suppressed { Ok(f.clone()) } else { f.evaluated(doc.units, &vars).map_err(|e| (f.uid, e)) })
             .collect();
         let fp = |r: &Result<Feature, (u64, String)>| match r {
             Ok(f) => fingerprint(f),
@@ -618,6 +621,10 @@ fn apply(model: &mut Model, f: &Feature) -> Result<(), String> {
             }
             if mats.is_empty() {
                 return Err("the pattern has a single instance".into());
+            }
+            // Copy ids keep the index in the low 16 bits.
+            if bodies.len() * mats.len() > MAX_COPIES {
+                return Err(format!("too many copies ({}; at most {MAX_COPIES})", bodies.len() * mats.len()));
             }
             for (i, id) in bodies.iter().enumerate() {
                 let b = model.body(*id).ok_or("a source body no longer exists")?.clone();

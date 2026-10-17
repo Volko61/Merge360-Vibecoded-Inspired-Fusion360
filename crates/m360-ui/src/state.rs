@@ -962,17 +962,33 @@ impl DocTab {
     }
 
     pub fn undo(&mut self) -> Option<String> {
+        let keep = self.workspace_data();
         let l = self.history.undo(&mut self.doc)?;
+        self.restore_workspace_data(keep);
         self.dirty = true;
         self.regenerate();
         Some(l)
     }
 
     pub fn redo(&mut self) -> Option<String> {
+        let keep = self.workspace_data();
         let l = self.history.redo(&mut self.doc)?;
+        self.restore_workspace_data(keep);
         self.dirty = true;
         self.regenerate();
         Some(l)
+    }
+
+    /// Manufacture, animation and simulation data are edited outside the design
+    /// history; undo/redo of design edits must leave them as they are.
+    fn workspace_data(&self) -> (Vec<m360_core::cam::CamSetup>, m360_core::animation::Storyboard, Option<m360_core::simulation::SimStudy>) {
+        (self.doc.cam.clone(), self.doc.animation.clone(), self.doc.simulation.clone())
+    }
+
+    fn restore_workspace_data(&mut self, (cam, animation, simulation): (Vec<m360_core::cam::CamSetup>, m360_core::animation::Storyboard, Option<m360_core::simulation::SimStudy>)) {
+        self.doc.cam = cam;
+        self.doc.animation = animation;
+        self.doc.simulation = simulation;
     }
 
     /// The plane referenced by a selectable item, if any.

@@ -81,12 +81,33 @@ fn same(a: [f64; 2], b: [f64; 2]) -> bool {
 }
 
 /// Find closed loops: every circle, plus every cycle of lines/arcs whose
-/// vertices all have exactly two incident curves.
+/// vertices all have exactly two incident curves. Loops are ordered by their
+/// first entity, so profile indices stay put when unrelated geometry is added.
 pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
+    let mut keyed = loops_keyed(entities);
+    keyed.sort_by_key(|(k, _)| *k);
+    keyed.into_iter().map(|(_, l)| l).collect()
+}
+
+/// For documents saved before profiles were ordered by entity: the current index
+/// of each profile, by its old index (closed curves first, then line/arc cycles).
+pub fn legacy_profile_map(entities: &[SketchEntity]) -> Vec<usize> {
+    let keyed = loops_keyed(entities);
+    let mut order: Vec<usize> = (0..keyed.len()).collect();
+    order.sort_by_key(|&i| keyed[i].0);
+    let mut map = vec![0; keyed.len()];
+    for (new, old) in order.into_iter().enumerate() {
+        map[old] = new;
+    }
+    map
+}
+
+/// Loops in discovery order (closed curves, then cycles), each with its lowest entity index.
+fn loops_keyed(entities: &[SketchEntity]) -> Vec<(usize, Loop2)> {
     let mut out = Vec::new();
     let mut verts: Vec<[f64; 2]> = Vec::new();
-    // (start vertex, end vertex, arc transit point)
-    let mut edges: Vec<(usize, usize, Option<[f64; 2]>)> = Vec::new();
+    // (start vertex, end vertex, arc transit point, entity index)
+    let mut edges: Vec<(usize, usize, Option<[f64; 2]>, usize)> = Vec::new();
     let vid = |p: [f64; 2], verts: &mut Vec<[f64; 2]>| {
         if let Some(i) = verts.iter().position(|q| same(*q, p)) {
             i
@@ -95,20 +116,20 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
             verts.len() - 1
         }
     };
-    for e in entities {
+    for (k, e) in entities.iter().enumerate() {
         if let Some((pts, closed)) = curve_polyline(e) {
             if closed {
                 let mut p = pts;
                 if p.len() > 1 && same(p[0], p[p.len() - 1]) {
                     p.pop();
                 }
-                out.push(Loop2::Polygon(p));
+                out.push((k, Loop2::Polygon(p)));
             } else {
                 // Open splines take part in loops as chains of short lines.
                 for w in pts.windows(2) {
                     let (ia, ib) = (vid(w[0], &mut verts), vid(w[1], &mut verts));
                     if ia != ib {
-                        edges.push((ia, ib, None));
+                        edges.push((ia, ib, None, k));
                     }
                 }
             }
@@ -116,7 +137,7 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
         }
         let (a, b, m) = match e {
             SketchEntity::Circle { c, r } if *r > 1e-9 => {
-                out.push(Loop2::Circle { c: *c, r: *r });
+                out.push((k, Loop2::Circle { c: *c, r: *r }));
                 continue;
             }
             SketchEntity::Line { a, b } if !same(*a, *b) => (*a, *b, None),
@@ -125,13 +146,13 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
         };
         let ia = vid(a, &mut verts);
         let ib = vid(b, &mut verts);
-        let dup = edges.iter().any(|&(x, y, t)| t.is_none() && m.is_none() && ((x, y) == (ia, ib) || (x, y) == (ib, ia)));
+        let dup = edges.iter().any(|&(x, y, t, _)| t.is_none() && m.is_none() && ((x, y) == (ia, ib) || (x, y) == (ib, ia)));
         if !dup {
-            edges.push((ia, ib, m));
+            edges.push((ia, ib, m, k));
         }
     }
     let mut adj: Vec<Vec<usize>> = vec![Vec::new(); verts.len()];
-    for (k, &(a, b, _)) in edges.iter().enumerate() {
+    for (k, &(a, b, _, _)) in edges.iter().enumerate() {
         adj[a].push(k);
         adj[b].push(k);
     }
@@ -140,7 +161,7 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
         if used[start] {
             continue;
         }
-        let (a, b, m0) = edges[start];
+        let (a, b, m0, _) = edges[start];
         if adj[a].len() != 2 || adj[b].len() != 2 {
             continue;
         }
@@ -162,7 +183,7 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
                 break false;
             }
             seen.push(next_edge);
-            let (x, y, m) = edges[next_edge];
+            let (x, y, m, _) = edges[next_edge];
             cur = if x == cur { y } else { x };
             segs.push(Seg2 { end: verts[cur], transit: m });
             cur_edge = next_edge;
@@ -174,7 +195,8 @@ pub fn loops(entities: &[SketchEntity]) -> Vec<Loop2> {
         if closed && (chain.len() >= 3 || (has_arc && segs.len() >= 2)) {
             let lp = if has_arc { Loop2::Path(segs) } else { Loop2::Polygon(chain.iter().map(|&i| verts[i]).collect()) };
             if lp.area() > 1e-9 {
-                out.push(lp);
+                let key = seen.iter().map(|&e| edges[e].3).min().unwrap_or(0);
+                out.push((key, lp));
             }
         }
     }
@@ -348,6 +370,25 @@ pub fn rectangular_pattern(entities: &[SketchEntity], targets: &[usize], d1: [f6
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn profile_indices_survive_added_circles() {
+        let mut e = super::rectangle([0.0, 0.0], [10.0, 10.0]);
+        let before = super::loops(&e);
+        e.push(super::SketchEntity::Circle { c: [50.0, 0.0], r: 3.0 });
+        let after = super::loops(&e);
+        assert_eq!(after.len(), 2);
+        assert!((after[0].area() - before[0].area()).abs() < 1e-9);
+        assert_eq!(super::legacy_profile_map(&e), vec![1, 0]);
+    }
+
+    #[test]
+    fn empty_chains_do_not_panic() {
+        let e = super::rectangle([0.0, 0.0], [10.0, 10.0]);
+        assert!(super::order_chain(&e, &[]).is_none());
+        assert!(super::chain_curves(&e, &[]).is_none());
+        assert!(super::offset(&e, &[], 1.0).is_empty());
+    }
+
     #[test]
     fn slot_is_one_profile() {
         let e = super::slot([0.0, 0.0], [20.0, 0.0], 5.0);
@@ -720,6 +761,9 @@ pub fn entity_from_polyline(pts: &[[f64; 2]], tol: f64) -> Option<SketchEntity> 
 /// surfaces), or `None` if the entities do not form one chain.
 pub fn chain_curves(entities: &[SketchEntity], chain: &[usize]) -> Option<Vec<m360_kernel::surface::Curve2>> {
     use m360_kernel::surface::Curve2;
+    if chain.is_empty() {
+        return None;
+    }
     // (start, end, curve from start to end)
     let mut items: Vec<([f64; 2], [f64; 2], Curve2)> = Vec::new();
     for &i in chain {
@@ -769,6 +813,9 @@ pub type ChainSeg = ([f64; 2], [f64; 2], Option<[f64; 2]>);
 
 /// Ordered chain of lines/arcs, and whether it is closed.
 pub fn order_chain(entities: &[SketchEntity], chain: &[usize]) -> Option<(Vec<ChainSeg>, bool)> {
+    if chain.is_empty() {
+        return None;
+    }
     let mut segs: Vec<ChainSeg> = Vec::new();
     for &i in chain {
         match entities.get(i)? {

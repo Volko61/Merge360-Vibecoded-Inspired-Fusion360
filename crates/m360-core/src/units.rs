@@ -63,35 +63,10 @@ impl Units {
         format!("{:.2} {}", self.from_mm(mm), self.suffix())
     }
 
-    /// Parse a user length expression such as `"25"`, `"1 in"`, `"10mm + 2.5"`.
+    /// Parse a user length expression such as `"25"`, `"1 in"`, `"10mm + 2.5"`, `"1e-3 m"`.
     /// Bare numbers are interpreted in `self`. Returns millimetres.
     pub fn parse(self, text: &str) -> Option<f64> {
-        let mut total = 0.0;
-        let mut any = false;
-        let normalized = text.replace('-', "+-");
-        for term in normalized.split('+') {
-            let term = term.trim();
-            if term.is_empty() {
-                continue;
-            }
-            let split = term
-                .find(|c: char| c.is_ascii_alphabetic() || c == '"')
-                .unwrap_or(term.len());
-            let (num, unit) = term.split_at(split);
-            let value: f64 = num.trim().parse().ok()?;
-            let unit = match unit.trim() {
-                "" => self,
-                "mm" => Units::Millimeter,
-                "cm" => Units::Centimeter,
-                "m" => Units::Meter,
-                "in" | "\"" => Units::Inch,
-                "ft" => Units::Foot,
-                _ => return None,
-            };
-            total += unit.to_mm(value);
-            any = true;
-        }
-        any.then_some(total)
+        crate::expr::eval(text, self, &Default::default()).ok()
     }
 }
 

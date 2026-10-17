@@ -707,3 +707,4 @@ iterations	Iterationen
 Normal to face	Senkrecht zur Fläche
 There is no body to study.	Es gibt keinen zu untersuchenden Körper.
 Create a study first.	Erstellen Sie zuerst eine Studie.
+Save All	Alle speichern

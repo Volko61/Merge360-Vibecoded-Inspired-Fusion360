@@ -56,6 +56,14 @@ pub struct UiFlags {
     pub rename: Option<(SelItem, String)>,
     pub about: bool,
     pub confirm_close: Option<usize>,
+    /// Tab to close once its pending save succeeds ("Save changes?" ▸ Save).
+    pub close_after_save: Option<usize>,
+    /// "Save changes?" on quit: shown when the window closes with modified designs.
+    pub confirm_quit: bool,
+    /// Saving every modified design before quitting.
+    pub save_all_quit: bool,
+    /// Quit confirmed: let the next close request through.
+    pub quit_ok: bool,
     pub shortcuts: bool,
 }
 
@@ -75,6 +83,8 @@ pub struct Merge360App {
     pub canvas_time: f64,
     pub canvas: crate::viewport::CanvasState,
     pub pending_sketch_plane: Option<PlaneRef>,
+    /// Sketch tool to activate when the sketch being created starts (L/R/C in the model).
+    pub pending_sketch_tool: Option<&'static str>,
     pub script: Option<crate::script::Script>,
     pub fps: Option<(std::time::Instant, u32)>,
     pub drawing: Option<crate::drawing::DrawingCache>,
@@ -119,6 +129,10 @@ impl Merge360App {
                 rename: None,
                 about: false,
                 confirm_close: None,
+                close_after_save: None,
+                confirm_quit: false,
+                save_all_quit: false,
+                quit_ok: false,
                 shortcuts: false,
             },
             toasts: Vec::new(),
@@ -131,6 +145,7 @@ impl Merge360App {
             canvas_time: 0.0,
             canvas: Default::default(),
             pending_sketch_plane: None,
+            pending_sketch_tool: None,
             fps: None,
             drawing: None,
             drawing_view: (1.0, glam::Vec2::ZERO),
@@ -887,6 +902,9 @@ impl Merge360App {
     }
 
     pub fn cancel_command(&mut self) {
+        if matches!(self.tabs[self.active].command, Some(Command::SketchPlane)) {
+            self.pending_sketch_tool = None;
+        }
         let tab = self.tab();
         if let Some(cmd) = tab.command.take() {
             if let Some(EditCtx { before, .. }) = cmd.editing() {
@@ -922,6 +940,9 @@ impl Merge360App {
             targets: Vec::new(),
         });
         look_at_plane(tab, plane, now);
+        if let Some(id) = self.pending_sketch_tool.take() {
+            self.actions.push(Action::Tool(id));
+        }
     }
 
     pub fn edit_sketch(&mut self, uid: u64) {
@@ -1276,8 +1297,43 @@ impl Merge360App {
                 let msg = format!("Saved {}", path.display());
                 self.add_recent(&path);
                 self.toast(ToastKind::Info, msg);
+                if self.flags.close_after_save.take() == Some(self.active) {
+                    self.close_tab(self.active);
+                }
             }
-            Err(e) => self.toast(ToastKind::Error, format!("Save failed: {e}")),
+            Err(e) => {
+                self.flags.close_after_save = None;
+                self.flags.save_all_quit = false;
+                self.toast(ToastKind::Error, format!("Save failed: {e}"));
+            }
+        }
+    }
+
+    /// Window close: ask before discarding modified designs, then save them one by one.
+    fn handle_quit(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.viewport().close_requested())
+            && !self.flags.quit_ok
+            && self.tabs.iter().any(|t| t.dirty)
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.flags.confirm_quit = true;
+        }
+        if !self.flags.save_all_quit || self.file_dialog.is_some() {
+            return;
+        }
+        match self.tabs.iter().position(|t| t.dirty) {
+            None => {
+                self.flags.save_all_quit = false;
+                self.flags.quit_ok = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            Some(i) => {
+                self.active = i;
+                match self.tabs[i].path.clone() {
+                    Some(p) => self.save_to(&p),
+                    None => self.actions_save_as(),
+                }
+            }
         }
     }
 
@@ -1379,6 +1435,9 @@ impl Merge360App {
 
     pub fn close_tab(&mut self, i: usize) {
         self.tabs.remove(i);
+        if i < self.active {
+            self.active -= 1;
+        }
         if self.tabs.is_empty() {
             self.tabs.push(DocTab::new(Document::new("Untitled"), None));
             self.apply_prefs_to_tab(self.tabs.len() - 1);
@@ -1386,10 +1445,13 @@ impl Merge360App {
         self.active = self.active.min(self.tabs.len() - 1);
     }
 
+    /// Folder of the active design, else of the most recent file, else the current directory.
     pub fn default_dir(&self) -> PathBuf {
-        self.recent
-            .first()
+        self.tabs[self.active]
+            .path
+            .as_ref()
             .and_then(|p| p.parent().map(Path::to_path_buf))
+            .or_else(|| self.recent.first().and_then(|p| p.parent().map(Path::to_path_buf)))
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("."))
     }
@@ -1448,10 +1510,12 @@ impl Merge360App {
             }
         }
         let mut bindings = self.prefs.bindings();
-        // Most specific chords first (Ctrl+Shift+Z before Ctrl+Z).
-        bindings.sort_by_key(|b| std::cmp::Reverse(b.chord.ctrl as u8 + b.chord.shift as u8 + b.chord.alt as u8));
-        // Sketch-specific bindings win over model/global ones.
-        bindings.sort_by_key(|b| b.ctx != KeyContext::Sketch);
+        // Most specific chords first (Ctrl+Shift+Z before Ctrl+Z: egui ignores extra
+        // Shift/Alt when matching), then sketch-specific bindings over model/global ones.
+        bindings.sort_by_key(|b| {
+            let mods = b.chord.ctrl as u8 + b.chord.shift as u8 + b.chord.alt as u8;
+            (std::cmp::Reverse(mods), b.ctx != KeyContext::Sketch)
+        });
         for b in bindings {
             let applies = match b.ctx {
                 KeyContext::Global => true,
@@ -1538,7 +1602,9 @@ impl Merge360App {
                 c.ortho = !c.ortho;
             }
             id if !in_sketch && id.starts_with("sk_") => {
-                // Sketch shortcuts outside a sketch start a new one first (like Fusion).
+                // Sketch shortcuts outside a sketch start a new one first (like Fusion),
+                // then switch to the requested tool once the plane is picked.
+                self.pending_sketch_tool = Some(id);
                 self.actions.push(Action::Tool("create_sketch"));
             }
             id => self.actions.push(Action::Tool(id)),
@@ -1629,6 +1695,7 @@ impl eframe::App for Merge360App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.canvas_time = ctx.input(|i| i.time);
+        self.handle_quit(&ctx);
         self.shortcuts(&ctx);
 
         let title = format!("Merge360 - {}", self.tabs[self.active].title());

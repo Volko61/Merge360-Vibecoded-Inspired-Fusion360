@@ -35,6 +35,27 @@ impl EdgeSpec {
     }
 }
 
+/// Reject treatments that reach past the body: the setback along each face must
+/// stay within the body's extent in that direction.
+fn check_size(solid: &Solid, edges: &[EdgeSpec], t: Treatment) -> Result<()> {
+    let mesh = crate::tessellate(solid);
+    for e in edges {
+        let cos = e.dirs[0].dot(e.dirs[1]).clamp(-1.0, 1.0);
+        let setback = match t {
+            Treatment::Fillet { radius } => radius / (cos.acos() / 2.0).tan(),
+            Treatment::Chamfer { distance } => distance,
+        };
+        for d in e.dirs {
+            let extent = mesh.positions.iter().map(|p| (DVec3::new(p[0] as f64, p[1] as f64, p[2] as f64) - e.a).dot(d)).fold(0.0, f64::max);
+            if setback.is_finite() && setback > extent + 1e-6 {
+                let what = if matches!(t, Treatment::Fillet { .. }) { "radius" } else { "distance" };
+                return Err(KernelError::InvalidParameter(format!("the {what} is too large for the adjacent faces")));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Build the tool solid for one edge. Returns (tool, operation).
 pub fn edge_tool(e: &EdgeSpec, t: Treatment) -> Result<(Solid, BooleanOp)> {
     edge_tool_variant(e, t, 0, &VARIANTS[0])
@@ -170,6 +191,7 @@ pub fn treat_edges_report(solid: &Solid, edges: &[EdgeSpec], t: Treatment) -> Re
     if edges.is_empty() {
         return Err(KernelError::InvalidParameter("no edges selected".into()));
     }
+    check_size(solid, edges, t)?;
     // truck's booleans are sensitive to near-degenerate configurations where
     // tools meet; try progressively more robust strategies and perturbations.
     let variants: &[Variant] = if matches!(t, Treatment::Fillet { .. }) { &VARIANTS } else { &VARIANTS[..1] };
@@ -339,5 +361,12 @@ mod tests {
         let expect = 8000.0 - 4.0 * (1.0 - std::f64::consts::PI / 4.0) * 9.0 * 20.0;
         assert!((v - expect).abs() < 4.0, "{v} vs {expect}");
     }
-}
 
+    #[test]
+    fn oversized_fillet_is_rejected() {
+        let cube = crate::primitives::make_box(&crate::Frame::new(DVec3::ZERO, DVec3::X, DVec3::Y), 20.0, 20.0, 20.0).unwrap();
+        let spec = edge_specs(&crate::tessellate(&cube)).into_iter().flatten().next().unwrap();
+        assert!(matches!(treat_edges(&cube, &[spec], Treatment::Fillet { radius: 50.0 }), Err(KernelError::InvalidParameter(_))));
+        assert!(matches!(treat_edges(&cube, &[spec], Treatment::Chamfer { distance: 25.0 }), Err(KernelError::InvalidParameter(_))));
+    }
+}

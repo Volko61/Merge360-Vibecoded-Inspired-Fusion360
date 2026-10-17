@@ -265,6 +265,9 @@ fn bounding_size(solid: &Solid) -> f64 {
     }
 }
 
+/// Largest body extent (mm) that is tessellated: 100 km.
+pub const MAX_SIZE: f64 = 1e8;
+
 /// Tessellate a solid with a chordal tolerance proportional to its size.
 pub fn tessellate(solid: &Solid) -> BodyMesh {
     let tol = (bounding_size(solid) * 0.001).clamp(1e-3, 0.5);
@@ -287,6 +290,14 @@ pub fn tessellate_with(solid: &Solid, tol: f64) -> BodyMesh {
 }
 
 fn tessellate_impl(solid: &Solid, tol: f64, smooth_cos: f32) -> BodyMesh {
+    // Non-finite or absurdly large geometry would make the triangulation loop forever.
+    let finite = solid.vertex_iter().all(|v| {
+        let p = v.point();
+        p.x.is_finite() && p.y.is_finite() && p.z.is_finite()
+    });
+    if !finite || !tol.is_finite() || tol <= 0.0 || bounding_size(solid) > MAX_SIZE {
+        return BodyMesh::default();
+    }
     // Shell by shell: open shells (surface bodies) cannot be meshed as a solid.
     let meshed: Vec<_> = solid.boundaries().iter().map(|sh| sh.robust_triangulation(tol)).collect();
     let mut out = BodyMesh {

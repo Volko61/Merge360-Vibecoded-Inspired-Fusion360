@@ -12,7 +12,7 @@ struct Raw {
 
 impl Raw {
     fn f(&self, code: i32) -> Option<f64> {
-        self.groups.iter().find(|(c, _)| *c == code).and_then(|(_, v)| v.trim().parse().ok())
+        self.groups.iter().find(|(c, _)| *c == code).and_then(|(_, v)| v.trim().parse().ok()).filter(|v: &f64| v.is_finite())
     }
     fn i(&self, code: i32) -> i64 {
         self.groups.iter().find(|(c, _)| *c == code).and_then(|(_, v)| v.trim().parse().ok()).unwrap_or(0)
@@ -72,10 +72,9 @@ fn bulge_segment(a: [f64; 2], b: [f64; 2], bulge: f64) -> SketchEntity {
 }
 
 fn arc_from(c: [f64; 2], r: f64, a0: f64, a1: f64) -> SketchEntity {
-    let mut a1 = a1;
-    while a1 <= a0 {
-        a1 += 360.0;
-    }
+    // Counter-clockwise sweep in (0, 360].
+    let sweep = (a1 - a0).rem_euclid(360.0);
+    let a1 = a0 + if sweep < 1e-9 { 360.0 } else { sweep };
     let p = |deg: f64| [c[0] + r * deg.to_radians().cos(), c[1] + r * deg.to_radians().sin()];
     SketchEntity::Arc { a: p(a0), m: p((a0 + a1) / 2.0), b: p(a1) }
 }
@@ -92,6 +91,29 @@ fn polyline(pts: &[([f64; 2], f64)], closed: bool, out: &mut Vec<SketchEntity>) 
     }
 }
 
+/// Mirror an entity across the Y axis (x → -x).
+fn mirror_x(e: &mut SketchEntity) {
+    let f = |p: &mut [f64; 2]| p[0] = -p[0];
+    match e {
+        SketchEntity::Line { a, b } => {
+            f(a);
+            f(b);
+        }
+        SketchEntity::Circle { c, .. } => f(c),
+        SketchEntity::Point { p } => f(p),
+        SketchEntity::Arc { a, m, b } => {
+            f(a);
+            f(m);
+            f(b);
+        }
+        SketchEntity::Spline { pts } => pts.iter_mut().for_each(f),
+        SketchEntity::Ellipse { c, a, .. } => {
+            f(c);
+            f(a);
+        }
+    }
+}
+
 /// Parse DXF text into sketch entities.
 pub fn read_dxf(text: &str) -> Result<Vec<SketchEntity>, String> {
     let raws = raw_entities(text);
@@ -99,9 +121,19 @@ pub fn read_dxf(text: &str) -> Result<Vec<SketchEntity>, String> {
         return Err("no ENTITIES section found".into());
     }
     let mut out = Vec::new();
+    // Start indices in `out` of entities to mirror (each runs to the next start or the end).
+    let mut mirrored: Vec<usize> = Vec::new();
+    let mut starts: Vec<usize> = Vec::new();
     let mut i = 0;
     while i < raws.len() {
         let r = &raws[i];
+        let first = out.len();
+        starts.push(first);
+        // Entities with a -Z extrusion direction (e.g. mirrored in AutoCAD) have
+        // their coordinates in a frame whose X axis is flipped.
+        if r.f(230).is_some_and(|z| z < 0.0) {
+            mirrored.push(first);
+        }
         let xy = |cx: i32, cy: i32| Some([r.f(cx)?, r.f(cy)?]);
         match r.kind.as_str() {
             "LINE" => {
@@ -122,8 +154,8 @@ pub fn read_dxf(text: &str) -> Result<Vec<SketchEntity>, String> {
             "SPLINE" => {
                 // Fit points (11/21) when present, else control points (10/20).
                 let pts_of = |cx: i32, cy: i32| -> Vec<[f64; 2]> {
-                    let xs: Vec<f64> = r.groups.iter().filter(|(c, _)| *c == cx).filter_map(|(_, v)| v.trim().parse().ok()).collect();
-                    let ys: Vec<f64> = r.groups.iter().filter(|(c, _)| *c == cy).filter_map(|(_, v)| v.trim().parse().ok()).collect();
+                    let xs: Vec<f64> = r.groups.iter().filter(|(c, _)| *c == cx).filter_map(|(_, v)| v.trim().parse().ok()).filter(|v: &f64| v.is_finite()).collect();
+                    let ys: Vec<f64> = r.groups.iter().filter(|(c, _)| *c == cy).filter_map(|(_, v)| v.trim().parse().ok()).filter(|v: &f64| v.is_finite()).collect();
                     xs.into_iter().zip(ys).map(|(x, y)| [x, y]).collect()
                 };
                 let mut pts = pts_of(11, 21);
@@ -146,10 +178,8 @@ pub fn read_dxf(text: &str) -> Result<Vec<SketchEntity>, String> {
                     } else {
                         // Elliptical arc: a spline through points of the arc.
                         let v = [-a[1] * ratio, a[0] * ratio];
-                        let mut t1 = t1;
-                        while t1 <= t0 {
-                            t1 += std::f64::consts::TAU;
-                        }
+                        let sweep = (t1 - t0).rem_euclid(std::f64::consts::TAU);
+                        let t1 = t0 + if sweep < 1e-9 { std::f64::consts::TAU } else { sweep };
                         let pts = (0..=16)
                             .map(|k| {
                                 let t = t0 + (t1 - t0) * k as f64 / 16.0;
@@ -170,7 +200,7 @@ pub fn read_dxf(text: &str) -> Result<Vec<SketchEntity>, String> {
                 let mut pts: Vec<([f64; 2], f64)> = Vec::new();
                 let mut x = None;
                 for (code, v) in &r.groups {
-                    let val: f64 = v.trim().parse().unwrap_or(0.0);
+                    let val: f64 = v.trim().parse().ok().filter(|v: &f64| v.is_finite()).unwrap_or(0.0);
                     match code {
                         10 => x = Some(val),
                         20 => {
@@ -206,6 +236,13 @@ pub fn read_dxf(text: &str) -> Result<Vec<SketchEntity>, String> {
         }
         i += 1;
     }
+    starts.push(out.len());
+    for &m in &mirrored {
+        let end = starts.iter().copied().find(|&s| s > m).unwrap_or(out.len());
+        for e in &mut out[m..end] {
+            mirror_x(e);
+        }
+    }
     if out.is_empty() {
         return Err("the file contains no supported 2D geometry (lines, arcs, circles, polylines)".into());
     }
@@ -238,5 +275,20 @@ mod tests {
         assert!((m[0] - 5.0).abs() < 1e-9 && (m[1] + 5.0).abs() < 1e-9, "{m:?}");
         // The closed polyline (half circle + line) is one profile.
         assert_eq!(crate::sketch::profiles(&e[3..5]).len(), 1);
+    }
+
+    #[test]
+    fn hostile_angles_and_mirrored_arcs() {
+        // Huge / infinite angles must not hang.
+        let dxf = "0\nSECTION\n2\nENTITIES\n0\nARC\n10\n0\n20\n0\n40\n1\n50\n1e19\n51\n0\n\
+            0\nARC\n10\n0\n20\n0\n40\n1\n50\ninf\n51\n0\n\
+            0\nELLIPSE\n10\n0\n20\n0\n11\n4\n21\n0\n40\n0.5\n41\n1e30\n42\n0\n\
+            0\nARC\n10\n10\n20\n0\n40\n10\n50\n0\n51\n90\n230\n-1\n0\nENDSEC\n0\nEOF\n";
+        let e = read_dxf(dxf).unwrap();
+        assert_eq!(e.len(), 3);
+        // Extrusion -Z: centre (-10, 0), spanning 90..180 degrees.
+        let SketchEntity::Arc { a, b, .. } = e[2] else { panic!() };
+        assert!((a[0] + 20.0).abs() < 1e-9 && a[1].abs() < 1e-9, "{a:?}");
+        assert!((b[0] + 10.0).abs() < 1e-9 && (b[1] - 10.0).abs() < 1e-9, "{b:?}");
     }
 }

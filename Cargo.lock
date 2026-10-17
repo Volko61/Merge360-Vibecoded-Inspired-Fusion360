@@ -1572,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "m360-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cavalier_contours",
  "epaint_default_fonts",
@@ -1585,7 +1585,7 @@ dependencies = [
 
 [[package]]
 name = "m360-kernel"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "glam",
  "truck-meshalgo",
@@ -1596,7 +1596,7 @@ dependencies = [
 
 [[package]]
 name = "m360-render"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bytemuck",
  "eframe",
@@ -1606,7 +1606,7 @@ dependencies = [
 
 [[package]]
 name = "m360-ui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "eframe",
  "glam",
@@ -1656,7 +1656,7 @@ dependencies = [
 
 [[package]]
 name = "merge360"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "m360-ui",

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 PackageIdentifier: Volko61.Merge360
-PackageVersion: 0.3.0
+PackageVersion: 0.3.1
 PackageLocale: en-US
 Publisher: Volko61
 PublisherUrl: https://github.com/Volko61
